@@ -3,23 +3,29 @@ import { z } from "zod";
 const VALORANT_API_WEAPONS_URL =
   "https://valorant-api.com/v1/weapons?language=en-US";
 
+// Riot IDs fit Postgres' uuid type but do not consistently set RFC version bits.
+const databaseUuidSchema = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  "Invalid database UUID",
+);
+
 const levelSchema = z.object({
-  uuid: z.uuid(),
+  uuid: databaseUuidSchema,
 });
 
 const skinSchema = z.object({
-  contentTierUuid: z.uuid().nullable(),
+  contentTierUuid: databaseUuidSchema.nullable(),
   displayIcon: z.url().nullable(),
   displayName: z.string().min(1),
   levels: z.array(levelSchema),
-  uuid: z.uuid(),
+  uuid: databaseUuidSchema,
 });
 
 const weaponSchema = z.object({
   category: z.string().min(1),
   displayName: z.string().min(1),
   skins: z.array(skinSchema),
-  uuid: z.uuid(),
+  uuid: databaseUuidSchema,
 });
 
 const weaponsResponseSchema = z.object({

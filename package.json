@@ -12,6 +12,7 @@
     "build": "next build",
     "auth:verify": "node scripts/verify-magic-link.mjs",
     "start": "next start",
+    "sync:catalog": "node --experimental-strip-types scripts/sync-catalog.ts",
     "lint": "eslint .",
     "supabase:start": "node scripts/supabase-start.mjs",
     "supabase:stop": "supabase stop",
