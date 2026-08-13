@@ -124,7 +124,12 @@ const dashboard = await fetch(`${appUrl}/dashboard`, {
   redirect: "manual",
 });
 const dashboardBody = await dashboard.text();
-if (dashboard.status !== 200 || !dashboardBody.includes("Your dashboard is ready.")) {
+if (
+  dashboard.status !== 200 ||
+  !dashboardBody.includes("Find your next favorite.") ||
+  !dashboardBody.includes("Vandal") ||
+  !dashboardBody.includes("Prime Vandal")
+) {
   fail("the authenticated dashboard did not render.");
 }
 

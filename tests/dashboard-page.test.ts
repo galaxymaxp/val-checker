@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
+const loadCatalogForBrowse = vi.fn();
 const redirect = vi.fn();
 
 vi.mock("@/src/lib/supabase/server", () => ({
-  createServerSupabaseClient: async () => ({ auth: { getClaims } }),
+  createServerSupabaseClient: async () => ({ auth: { getClaims }, from: vi.fn() }),
 }));
 
+vi.mock("@/src/lib/catalog/browse", () => ({ loadCatalogForBrowse }));
 vi.mock("next/navigation", () => ({ redirect }));
 
 describe("dashboard page", () => {
   beforeEach(() => {
     getClaims.mockReset();
+    loadCatalogForBrowse.mockReset();
     redirect.mockReset();
+    loadCatalogForBrowse.mockResolvedValue([]);
   });
 
   it("renders after an authenticated magic-link session", async () => {
@@ -26,9 +30,13 @@ describe("dashboard page", () => {
 
   it("keeps a server-side redirect as a second protection layer", async () => {
     getClaims.mockResolvedValue({ data: null });
+    redirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
     const { default: DashboardPage } = await import("@/app/dashboard/page");
-    await DashboardPage();
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(redirect).toHaveBeenCalledWith("/sign-in?next=/dashboard");
+    expect(loadCatalogForBrowse).not.toHaveBeenCalled();
   });
 });
