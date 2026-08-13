@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Next.js
 .next/
@@ -14,7 +15,6 @@ test-results/
 .turbo/
 .vercel/
 *.tsbuildinfo
-next-env.d.ts
 
 # Environment and secret-bearing files
 .env*
@@ -32,4 +32,3 @@ supabase/.temp/
 .DS_Store
 Thumbs.db
 *.swp
-
