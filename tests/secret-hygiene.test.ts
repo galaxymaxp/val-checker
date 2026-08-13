@@ -20,6 +20,15 @@ describe("repository secret hygiene", () => {
     expect(rootFiles).toContain(".env.example");
   });
 
+  it("ignores known Riot session and reauthentication artifacts", () => {
+    expect(git("check-ignore", "--no-index", "--", "jar_live.json")).toBe(
+      "jar_live.json",
+    );
+    expect(git("check-ignore", "--no-index", "--", "reauth_log.csv")).toBe(
+      "reauth_log.csv",
+    );
+  });
+
   it("tracks no secret-bearing file names", () => {
     const tracked = git("ls-files").split(/\r?\n/).filter(Boolean);
     const forbidden = tracked.filter((file) => {
@@ -30,6 +39,7 @@ describe("repository secret hygiene", () => {
         isEnvironmentFile ||
         /^cookies.*\.json$/i.test(basename) ||
         /^jar_live\.json$/i.test(basename) ||
+        /^reauth_log\.csv$/i.test(basename) ||
         /\.(pem|key)$/i.test(basename)
       );
     });
