@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main className="shell">
@@ -7,6 +9,9 @@ export default function HomePage() {
         The catalog, account access, and personal watchlist are being assembled in separate,
         testable layers.
       </p>
+      <Link className="primary-link" href="/sign-in">
+        Sign in with email
+      </Link>
     </main>
   );
 }

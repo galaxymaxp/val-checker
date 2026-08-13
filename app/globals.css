@@ -58,3 +58,50 @@ h1 {
   font-size: clamp(1rem, 2vw, 1.25rem);
   line-height: 1.7;
 }
+
+.primary-link,
+button {
+  width: fit-content;
+  border: 0;
+  border-radius: 0.25rem;
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.8rem 1rem;
+  text-decoration: none;
+}
+
+.auth-shell,
+.dashboard-shell {
+  width: min(42rem, calc(100% - 3rem));
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 32rem;
+}
+
+.auth-form label {
+  font-weight: 700;
+}
+
+.auth-form input {
+  min-height: 3rem;
+  border: 1px solid #303745;
+  border-radius: 0.25rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  padding: 0 0.9rem;
+}
+
+.auth-form button {
+  cursor: pointer;
+}
+
+.auth-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}

@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "auth:verify": "node scripts/verify-magic-link.mjs",
     "start": "next start",
     "lint": "eslint .",
     "supabase:start": "node scripts/supabase-start.mjs",
