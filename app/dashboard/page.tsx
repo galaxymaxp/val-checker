@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
+import { setSkinWatched } from "@/app/dashboard/actions";
 import { CollectionBrowser } from "@/app/dashboard/collection-browser";
 import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
+import { loadWatchedSkinUuids } from "@/src/lib/watchlist/load";
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
@@ -12,7 +14,10 @@ export default async function DashboardPage() {
     redirect("/sign-in?next=/dashboard");
   }
 
-  const weapons = await loadCatalogForBrowse(supabase);
+  const [weapons, watchedSkinUuids] = await Promise.all([
+    loadCatalogForBrowse(supabase),
+    loadWatchedSkinUuids(supabase),
+  ]);
 
   return (
     <main className="catalog-shell">
@@ -26,7 +31,11 @@ export default async function DashboardPage() {
           access is not involved.
         </p>
       </header>
-      <CollectionBrowser weapons={weapons} />
+      <CollectionBrowser
+        initialWatchedSkinUuids={watchedSkinUuids}
+        updateWatch={setSkinWatched}
+        weapons={weapons}
+      />
     </main>
   );
 }

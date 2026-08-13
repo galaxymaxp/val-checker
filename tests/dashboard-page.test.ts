@@ -2,21 +2,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
 const loadCatalogForBrowse = vi.fn();
+const loadWatchedSkinUuids = vi.fn();
 const redirect = vi.fn();
+const setSkinWatched = vi.fn();
 
 vi.mock("@/src/lib/supabase/server", () => ({
   createServerSupabaseClient: async () => ({ auth: { getClaims }, from: vi.fn() }),
 }));
 
 vi.mock("@/src/lib/catalog/browse", () => ({ loadCatalogForBrowse }));
+vi.mock("@/src/lib/watchlist/load", () => ({ loadWatchedSkinUuids }));
+vi.mock("@/app/dashboard/actions", () => ({ setSkinWatched }));
 vi.mock("next/navigation", () => ({ redirect }));
 
 describe("dashboard page", () => {
   beforeEach(() => {
     getClaims.mockReset();
     loadCatalogForBrowse.mockReset();
+    loadWatchedSkinUuids.mockReset();
     redirect.mockReset();
     loadCatalogForBrowse.mockResolvedValue([]);
+    loadWatchedSkinUuids.mockResolvedValue([]);
   });
 
   it("renders after an authenticated magic-link session", async () => {
@@ -38,5 +44,6 @@ describe("dashboard page", () => {
 
     expect(redirect).toHaveBeenCalledWith("/sign-in?next=/dashboard");
     expect(loadCatalogForBrowse).not.toHaveBeenCalled();
+    expect(loadWatchedSkinUuids).not.toHaveBeenCalled();
   });
 });

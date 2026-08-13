@@ -326,6 +326,19 @@ button {
   background: var(--accent);
 }
 
+.watch-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.watchlist-error {
+  margin: -2.5rem 0 0;
+  border-left: 3px solid var(--accent);
+  background: rgb(255 70 85 / 10%);
+  color: #ffd7da;
+  padding: 0.8rem 1rem;
+}
+
 .empty-catalog {
   display: grid;
   min-height: 20rem;

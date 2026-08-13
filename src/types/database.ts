@@ -20,6 +20,13 @@ type SkinLevelRow = {
   first_seen_at: string;
 };
 
+type WatchlistRow = {
+  id: string;
+  user_id: string;
+  skin_uuid: string;
+  created_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -39,6 +46,15 @@ export interface Database {
         Row: SkinLevelRow;
         Insert: Omit<SkinLevelRow, "first_seen_at"> & { first_seen_at?: string };
         Update: Partial<SkinLevelRow>;
+        Relationships: [];
+      };
+      watchlist: {
+        Row: WatchlistRow;
+        Insert: Omit<WatchlistRow, "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<WatchlistRow>;
         Relationships: [];
       };
     };

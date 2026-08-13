@@ -4,17 +4,31 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import type { CatalogWeaponView } from "@/src/lib/catalog/browse";
+import type { WatchMutationResult } from "@/src/types/watchlist";
 
 interface CollectionBrowserProps {
+  readonly initialWatchedSkinUuids: readonly string[];
+  readonly updateWatch: (
+    skinUuid: string,
+    watched: boolean,
+  ) => Promise<WatchMutationResult>;
   readonly weapons: readonly CatalogWeaponView[];
 }
 
-export function CollectionBrowser({ weapons }: CollectionBrowserProps) {
+export function CollectionBrowser({
+  initialWatchedSkinUuids,
+  updateWatch,
+  weapons,
+}: CollectionBrowserProps) {
   const [query, setQuery] = useState("");
   const [watchedOnly, setWatchedOnly] = useState(false);
   const [watchedSkinUuids, setWatchedSkinUuids] = useState<Set<string>>(
+    () => new Set(initialWatchedSkinUuids),
+  );
+  const [pendingSkinUuids, setPendingSkinUuids] = useState<Set<string>>(
     () => new Set(),
   );
+  const [mutationError, setMutationError] = useState<string>();
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
   const categories = useMemo(() => {
@@ -45,11 +59,18 @@ export function CollectionBrowser({ weapons }: CollectionBrowserProps) {
     return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
   }, [normalizedQuery, watchedOnly, watchedSkinUuids, weapons]);
 
-  function toggleWatched(skinUuid: string) {
+  async function toggleWatched(skinUuid: string) {
+    if (pendingSkinUuids.has(skinUuid)) {
+      return;
+    }
+
+    const wasWatched = watchedSkinUuids.has(skinUuid);
+    const nextWatched = !wasWatched;
+    setMutationError(undefined);
     setWatchedSkinUuids((current) => {
       const next = new Set(current);
 
-      if (next.has(skinUuid)) {
+      if (wasWatched) {
         next.delete(skinUuid);
       } else {
         next.add(skinUuid);
@@ -57,6 +78,34 @@ export function CollectionBrowser({ weapons }: CollectionBrowserProps) {
 
       return next;
     });
+    setPendingSkinUuids((current) => new Set(current).add(skinUuid));
+
+    try {
+      const result = await updateWatch(skinUuid, nextWatched);
+
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+    } catch {
+      setWatchedSkinUuids((current) => {
+        const rolledBack = new Set(current);
+
+        if (wasWatched) {
+          rolledBack.add(skinUuid);
+        } else {
+          rolledBack.delete(skinUuid);
+        }
+
+        return rolledBack;
+      });
+      setMutationError("That change did not save. Your previous watchlist was restored.");
+    } finally {
+      setPendingSkinUuids((current) => {
+        const next = new Set(current);
+        next.delete(skinUuid);
+        return next;
+      });
+    }
   }
 
   return (
@@ -90,6 +139,12 @@ export function CollectionBrowser({ weapons }: CollectionBrowserProps) {
         </div>
       </div>
 
+      {mutationError ? (
+        <p className="watchlist-error" role="alert">
+          {mutationError}
+        </p>
+      ) : null}
+
       {categories.length === 0 ? (
         <div className="empty-catalog" role="status">
           <p className="eyebrow">NO MATCHES</p>
@@ -113,6 +168,7 @@ export function CollectionBrowser({ weapons }: CollectionBrowserProps) {
                   <ul className="skin-grid">
                     {weapon.skins.map((skin) => {
                       const isWatched = watchedSkinUuids.has(skin.skinUuid);
+                      const isPending = pendingSkinUuids.has(skin.skinUuid);
 
                       return (
                         <li className="skin-card" key={skin.skinUuid}>
@@ -135,10 +191,11 @@ export function CollectionBrowser({ weapons }: CollectionBrowserProps) {
                               aria-label={`${isWatched ? "Stop watching" : "Watch"} ${skin.displayName}`}
                               aria-pressed={isWatched}
                               className="watch-button"
+                              disabled={isPending}
                               onClick={() => toggleWatched(skin.skinUuid)}
                               type="button"
                             >
-                              {isWatched ? "Watched" : "Watch"}
+                              {isPending ? "Saving…" : isWatched ? "Watched" : "Watch"}
                             </button>
                           </div>
                         </li>

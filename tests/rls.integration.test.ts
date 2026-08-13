@@ -80,7 +80,7 @@ async function createSignedInUser(
     throw new Error("Unable to sign in a local RLS test user.");
   }
 
-  return { client, userId: created.user.id };
+  return { client, email, password, userId: created.user.id };
 }
 
 describe("foundation schema RLS", () => {
@@ -197,6 +197,34 @@ describe("foundation schema RLS", () => {
       expect(watchlistA.data).toEqual([{ user_id: userA.userId, skin_uuid: skinUuid }]);
       expect(watchlistB.error).toBeNull();
       expect(watchlistB.data).toEqual([{ user_id: userB.userId, skin_uuid: skinUuid }]);
+
+      const reloadedUserA = makeClient(status.API_URL, status.ANON_KEY);
+      const { error: reloadSignInError } = await reloadedUserA.auth.signInWithPassword({
+        email: userA.email,
+        password: userA.password,
+      });
+      expect(reloadSignInError).toBeNull();
+      const reloadedWatchlistA = await reloadedUserA
+        .from("watchlist")
+        .select("user_id, skin_uuid");
+      expect(reloadedWatchlistA.error).toBeNull();
+      expect(reloadedWatchlistA.data).toEqual([
+        { user_id: userA.userId, skin_uuid: skinUuid },
+      ]);
+
+      const { error: crossUserDeleteError } = await userB.client
+        .from("watchlist")
+        .delete()
+        .eq("user_id", userA.userId)
+        .eq("skin_uuid", skinUuid);
+      expect(crossUserDeleteError).toBeNull();
+      const watchlistAfterCrossUserDelete = await reloadedUserA
+        .from("watchlist")
+        .select("user_id, skin_uuid");
+      expect(watchlistAfterCrossUserDelete.error).toBeNull();
+      expect(watchlistAfterCrossUserDelete.data).toEqual([
+        { user_id: userA.userId, skin_uuid: skinUuid },
+      ]);
 
       for (const client of [userA.client, userB.client]) {
         const [connections, checks] = await Promise.all([
