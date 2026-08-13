@@ -43,6 +43,11 @@ export interface Database {
       };
     };
     Views: Record<never, never>;
-    Functions: Record<never, never>;
+    Functions: {
+      health_check: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+    };
   };
 }
