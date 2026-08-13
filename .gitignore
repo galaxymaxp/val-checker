@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Test and coverage output
+coverage/
+playwright-report/
+test-results/
+
+# Local tooling
+.turbo/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment and secret-bearing files
+.env*
+!.env.example
+cookies*.json
+jar_live.json
+*.pem
+*.key
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+*.swp
+
