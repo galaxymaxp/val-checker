@@ -1,0 +1,322 @@
+# Valorant Store Checker — Build Spec (agent-ready)
+
+**Version:** 2.0 · **Date:** 2026-08-14
+**Audience:** a coding agent (Codex-style) executing tasks autonomously, plus the human reviewing.
+**Mode:** Track B (Phases 1–4) is IN SCOPE now. Track C (Phases 5–9) is BLOCKED — see §8.
+
+---
+
+## 0. Agent operating rules — read first, obey always
+
+These are hard constraints, not suggestions. Violating any is a failed task.
+
+1. **Work one task at a time.** Each task below has an ID (e.g. `1.3`) and an **Acceptance** block. Implement, then satisfy Acceptance (write/run the test or command), then move on. Do not batch phases.
+2. **Stop at the end of Phase 4 and report.** Do NOT begin Phase 5 or anything under Track C (§8). Those depend on an external experiment that has not returned. If you believe a Track-C task is unblocked, stop and ask the human instead of proceeding.
+3. **Never commit secrets.** The very first commit must contain a `.gitignore` covering `.env*`, `cookies*.json`, `jar_live.json`, `*.pem`, `*.key`. If any secret-bearing file is already tracked, stop and report.
+4. **Never log credentials.** No cookie values, tokens, `Authorization` headers, or the encrypted jar may be written to logs, error messages, or test output. Redact to name-only.
+5. **Do not run migrations against a remote/production database.** Use the local Supabase stack (`supabase start`). If a task seems to require a remote DB, stop and ask.
+6. **Ask before destructive operations** — dropping tables, deleting data, force-pushing, rewriting history.
+7. **No invented external URLs.** (Track C only.) Every Riot endpoint must map to a documented `valapidocs.techchrism.me` endpoint cited in a code comment. This phase (B) touches only `valorant-api.com`, which is public catalog data with no auth.
+8. **Cite the spec, not this behaviour.** When you make a design choice, reference the section here that drove it in your PR description.
+
+**Definition of "done" for a task** = its Acceptance block passes AND `pnpm test` and `pnpm build` are green AND no secret is tracked.
+
+---
+
+## 1. Status snapshot
+
+### Proven (do not rebuild or re-litigate)
+- Browser-captured cookie jar reused server-side: **yes** (26 cookies, `ssid` present).
+- Cookie-reauth returns a usable token without fresh login: **yes** (`GET /authorize`, `allow_redirects=False`, 301 → `playvalorant.com/opt_in#access_token=…`).
+- Rotation/persistence chain holds locally: **yes** (55/55 `OK` over ~13.5h, cookie count steady at 26).
+
+### Unknown (external experiment, not this agent's job)
+- Does an AP-region session survive ~21 days unattended from a datacenter IP without MFA? → measured by a separate VPS spike. **Track C stays blocked until this returns.**
+
+### In scope for this agent, now
+- Phases 1–4: foundation, catalog sync + resolver, collection frontend, watchlist. **None of it touches Riot.**
+
+---
+
+## 2. Stack & repository layout
+
+**Stack**
+- Next.js (App Router) + TypeScript, deployed to Vercel (frontend + light API routes only).
+- Supabase (Postgres + Auth + RLS). Local dev via Supabase CLI.
+- pnpm. Vitest for tests. Zod for runtime validation at all external boundaries.
+- Worker (Track C) is a **separate deployable** targeting a VPS — it is NOT a Vercel function. Scaffold its folder now; leave it empty of Riot logic.
+
+**Layout**
+```
+/
+├─ .gitignore                      # task 1.1, first commit
+├─ app/                            # Next.js App Router (Vercel)
+│  ├─ (auth)/…                     # magic-link sign-in
+│  ├─ dashboard/…                  # collection UI (Phase 3)
+│  └─ api/…                        # server routes (service-role reads live here)
+├─ src/
+│  ├─ lib/
+│  │  ├─ supabase/                 # browser + server clients
+│  │  ├─ catalog/                  # valorant-api sync + resolver (Phase 2)
+│  │  └─ riot/                     # RiotAdapter interface ONLY for now (Phase 5, stubbed)
+│  └─ types/
+├─ supabase/
+│  └─ migrations/                  # SQL migrations (schema + RLS together)
+├─ worker/                         # separate VPS deployable — empty scaffold for now
+└─ tests/
+```
+
+---
+
+## 3. Environment variables
+
+Create `.env.local` (gitignored) and a committed `.env.example` with empty values.
+
+| Var | Scope | Phase | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | client | 1 | |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client | 1 | |
+| `SUPABASE_SERVICE_ROLE_KEY` | server only | 1 | Never imported into a client component |
+| `SESSION_ENCRYPTION_KEY` | worker only | 5 (blocked) | Lives OUTSIDE Supabase. Not needed yet |
+| `RESEND_API_KEY` | worker only | 7 (blocked) | Not needed yet |
+
+Guard: `SUPABASE_SERVICE_ROLE_KEY` must be unreachable from any `"use client"` module. Add a lint check or test asserting it is only referenced under `app/api/` and `src/lib/supabase/server*`.
+
+---
+
+## 4. Phase 1 — Foundation
+
+Goal: a logged-in user reaches an empty dashboard; full schema exists with RLS; `riot_connections` is locked to the service role.
+
+### 1.1 Repo + secret hygiene
+Scaffold the Next.js/TS/pnpm project. First commit includes `.gitignore` (see §0.3) and `.env.example`.
+**Acceptance:** `git log` shows `.gitignore` in the first commit; `git ls-files` lists no `.env*`, no `*.json` cookie files.
+
+### 1.2 Supabase local + clients
+Init Supabase locally. Add browser client (anon key) and server client (service role, server-only).
+**Acceptance:** `supabase start` runs; a server route can read `select 1`; a client component cannot import the service-role client (test asserts this).
+
+### 1.3 Schema migration (schema + RLS in ONE migration)
+Write a single migration containing every table below **and** its RLS. RLS is never a follow-up migration.
+
+```sql
+-- enums
+create type auth_status as enum (
+  'CONNECTED','REAUTH_REQUIRED','RIOT_UNAVAILABLE','RATE_LIMITED','NETWORK_BLOCKED'
+);
+
+-- catalog (public data; readable by any authenticated user, writable only by service role)
+create table weapons (
+  weapon_uuid   uuid primary key,
+  display_name  text not null,
+  category      text
+);
+
+create table skins (
+  skin_uuid     uuid primary key,
+  display_name  text not null,
+  weapon_uuid   uuid references weapons(weapon_uuid),
+  content_tier  text,
+  display_icon  text,
+  first_seen_at timestamptz not null default now()
+);
+
+-- THE RESOLVER TABLE: storefront returns level UUIDs; watchlist stores skin UUIDs.
+create table skin_levels (
+  level_uuid    uuid primary key,
+  skin_uuid     uuid not null references skins(skin_uuid),
+  ordinal       int,
+  first_seen_at timestamptz not null default now()
+);
+create index on skin_levels (skin_uuid);
+
+-- user data
+create table watchlist (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  skin_uuid  uuid not null references skins(skin_uuid),
+  created_at timestamptz not null default now(),
+  unique (user_id, skin_uuid)
+);
+
+-- sensitive: encrypted session material. Service-role only. No user-facing policy.
+create table riot_connections (
+  id                  uuid primary key default gen_random_uuid(),
+  user_id             uuid not null references auth.users(id) on delete cascade,
+  puuid               text,
+  region              text,          -- na|eu|ap|kr  (mapped, see §9)
+  shard               text,
+  encrypted_jar       bytea not null,
+  jar_nonce           bytea not null,
+  session_key_version int  not null default 1,
+  auth_status         auth_status not null default 'CONNECTED',
+  consecutive_failures int not null default 0,
+  last_refresh_at     timestamptz,
+  created_at          timestamptz not null default now(),
+  unique (user_id)                   -- one connection per user for V1
+);
+
+-- operational: service-role only
+create table shop_checks (
+  id               uuid primary key default gen_random_uuid(),
+  connection_id    uuid not null references riot_connections(id) on delete cascade,
+  checked_at       timestamptz not null default now(),
+  shop_hash        text not null,
+  offer_skin_uuids uuid[] not null default '{}',
+  total_cost       int,
+  expires_at       timestamptz,
+  night_market     jsonb,           -- captured from day one even if surfaced later
+  bundle           jsonb
+);
+
+-- user-visible alerts; unique constraint is the real dedup
+create table notifications (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  skin_uuid     uuid not null references skins(skin_uuid),
+  shop_check_id uuid not null references shop_checks(id) on delete cascade,
+  created_at    timestamptz not null default now(),
+  emailed_at    timestamptz,
+  unique (user_id, skin_uuid, shop_check_id)
+);
+
+-- ROW LEVEL SECURITY --------------------------------------------------------
+alter table weapons     enable row level security;
+alter table skins       enable row level security;
+alter table skin_levels enable row level security;
+create policy "catalog readable" on weapons     for select to authenticated using (true);
+create policy "catalog readable" on skins       for select to authenticated using (true);
+create policy "catalog readable" on skin_levels for select to authenticated using (true);
+-- no insert/update/delete policies → writes denied to all but service role
+
+alter table watchlist enable row level security;
+create policy "own watchlist" on watchlist
+  for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table notifications enable row level security;
+create policy "own notifications read" on notifications
+  for select to authenticated using (auth.uid() = user_id);
+
+-- riot_connections and shop_checks: RLS enabled, NO policies → service-role only.
+alter table riot_connections enable row level security;
+alter table shop_checks      enable row level security;
+```
+
+**Acceptance (all must pass as automated tests):**
+- Migration applies cleanly on a fresh local DB.
+- With an anon key + a signed-in user JWT, `select * from riot_connections` returns **zero rows / permission denied** — assert with a real request, not by reading the SQL.
+- Same for `shop_checks`.
+- A user can insert into `watchlist` only with their own `user_id`; inserting another user's `user_id` is rejected by the `with check`.
+- A user selecting `watchlist` sees only their own rows (create two users; each sees one).
+- Any authenticated user can `select` from `skins`/`skin_levels`/`weapons`; none can `insert`.
+
+### 1.4 Magic-link auth + empty dashboard
+Supabase magic-link sign-in; protected `/dashboard` that renders for an authed user and redirects otherwise.
+**Acceptance:** unauthenticated `/dashboard` redirects to sign-in; after magic-link, dashboard renders. One e2e or integration test covers the redirect.
+
+---
+
+## 5. Phase 2 — Catalog sync + the resolver
+
+Goal: populate the catalog from public data and build the SkinLevel→Skin resolver **with its test**. This phase exists to kill one specific silent bug.
+
+### 2.1 valorant-api client
+Typed client for `valorant-api.com` (weapons + skins + skin levels). Validate responses with Zod. No auth involved.
+**Acceptance:** a mocked-fixture test parses a sample payload into typed rows; malformed payloads throw at the boundary, not deep in app code.
+
+### 2.2 Sync job
+Idempotent upsert of `weapons`, `skins`, `skin_levels`, setting `first_seen_at` on first insert only. Runs via `pnpm sync:catalog`.
+**Acceptance:** running the sync twice against local DB yields identical row counts and unchanged `first_seen_at` on existing rows.
+
+### 2.3 The resolver (highest-risk deliverable)
+Implement `resolveSkinUuids(levelUuids: string[]): Promise<string[]>` in `src/lib/catalog/`. It maps storefront **SkinLevel** UUIDs to parent **Skin** UUIDs via `skin_levels`.
+
+**Why this phase exists:** the storefront returns *SkinLevel* UUIDs; the watchlist stores *Skin* UUIDs. Compared directly they never match, so the checker runs flawlessly and silently never alerts. This is the single most probable failure of the whole product and the hardest to notice.
+
+**Acceptance (required test, a Phase-2 deliverable — not deferred):**
+- Given a fixture storefront payload containing known level UUIDs, `resolveSkinUuids` returns the correct parent skin UUIDs.
+- An unknown level UUID is handled explicitly (skipped + logged by name, or surfaced) — never silently dropped in a way that masks a stale catalog.
+- A direct-equality test documents the trap: asserting raw level UUIDs do NOT equal watchlist skin UUIDs, proving the resolver is load-bearing.
+
+---
+
+## 6. Phase 3 — Collection frontend
+
+Goal: browse the full catalog and toggle watch state in the UI (local state first).
+
+### 3.1 Catalog browse UI
+Weapon categories → weapon cards → skins, with search and an All / Watched-Only filter. Renders purely from the synced catalog; no Riot session anywhere.
+**Acceptance:** with a seeded local catalog, the UI lists weapons and skins, search filters, and the Watched-Only toggle works against local state.
+
+---
+
+## 7. Phase 4 — Watchlist persistence
+
+Goal: persist the watchlist in Supabase with optimistic updates, scoped by RLS.
+
+### 4.1 Watchlist CRUD
+Add/remove watch entries writing to `watchlist`; optimistic UI with rollback on error.
+**Acceptance:** watch state survives reload; a second user cannot see or mutate the first user's watchlist (RLS-backed test); optimistic add rolls back on a forced server error.
+
+**END OF IN-SCOPE WORK. Stop here, run the full suite, open a PR, and report. Do not start §8.**
+
+---
+
+## 8. Track C — BLOCKED (Phases 5–9)
+
+> ⛔ **Do not implement any task in this section.** It depends on the durability spike (an external 3-week VPS measurement) returning a pass. Definitions are here so the agent understands the boundaries it must not cross, and so Phase 1–4 choices stay compatible.
+
+**Gate to unblock:** VPS reauth loop ≥14 consecutive unattended days, no manual login, no MFA prompt. Until the human confirms this, Track C stays closed.
+
+- **Phase 5 — Connect flow + consent + encrypted storage.** Consent screen (states: what's stored, that stored material can access the account and bypass MFA, lifespan, revocation, non-affiliation with Riot). Disconnect includes Riot "Sign out everywhere". Encryption: AES-256-GCM, per-row nonce, `user_id` as AAD, `session_key_version` populated; **key held outside Supabase** (KMS/envelope preferred). Signup **allowlisted/invite-only** for V1. Ship `SECURITY.md` + README threat model.
+- **Phase 6 — Worker loop** (on the VPS, not Vercel). Daily after 00:00 UTC rotation; jittered per-connection delay; on success **persist the full rotated jar**, resolve level→skin UUIDs (Phase 2), hash the shop, dedup via the `notifications` unique constraint, capture Night Market + bundle. 3 consecutive failures → `REAUTH_REQUIRED`.
+- **Phase 7 — Email** (Resend, verified domain, bounce webhook). Reauth cadence: one email on entering `REAUTH_REQUIRED`, one reminder on day 7, then silence. Never more than two per episode.
+- **Phase 8 — Auth-health UI.** Connection status + reconnect; honest copy about the real session ceiling (§ copy rules).
+- **Phase 9 — Allowlisted 10-user test** with metrics collecting.
+
+**RiotAdapter contract (Phase 5 — stub the interface now, implement later):**
+```ts
+// src/lib/riot/adapter.ts  — interface only until Track C unblocks
+export interface RiotAdapter {
+  authenticate(): Promise<Session>;      // from a captured jar, never a password
+  refreshSession(s: Session): Promise<Session>;
+  getEntitlements(s: Session): Promise<Entitlements>;
+  getPUUID(s: Session): Promise<string>;
+  getRegion(s: Session): Promise<string>;
+  getStore(s: Session): Promise<Storefront>;   // returns level UUIDs
+  healthCheck(): Promise<HealthStatus>;
+}
+// Rule: nothing outside this module imports a Riot URL, header, or type.
+// Rule: getStore's result is passed through the Phase-2 resolver before any
+//       comparison with a watchlist. The adapter never returns raw level UUIDs
+//       to callers that expect skin UUIDs.
+```
+
+---
+
+## 9. Standing engineering rules
+
+- All Riot logic (Track C) lives behind `RiotAdapter`. No Riot URL/header/type leaks outside `src/lib/riot/`.
+- The resolver boundary is inviolable: **skin UUIDs cross app boundaries, level UUIDs do not.**
+- Never log credentials, cookies, tokens, or `Authorization` headers.
+- `region` and `shard` are distinct. Map: `na|latam|br → na`, `eu → eu`, `ap → ap`, `kr → kr`.
+- Validate every external payload with Zod at the boundary.
+- Read SkinPeek **forks** for current auth behaviour (upstream archived 2025-06-04); upstream for architecture only. (Track C.)
+- Encryption key lives outside Supabase. A key beside the DB credentials is obfuscation, not encryption. (Track C.)
+
+---
+
+## 10. Copy constraints (apply when Track C UI is built)
+
+- Do NOT promise "weeks or months between logins." Observed ceiling: ~3 weeks for a full jar, ~1 week for `ssid` alone.
+- DO state periodic reconnection is required and that an email will prompt it.
+- DO state the service is unaffiliated with Riot Games.
+
+---
+
+## 11. First actions for the agent
+
+1. Phase 1.1 → 1.4 in order, satisfying each Acceptance block.
+2. Phase 2, with the resolver test (2.3) as a required deliverable.
+3. Phases 3 and 4.
+4. Stop, run `pnpm test` + `pnpm build`, open a PR summarising each phase against its Acceptance criteria, and report. **Do not enter Track C.**
