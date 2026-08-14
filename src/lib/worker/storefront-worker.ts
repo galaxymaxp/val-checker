@@ -36,6 +36,36 @@ export type LifecycleApplication = {
   readonly terminalTransition: boolean;
 };
 
+export type RunLogOutcome = "checked" | "failed" | "skipped";
+
+/**
+ * Closed vocabulary. A raw error string is never recorded, so an operational
+ * log line cannot leak cookies, tokens, or a PUUID.
+ */
+export type RunLogReason =
+  | "ATTEMPT_FENCED"
+  | "DAILY_CLAIM_HELD"
+  | "DELIVERY_FAILED"
+  | "LIFECYCLE_STALE"
+  | "NOT_ALLOWLISTED"
+  | "REAUTH_FAILED"
+  | "REAUTH_REQUIRED_SKIP"
+  | "SESSION_UNAVAILABLE"
+  | "STOREFRONT_FAILED"
+  | "UNEXPECTED";
+
+export type RunLogEntry = {
+  readonly classification: SessionCheckResult | null;
+  readonly connectionId: string;
+  readonly emailsSent: number;
+  readonly matchesFound: number;
+  readonly outcome: RunLogOutcome;
+  readonly reason: RunLogReason | null;
+  readonly runId: string | null;
+  readonly storeDate: string | null;
+  readonly userId: string;
+};
+
 export interface DailyStorefrontRepository {
   applyLifecycle(
     connection: WorkerConnection,
@@ -53,6 +83,7 @@ export interface DailyStorefrontRepository {
     claim: DailyRunClaim,
     connection: WorkerConnection,
   ): Promise<Date | null>;
+  recordRun(entry: RunLogEntry): Promise<void>;
 }
 
 export interface WorkerRiotClient {
@@ -74,13 +105,17 @@ export type WorkerPipeline = (
   input: StorefrontPipelineInput,
 ) => Promise<StorefrontPipelineResult>;
 
+export type WorkerStorefrontDelivery = {
+  readonly emailsSent: number;
+};
+
 export type WorkerStorefrontSender = (
   input: StorefrontPipelineResult & {
     readonly checkedAt: Date;
     readonly connectionId: string;
     readonly userId: string;
   },
-) => Promise<void>;
+) => Promise<WorkerStorefrontDelivery>;
 
 export type DailyStorefrontWorkerDependencies = {
   readonly allowlist: Pick<RiotConnectAllowlist, "allows">;
@@ -99,7 +134,32 @@ export type DailyStorefrontSummary = {
   readonly skipped: number;
 };
 
-type AccountOutcome = "checked" | "failed" | "skipped";
+type AccountResult = {
+  readonly classification: SessionCheckResult | null;
+  readonly emailsSent: number;
+  readonly matchesFound: number;
+  readonly outcome: RunLogOutcome;
+  readonly reason: RunLogReason | null;
+  readonly runId: string | null;
+  readonly storeDate: string | null;
+};
+
+function terminated(
+  outcome: RunLogOutcome,
+  reason: RunLogReason | null,
+  overrides: Partial<AccountResult> = {},
+): AccountResult {
+  return {
+    classification: null,
+    emailsSent: 0,
+    matchesFound: 0,
+    outcome,
+    reason,
+    runId: null,
+    storeDate: null,
+    ...overrides,
+  };
+}
 
 function failureClassification(error: unknown): SessionCheckResult {
   if (
@@ -163,21 +223,22 @@ export class DailyStorefrontWorker {
 
     for (const connection of connections) {
       counts.processed += 1;
-      let outcome: AccountOutcome;
+      let result: AccountResult;
       try {
-        outcome = await this.runAccount(connection);
+        result = await this.runAccount(connection);
       } catch {
-        outcome = "failed";
+        result = terminated("failed", "UNEXPECTED");
       }
-      counts[outcome] += 1;
+      counts[result.outcome] += 1;
+      await this.recordRun(connection, result);
     }
 
     return counts;
   }
 
-  private async runAccount(connection: WorkerConnection): Promise<AccountOutcome> {
+  private async runAccount(connection: WorkerConnection): Promise<AccountResult> {
     if (connection.authStatus === "REAUTH_REQUIRED") {
-      return "skipped";
+      return terminated("skipped", "REAUTH_REQUIRED_SKIP");
     }
 
     const email = await this.dependencies.repository.loadVerifiedEmail(
@@ -187,16 +248,20 @@ export class DailyStorefrontWorker {
       !email ||
       !this.dependencies.allowlist.allows({ email, userId: connection.userId })
     ) {
-      return "skipped";
+      return terminated("skipped", "NOT_ALLOWLISTED");
     }
 
     const claim = await this.dependencies.repository.claim(connection);
     if (!claim) {
-      return "skipped";
+      return terminated("skipped", "DAILY_CLAIM_HELD");
     }
 
+    const claimed = { runId: claim.id, storeDate: claim.storeDate };
     let storefront: FetchedStorefront;
     let checkedAt: Date;
+    // Narrows the closed-vocabulary reason without ever reading an error
+    // message, which could otherwise carry session material.
+    let phase: RunLogReason = "SESSION_UNAVAILABLE";
     try {
       const material = await this.dependencies.sessionStore.load(
         connection.userId,
@@ -211,6 +276,7 @@ export class DailyStorefrontWorker {
         region: connection.region,
         session,
       });
+      phase = "REAUTH_FAILED";
       const rotated = await reauthenticateAndPersist({
         adapter: client,
         expectedConnectionEpoch: connection.connectionEpoch,
@@ -219,15 +285,17 @@ export class DailyStorefrontWorker {
         userId: connection.userId,
       });
 
+      phase = "ATTEMPT_FENCED";
       const attemptedAt =
         await this.dependencies.repository.markStorefrontAttempt(
           claim,
           connection,
         );
       if (!attemptedAt) {
-        return "skipped";
+        return terminated("skipped", "ATTEMPT_FENCED", claimed);
       }
       checkedAt = attemptedAt;
+      phase = "STOREFRONT_FAILED";
       storefront = await client.getStore(rotated);
     } catch (error) {
       const result = failureClassification(error);
@@ -242,7 +310,7 @@ export class DailyStorefrontWorker {
           idempotencyKey: `val-checker/session-expired/${claim.id}`,
         });
       }
-      return "failed";
+      return terminated("failed", phase, { ...claimed, classification: result });
     }
 
     const healthy = await this.dependencies.repository.applyLifecycle(
@@ -251,9 +319,13 @@ export class DailyStorefrontWorker {
       "CONNECTED",
     );
     if (!healthy.applied) {
-      return "skipped";
+      return terminated("skipped", "LIFECYCLE_STALE", {
+        ...claimed,
+        classification: "OK",
+      });
     }
 
+    let matchesFound = 0;
     try {
       const sentNotifications =
         await this.dependencies.repository.loadSentNotifications(
@@ -266,17 +338,51 @@ export class DailyStorefrontWorker {
         storefront,
         userId: connection.userId,
       });
-      await this.dependencies.sendStorefront({
+      matchesFound = plan.matches.length;
+      const delivery = await this.dependencies.sendStorefront({
         ...plan,
         checkedAt,
         connectionId: connection.id,
         userId: connection.userId,
       });
-      return "checked";
+      return {
+        ...claimed,
+        classification: "OK",
+        emailsSent: delivery.emailsSent,
+        matchesFound,
+        outcome: "checked",
+        reason: null,
+      };
     } catch {
       // A valid storefront proves session health. Downstream failures are not
       // fed into the Riot session lifecycle.
-      return "failed";
+      return terminated("failed", "DELIVERY_FAILED", {
+        ...claimed,
+        classification: "OK",
+        matchesFound,
+      });
+    }
+  }
+
+  private async recordRun(
+    connection: WorkerConnection,
+    result: AccountResult,
+  ): Promise<void> {
+    try {
+      await this.dependencies.repository.recordRun({
+        classification: result.classification,
+        connectionId: connection.id,
+        emailsSent: result.emailsSent,
+        matchesFound: result.matchesFound,
+        outcome: result.outcome,
+        reason: result.reason,
+        runId: result.runId,
+        storeDate: result.storeDate,
+        userId: connection.userId,
+      });
+    } catch {
+      // Operational logging is observability, never a gate. Losing a log line
+      // must not fail an otherwise successful check or stop later accounts.
     }
   }
 }

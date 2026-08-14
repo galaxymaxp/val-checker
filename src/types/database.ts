@@ -60,6 +60,20 @@ type RiotDailyRunRow = {
   storefront_attempted_at: string | null;
 };
 
+type RiotRunLogRow = {
+  id: string;
+  user_id: string;
+  connection_id: string;
+  run_id: string | null;
+  store_date: string | null;
+  ran_at: string;
+  outcome: "checked" | "failed" | "skipped";
+  reason: string | null;
+  classification: "OK" | "DEAD" | "UNKNOWN" | "ERROR" | null;
+  matches_found: number;
+  emails_sent: number;
+};
+
 type ShopCheckRow = {
   id: string;
   connection_id: string;
@@ -146,6 +160,15 @@ export interface Database {
             >
           >;
         Update: Partial<RiotDailyRunRow>;
+        Relationships: [];
+      };
+      riot_run_logs: {
+        Row: RiotRunLogRow;
+        Insert: Pick<RiotRunLogRow, "user_id" | "connection_id" | "outcome"> &
+          Partial<
+            Omit<RiotRunLogRow, "user_id" | "connection_id" | "outcome">
+          >;
+        Update: Partial<RiotRunLogRow>;
         Relationships: [];
       };
       shop_checks: {

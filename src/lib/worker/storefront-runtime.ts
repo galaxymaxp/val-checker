@@ -60,13 +60,14 @@ export async function runConfiguredDailyStorefrontCron(): Promise<DailyStorefron
       });
     },
     sendStorefront: async (input) => {
-      await storefrontDelivery.deliver({
+      const { emailsSent } = await storefrontDelivery.deliver({
         canonicalStorefront: input.canonicalStorefront,
         checkedAt: input.checkedAt,
         connectionId: input.connectionId,
         emails: input.emails,
         userId: input.userId,
       });
+      return { emailsSent };
     },
     sessionStore,
   }).run();

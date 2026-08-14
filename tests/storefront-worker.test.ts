@@ -59,6 +59,7 @@ function setup(options: {
     loadSentNotifications: vi.fn().mockResolvedValue([]),
     loadVerifiedEmail: vi.fn().mockResolvedValue("verified@example.com"),
     markStorefrontAttempt: vi.fn().mockResolvedValue(checkedAt),
+    recordRun: vi.fn().mockResolvedValue(undefined),
   };
   const refreshSession = vi.fn().mockResolvedValue(session(2));
   const getStore = vi.fn().mockResolvedValue({ levelUuids: [], payload: {} });
@@ -85,7 +86,7 @@ function setup(options: {
     pipeline,
     repository,
     sendExpiry: vi.fn().mockResolvedValue(undefined),
-    sendStorefront: vi.fn().mockResolvedValue(undefined),
+    sendStorefront: vi.fn().mockResolvedValue({ emailsSent: 0 }),
     sessionStore,
   };
   return {

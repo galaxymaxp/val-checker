@@ -8,6 +8,7 @@ import type {
   DailyRunClaim,
   DailyStorefrontRepository,
   LifecycleApplication,
+  RunLogEntry,
   WorkerConnection,
 } from "@/src/lib/worker/storefront-worker";
 
@@ -137,6 +138,23 @@ export class SupabaseDailyStorefrontRepository
       throw new StorefrontWorkerRepositoryError();
     }
     return attemptedAt;
+  }
+
+  async recordRun(entry: RunLogEntry): Promise<void> {
+    const { error } = await this.supabase.from("riot_run_logs").insert({
+      classification: entry.classification,
+      connection_id: entry.connectionId,
+      emails_sent: entry.emailsSent,
+      matches_found: entry.matchesFound,
+      outcome: entry.outcome,
+      reason: entry.reason,
+      run_id: entry.runId,
+      store_date: entry.storeDate,
+      user_id: entry.userId,
+    });
+    if (error) {
+      throw new StorefrontWorkerRepositoryError();
+    }
   }
 
   async applyLifecycle(
