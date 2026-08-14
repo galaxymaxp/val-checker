@@ -34,6 +34,7 @@ describe("reauthenticated session persistence", () => {
 
     const run = reauthenticateAndPersist({
       adapter: { refreshSession },
+      expectedConnectionEpoch: "epoch-id",
       session: initial,
       store: { persistRotated },
       userId: "user-id",
@@ -43,7 +44,11 @@ describe("reauthenticated session persistence", () => {
     });
 
     await vi.waitFor(() => {
-      expect(persistRotated).toHaveBeenCalledWith("user-id", rotated);
+      expect(persistRotated).toHaveBeenCalledWith(
+        "user-id",
+        rotated,
+        "epoch-id",
+      );
     });
     expect(completed).not.toHaveBeenCalled();
 
@@ -60,6 +65,7 @@ describe("reauthenticated session persistence", () => {
 
     const run = reauthenticateAndPersist({
       adapter: { refreshSession: vi.fn().mockResolvedValue(rotated) },
+      expectedConnectionEpoch: "epoch-id",
       session: session(1),
       store: {
         persistRotated: vi
@@ -87,6 +93,7 @@ describe("reauthenticated session persistence", () => {
     await expect(
       reauthenticateAndPersist({
         adapter: { refreshSession: vi.fn().mockRejectedValue(failure) },
+        expectedConnectionEpoch: "epoch-id",
         session: session(1),
         store: { persistRotated },
         userId: "user-id",

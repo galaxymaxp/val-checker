@@ -117,7 +117,7 @@ export class StorefrontEmailDeliveryService {
       }
 
       const reservation = await this.reserve(input, planned.skinUuid, checkedAt);
-      if (reservation.notification_emailed_at) {
+      if (!reservation.notification_delivery_claimed) {
         emailsSkipped += 1;
         continue;
       }

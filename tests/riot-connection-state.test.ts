@@ -9,7 +9,10 @@ import type { Database } from "@/src/types/database";
 
 vi.mock("server-only", () => ({}));
 
-function stateClient(result: { data: { id: string } | null; error: unknown }) {
+function stateClient(result: {
+  data: { auth_status: Database["public"]["Enums"]["auth_status"]; id: string } | null;
+  error: unknown;
+}) {
   const maybeSingle = vi.fn().mockResolvedValue(result);
   const eq = vi.fn(() => ({ maybeSingle }));
   const select = vi.fn(() => ({ eq }));
@@ -23,12 +26,26 @@ function stateClient(result: { data: { id: string } | null; error: unknown }) {
 
 describe("Riot connection state loader", () => {
   it("loads only connection presence scoped to the verified user", async () => {
-    const { eq, supabase } = stateClient({ data: { id: "row-id" }, error: null });
+    const { eq, supabase } = stateClient({
+      data: { auth_status: "CONNECTED", id: "row-id" },
+      error: null,
+    });
 
     await expect(
       loadRiotConnectionStateWithClient(supabase, "verified-user"),
     ).resolves.toBe("connected");
     expect(eq).toHaveBeenCalledWith("user_id", "verified-user");
+  });
+
+  it("exposes a retained reauth-required row as reconnect-capable", async () => {
+    const { supabase } = stateClient({
+      data: { auth_status: "REAUTH_REQUIRED", id: "row-id" },
+      error: null,
+    });
+
+    await expect(
+      loadRiotConnectionStateWithClient(supabase, "verified-user"),
+    ).resolves.toBe("disconnected");
   });
 
   it("returns disconnected for no row and redacts query failures", async () => {

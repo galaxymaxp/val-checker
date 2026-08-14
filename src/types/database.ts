@@ -37,6 +37,7 @@ type AuthStatus =
 type RiotConnectionRow = {
   id: string;
   user_id: string;
+  connection_epoch: string;
   puuid: string | null;
   region: string | null;
   shard: string | null;
@@ -47,6 +48,16 @@ type RiotConnectionRow = {
   consecutive_failures: number;
   last_refresh_at: string | null;
   created_at: string;
+};
+
+type RiotDailyRunRow = {
+  id: string;
+  user_id: string;
+  connection_id: string;
+  connection_epoch: string;
+  store_date: string;
+  claimed_at: string;
+  storefront_attempted_at: string | null;
 };
 
 type ShopCheckRow = {
@@ -68,6 +79,7 @@ type NotificationRow = {
   skin_uuid: string;
   shop_check_id: string;
   created_at: string;
+  delivery_attempted_at: string | null;
   emailed_at: string | null;
 };
 
@@ -113,11 +125,27 @@ export interface Database {
           region?: string | null;
           shard?: string | null;
           auth_status?: AuthStatus;
+          connection_epoch?: string;
           consecutive_failures?: number;
           last_refresh_at?: string | null;
           session_key_version?: number;
         };
         Update: Partial<RiotConnectionRow>;
+        Relationships: [];
+      };
+      riot_daily_runs: {
+        Row: RiotDailyRunRow;
+        Insert: Pick<
+          RiotDailyRunRow,
+          "user_id" | "connection_id" | "connection_epoch" | "store_date"
+        > &
+          Partial<
+            Omit<
+              RiotDailyRunRow,
+              "user_id" | "connection_id" | "connection_epoch" | "store_date"
+            >
+          >;
+        Update: Partial<RiotDailyRunRow>;
         Relationships: [];
       };
       shop_checks: {
@@ -157,6 +185,26 @@ export interface Database {
         Args: Record<PropertyKey, never>;
         Returns: number;
       };
+      claim_riot_daily_run: {
+        Args: {
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          claimed_at: string;
+          run_id: string;
+          store_date: string;
+        }[];
+      };
+      mark_riot_storefront_attempt: {
+        Args: {
+          p_connection_epoch: string;
+          p_run_id: string;
+          p_user_id: string;
+        };
+        Returns: { attempted_at: string }[];
+      };
       reserve_storefront_notification: {
         Args: {
           p_checked_at: string;
@@ -170,6 +218,7 @@ export interface Database {
         };
         Returns: {
           notification_emailed_at: string | null;
+          notification_delivery_claimed: boolean;
           notification_id: string;
           shop_check_id: string;
         }[];

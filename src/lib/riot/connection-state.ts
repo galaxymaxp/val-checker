@@ -18,7 +18,7 @@ export async function loadRiotConnectionStateWithClient(
 ): Promise<RiotConnectionState> {
   const { data, error } = await supabase
     .from("riot_connections")
-    .select("id")
+    .select("auth_status, id")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -26,5 +26,7 @@ export async function loadRiotConnectionStateWithClient(
     throw new RiotConnectionStateError();
   }
 
-  return data ? "connected" : "disconnected";
+  return data && data.auth_status !== "REAUTH_REQUIRED"
+    ? "connected"
+    : "disconnected";
 }

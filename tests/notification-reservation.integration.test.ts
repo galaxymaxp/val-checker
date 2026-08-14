@@ -134,20 +134,27 @@ describe("storefront notification reservation", () => {
           p_skin_uuid: skinUuid,
           p_user_id: userId,
         };
-        const first = await admin.rpc(
-          "reserve_storefront_notification",
-          args,
+        const attempts = await Promise.all(
+          Array.from({ length: 8 }, () =>
+            admin.rpc("reserve_storefront_notification", args),
+          ),
         );
-        const second = await admin.rpc(
-          "reserve_storefront_notification",
-          args,
-        );
-
-        expect(first.error).toBeNull();
-        expect(second.error).toBeNull();
-        expect(first.data).toHaveLength(1);
-        expect(second.data).toEqual(first.data);
-        const reservation = first.data?.[0];
+        for (const attempt of attempts) {
+          expect(attempt.error).toBeNull();
+          expect(attempt.data).toHaveLength(1);
+        }
+        const reservations = attempts.map((attempt) => attempt.data![0]);
+        expect(
+          reservations.filter(
+            (reservation) => reservation.notification_delivery_claimed,
+          ),
+        ).toHaveLength(1);
+        expect([
+          ...new Set(
+            reservations.map(({ notification_id }) => notification_id),
+          ),
+        ]).toHaveLength(1);
+        const reservation = reservations[0];
         expect(reservation?.notification_emailed_at).toBeNull();
 
         const [checks, notifications] = await Promise.all([
@@ -158,7 +165,7 @@ describe("storefront notification reservation", () => {
             .eq("rotation_date", "2026-08-14"),
           admin
             .from("notifications")
-            .select("id, emailed_at")
+            .select("delivery_attempted_at, id, emailed_at")
             .eq("user_id", userId)
             .eq("skin_uuid", skinUuid),
         ]);
@@ -170,9 +177,11 @@ describe("storefront notification reservation", () => {
           },
         ]);
         expect(notifications.error).toBeNull();
-        expect(notifications.data).toEqual([
-          { emailed_at: null, id: reservation?.notification_id },
-        ]);
+        expect(notifications.data?.[0]).toMatchObject({
+          emailed_at: null,
+          id: reservation?.notification_id,
+        });
+        expect(notifications.data?.[0].delivery_attempted_at).not.toBeNull();
 
         const emailedAt = "2026-08-14T00:06:00.000Z";
         expect(
@@ -188,6 +197,9 @@ describe("storefront notification reservation", () => {
           args,
         );
         expect(afterAcceptance.error).toBeNull();
+        expect(
+          afterAcceptance.data?.[0].notification_delivery_claimed,
+        ).toBe(false);
         expect(
           new Date(
             afterAcceptance.data?.[0].notification_emailed_at ?? "",

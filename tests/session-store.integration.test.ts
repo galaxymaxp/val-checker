@@ -116,6 +116,7 @@ describe("encrypted Supabase session storage", () => {
         .single();
       expect(readError).toBeNull();
       expect(persisted?.session_key_version).toBe(1);
+      expect(persisted?.connection_epoch).toBeDefined();
       expect(Object.keys(persisted ?? {})).not.toContain("encryption_key");
 
       const loaded = await store.load(userId);
@@ -137,11 +138,14 @@ describe("encrypted Supabase session storage", () => {
 
       const { data: submittedRow, error: submittedReadError } = await admin
         .from("riot_connections")
-        .select("encrypted_jar, region")
+        .select("connection_epoch, encrypted_jar, region")
         .eq("user_id", userId)
         .single();
       expect(submittedReadError).toBeNull();
       expect(submittedRow?.region).toBe("ap");
+      expect(submittedRow?.connection_epoch).not.toBe(
+        persisted?.connection_epoch,
+      );
       expect(JSON.stringify(submittedRow)).not.toContain(
         "offline-submitted-session-value",
       );
@@ -176,18 +180,23 @@ describe("encrypted Supabase session storage", () => {
         now: () => new Date("2026-08-14T11:00:00.000Z"),
       }).capture({ serializedJar: rotatedJar });
 
-      await store.persistRotated(userId, rotatedSession);
+      await store.persistRotated(
+        userId,
+        rotatedSession,
+        submittedRow!.connection_epoch,
+      );
 
       const { data: rotatedRow, error: rotatedReadError } = await admin
         .from("riot_connections")
         .select(
-          "auth_status, consecutive_failures, encrypted_jar, jar_nonce, last_refresh_at, puuid, region, session_key_version, shard",
+          "auth_status, connection_epoch, consecutive_failures, encrypted_jar, jar_nonce, last_refresh_at, puuid, region, session_key_version, shard",
         )
         .eq("user_id", userId)
         .single();
       expect(rotatedReadError).toBeNull();
       expect(rotatedRow).toMatchObject({
         auth_status: "RATE_LIMITED",
+        connection_epoch: submittedRow?.connection_epoch,
         consecutive_failures: 2,
         last_refresh_at: "2026-08-14T11:00:00+00:00",
         region: "ap",
@@ -209,7 +218,11 @@ describe("encrypted Supabase session storage", () => {
       ).toBe(true);
 
       await expect(
-        store.persistRotated(randomUUID(), rotatedSession),
+        store.persistRotated(userId, rotatedSession, randomUUID()),
+      ).rejects.toThrow("Encrypted session storage operation failed.");
+
+      await expect(
+        store.persistRotated(randomUUID(), rotatedSession, randomUUID()),
       ).rejects.toThrow("Encrypted session storage operation failed.");
 
       await store.delete(userId);

@@ -14,6 +14,7 @@ export class ReauthPersistenceRunError extends Error {
 
 type ReauthPersistenceDependencies = {
   readonly adapter: Pick<RiotAdapter, "refreshSession">;
+  readonly expectedConnectionEpoch: string;
   readonly session: Session;
   readonly store: Pick<SessionStore, "persistRotated">;
   readonly userId: string;
@@ -25,6 +26,7 @@ type ReauthPersistenceDependencies = {
  */
 export async function reauthenticateAndPersist({
   adapter,
+  expectedConnectionEpoch,
   session,
   store,
   userId,
@@ -32,7 +34,11 @@ export async function reauthenticateAndPersist({
   const rotatedSession = await adapter.refreshSession(session);
 
   try {
-    await store.persistRotated(userId, rotatedSession);
+    await store.persistRotated(
+      userId,
+      rotatedSession,
+      expectedConnectionEpoch,
+    );
   } catch {
     throw new ReauthPersistenceRunError();
   }

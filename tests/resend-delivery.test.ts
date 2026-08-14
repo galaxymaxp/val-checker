@@ -42,6 +42,7 @@ function canonicalStorefront(
 }
 
 type Reservation = {
+  readonly notification_delivery_claimed: boolean;
   readonly notification_emailed_at: string | null;
   readonly notification_id: string;
   readonly shop_check_id: string;
@@ -54,6 +55,7 @@ function deliveryClient(options: {
 } = {}) {
   const reservations = options.reservations ?? [
     {
+      notification_delivery_claimed: true,
       notification_emailed_at: null,
       notification_id: "55555555-5555-4555-8555-555555555555",
       shop_check_id: "66666666-6666-4666-8666-666666666666",
@@ -129,6 +131,7 @@ describe("storefront Resend delivery", () => {
   it("sends to the verified auth email and marks each acceptance afterward", async () => {
     const reservations: Reservation[] = [firstSkinUuid, secondSkinUuid].map(
       (_skinUuid, ordinal) => ({
+        notification_delivery_claimed: true,
         notification_emailed_at: null,
         notification_id: `${ordinal + 5}5555555-5555-4555-8555-555555555555`,
         shop_check_id: "66666666-6666-4666-8666-666666666666",
@@ -199,6 +202,7 @@ describe("storefront Resend delivery", () => {
     const { client, from } = deliveryClient({
       reservations: [
         {
+          notification_delivery_claimed: false,
           notification_emailed_at: "2026-08-14T00:06:00.000Z",
           notification_id: "55555555-5555-4555-8555-555555555555",
           shop_check_id: "66666666-6666-4666-8666-666666666666",
@@ -223,11 +227,13 @@ describe("storefront Resend delivery", () => {
     const { client } = deliveryClient({
       reservations: [
         {
+          notification_delivery_claimed: true,
           notification_emailed_at: null,
           notification_id: notificationId,
           shop_check_id: "66666666-6666-4666-8666-666666666666",
         },
         {
+          notification_delivery_claimed: false,
           notification_emailed_at: acceptedAt.toISOString(),
           notification_id: notificationId,
           shop_check_id: "66666666-6666-4666-8666-666666666666",

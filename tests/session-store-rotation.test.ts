@@ -37,11 +37,13 @@ function rotatedSession(): CapturedSession {
 function updateClient(result: { data: { id: string } | null; error: unknown }) {
   const maybeSingle = vi.fn().mockResolvedValue(result);
   const select = vi.fn(() => ({ maybeSingle }));
-  const eq = vi.fn(() => ({ select }));
+  const query = { eq: vi.fn(), select };
+  query.eq.mockReturnValue(query);
+  const eq = query.eq;
   const update = vi.fn(
     (value: Database["public"]["Tables"]["riot_connections"]["Update"]) => {
       void value;
-      return { eq };
+      return query;
     },
   );
   const from = vi.fn(() => ({ update }));
@@ -60,10 +62,11 @@ describe("rotated session storage", () => {
     const client = updateClient({ data: { id: "connection-id" }, error: null });
     const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
 
-    await store.persistRotated("user-id", rotatedSession());
+    await store.persistRotated("user-id", rotatedSession(), "epoch-id");
 
     expect(client.from).toHaveBeenCalledWith("riot_connections");
     expect(client.eq).toHaveBeenCalledWith("user_id", "user-id");
+    expect(client.eq).toHaveBeenCalledWith("connection_epoch", "epoch-id");
     expect(client.select).toHaveBeenCalledWith("id");
     expect(client.update).toHaveBeenCalledTimes(1);
     const update = client.update.mock.calls[0]?.[0];
@@ -89,7 +92,7 @@ describe("rotated session storage", () => {
     const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
 
     try {
-      await store.persistRotated("user-id", rotatedSession());
+      await store.persistRotated("user-id", rotatedSession(), "epoch-id");
       expect.unreachable("A failed rotation must fail the run.");
     } catch (error) {
       expect(error).toBeInstanceOf(SessionStorageError);

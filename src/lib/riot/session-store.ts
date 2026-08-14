@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CapturedSession } from "@/src/lib/riot/session-provider";
@@ -19,8 +20,15 @@ export class SessionStorageError extends Error {
 
 export interface SessionStore {
   delete(userId: string): Promise<void>;
-  load(userId: string): Promise<Uint8Array | null>;
-  persistRotated(userId: string, session: CapturedSession): Promise<void>;
+  load(
+    userId: string,
+    expectedConnectionEpoch?: string,
+  ): Promise<Uint8Array | null>;
+  persistRotated(
+    userId: string,
+    session: CapturedSession,
+    expectedConnectionEpoch: string,
+  ): Promise<void>;
   save(
     userId: string,
     session: CapturedSession,
@@ -61,6 +69,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
   async persistRotated(
     userId: string,
     session: CapturedSession,
+    expectedConnectionEpoch: string,
   ): Promise<void> {
     if (
       session.kind !== "captured-session" ||
@@ -71,7 +80,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     }
 
     const encrypted = this.cipher.encrypt(userId, session.material);
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from("riot_connections")
       .update({
         encrypted_jar: encodeBytea(encrypted.ciphertext),
@@ -79,9 +88,9 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
         last_refresh_at: session.capturedAt,
         session_key_version: encrypted.keyVersion,
       })
-      .eq("user_id", userId)
-      .select("id")
-      .maybeSingle();
+      .eq("user_id", userId);
+    query = query.eq("connection_epoch", expectedConnectionEpoch);
+    const { data, error } = await query.select("id").maybeSingle();
 
     if (error || !data) {
       throw new SessionStorageError();
@@ -105,6 +114,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     const { error } = await this.supabase.from("riot_connections").upsert(
       {
         auth_status: "CONNECTED",
+        connection_epoch: randomUUID(),
         consecutive_failures: 0,
         encrypted_jar: encodeBytea(encrypted.ciphertext),
         jar_nonce: encodeBytea(encrypted.nonce),
@@ -121,12 +131,18 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     }
   }
 
-  async load(userId: string): Promise<Uint8Array | null> {
-    const { data, error } = await this.supabase
+  async load(
+    userId: string,
+    expectedConnectionEpoch?: string,
+  ): Promise<Uint8Array | null> {
+    let query = this.supabase
       .from("riot_connections")
       .select("encrypted_jar, jar_nonce, session_key_version")
-      .eq("user_id", userId)
-      .maybeSingle();
+      .eq("user_id", userId);
+    if (expectedConnectionEpoch) {
+      query = query.eq("connection_epoch", expectedConnectionEpoch);
+    }
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
       throw new SessionStorageError();
