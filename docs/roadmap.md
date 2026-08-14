@@ -6,7 +6,50 @@
 
 > **Historical specification notice:** The Version 2.0 text below is preserved as
 > the decision record that governed Phases 1–4. Where it conflicts with the
-> Version 2.1 decision addendum immediately below, the addendum controls.
+> Version 2.1 or Version 2.2 decision addenda immediately below, the newest
+> addendum controls.
+
+## Version 2.2 decision addendum — Phase 6 ship gate opened
+
+**Decision date:** 2026-08-14
+
+### Durability gate retired
+
+The 14-day durability gate is retired. Research found Riot's enforcement against
+store checkers has taken the form of DMCA action against projects, not
+account-level bans. The gate was therefore guarding a risk the available evidence
+does not support. This decision supersedes the closed ship gate in Version 2.1
+and the Track C blocker in §8 and §11; those sections remain below as the
+historical record of why collection and use of real session material was
+previously blocked.
+
+The replacement control is a staged rollout:
+
+- begin with the operator's own account only for approximately three weeks; and
+- only after that dogfood period, add explicitly allowlisted users.
+
+The Phase 6 ship gate is now **OPEN for single-user dogfooding**. Live Riot
+requests are permitted only through the daily cron path and only for an
+allowlisted account.
+
+### Controls that remain load-bearing
+
+- The existing fail-closed connect-flow allowlist remains. It gates dogfooding
+  scope rather than account-ban risk: only allowlisted users may submit Riot
+  session material. Public magic-link signup remains open, and non-allowlisted
+  connection attempts must continue to be rejected.
+- Server-side session encryption remains mandatory. Email delivery requires the
+  service to retain the Riot session, unlike store checkers that keep sessions
+  client-side, so AES-256-GCM with encryption keys held outside Supabase is the
+  compensating control. It must not be weakened.
+- Storefront access is limited to **one check per user per day**, scheduled
+  shortly after the 00:00 UTC store rotation. There is no on-demand refresh
+  endpoint, polling, or user-triggered fetch. This is an architectural
+  constraint, not a configurable default.
+
+Phase 6 implements the real Riot adapter and daily worker path under these
+controls. The pending `skins.weapon_uuid` migration is still excluded until the
+project owner separately approves it.
 
 ## Version 2.1 decision addendum — build and ship gates separated
 
