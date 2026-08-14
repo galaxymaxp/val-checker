@@ -70,6 +70,32 @@ describe("watchlist server action", () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  it("rejects an invalid skin UUID before authentication", async () => {
+    const { setSkinWatched } = await import("@/app/dashboard/actions");
+
+    await expect(setSkinWatched("not-a-uuid", true)).resolves.toEqual({
+      error: "This skin is not valid.",
+      ok: false,
+    });
+    expect(getClaims).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(deleteRows).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unauthenticated mutation", async () => {
+    getClaims.mockResolvedValue({ data: { claims: {} } });
+    const { setSkinWatched } = await import("@/app/dashboard/actions");
+
+    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({
+      error: "Please sign in again.",
+      ok: false,
+    });
+    expect(upsert).not.toHaveBeenCalled();
+    expect(deleteRows).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("removes only the verified user's matching row", async () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
@@ -77,6 +103,20 @@ describe("watchlist server action", () => {
     await expect(setSkinWatched(skinUuid, false)).resolves.toEqual({ ok: true });
     expect(deleteEqUser).toHaveBeenCalledWith("user_id", "verified-user");
     expect(deleteEqSkin).toHaveBeenCalledWith("skin_uuid", skinUuid);
+  });
+
+  it("treats replayed watched=false requests as successful", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
+    const { setSkinWatched } = await import("@/app/dashboard/actions");
+
+    await expect(setSkinWatched(skinUuid, false)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(skinUuid, false)).resolves.toEqual({ ok: true });
+    expect(deleteRows).toHaveBeenCalledTimes(2);
+    expect(deleteEqUser).toHaveBeenCalledTimes(2);
+    expect(deleteEqUser).toHaveBeenCalledWith("user_id", "verified-user");
+    expect(deleteEqSkin).toHaveBeenCalledTimes(2);
+    expect(deleteEqSkin).toHaveBeenCalledWith("skin_uuid", skinUuid);
+    expect(revalidatePath).toHaveBeenCalledTimes(2);
   });
 
   it("returns a redacted error when the database rejects a mutation", async () => {
