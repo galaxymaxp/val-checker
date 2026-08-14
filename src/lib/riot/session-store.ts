@@ -20,6 +20,7 @@ export class SessionStorageError extends Error {
 export interface SessionStore {
   delete(userId: string): Promise<void>;
   load(userId: string): Promise<Uint8Array | null>;
+  persistRotated(userId: string, session: CapturedSession): Promise<void>;
   save(
     userId: string,
     session: CapturedSession,
@@ -56,6 +57,36 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     private readonly supabase: SupabaseClient<Database>,
     private readonly cipher: AesGcmSessionCipher,
   ) {}
+
+  async persistRotated(
+    userId: string,
+    session: CapturedSession,
+  ): Promise<void> {
+    if (
+      session.kind !== "captured-session" ||
+      !(session.material instanceof Uint8Array) ||
+      session.material.byteLength === 0
+    ) {
+      throw new SessionStorageError();
+    }
+
+    const encrypted = this.cipher.encrypt(userId, session.material);
+    const { data, error } = await this.supabase
+      .from("riot_connections")
+      .update({
+        encrypted_jar: encodeBytea(encrypted.ciphertext),
+        jar_nonce: encodeBytea(encrypted.nonce),
+        last_refresh_at: session.capturedAt,
+        session_key_version: encrypted.keyVersion,
+      })
+      .eq("user_id", userId)
+      .select("id")
+      .maybeSingle();
+
+    if (error || !data) {
+      throw new SessionStorageError();
+    }
+  }
 
   async save(
     userId: string,

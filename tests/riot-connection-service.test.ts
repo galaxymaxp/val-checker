@@ -36,6 +36,7 @@ function fixtureStore(): SessionStore {
   return {
     delete: vi.fn().mockResolvedValue(undefined),
     load: vi.fn().mockResolvedValue(null),
+    persistRotated: vi.fn().mockResolvedValue(undefined),
     save: vi.fn().mockResolvedValue(undefined),
   };
 }

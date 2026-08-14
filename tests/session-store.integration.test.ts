@@ -68,7 +68,7 @@ function sameValue(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 describe("encrypted Supabase session storage", () => {
-  it("persists only encrypted fixture material and removes it on disconnect", async () => {
+  it("persists encrypted material, rotates in place, and removes it on disconnect", async () => {
     const status = localSupabaseStatus();
     const admin = createClient<Database>(status.API_URL, status.SERVICE_ROLE_KEY, {
       auth: {
@@ -152,6 +152,65 @@ describe("encrypted Supabase session storage", () => {
           ? sameValue(loadedSubmission, new TextEncoder().encode(submittedJar))
           : false,
       ).toBe(true);
+
+      const { error: lifecycleSeedError } = await admin
+        .from("riot_connections")
+        .update({
+          auth_status: "RATE_LIMITED",
+          consecutive_failures: 2,
+          puuid: randomUUID(),
+          shard: "ap",
+        })
+        .eq("user_id", userId);
+      expect(lifecycleSeedError).toBeNull();
+
+      const rotatedJar = JSON.stringify([
+        {
+          domain: ".riotgames.com",
+          name: "ssid",
+          path: "/",
+          value: "offline-rotated-session-value",
+        },
+      ]);
+      const rotatedSession = await new SubmittedCookieProvider({
+        now: () => new Date("2026-08-14T11:00:00.000Z"),
+      }).capture({ serializedJar: rotatedJar });
+
+      await store.persistRotated(userId, rotatedSession);
+
+      const { data: rotatedRow, error: rotatedReadError } = await admin
+        .from("riot_connections")
+        .select(
+          "auth_status, consecutive_failures, encrypted_jar, jar_nonce, last_refresh_at, puuid, region, session_key_version, shard",
+        )
+        .eq("user_id", userId)
+        .single();
+      expect(rotatedReadError).toBeNull();
+      expect(rotatedRow).toMatchObject({
+        auth_status: "RATE_LIMITED",
+        consecutive_failures: 2,
+        last_refresh_at: "2026-08-14T11:00:00+00:00",
+        region: "ap",
+        session_key_version: 1,
+        shard: "ap",
+      });
+      expect(rotatedRow?.puuid).not.toBeNull();
+      expect(rotatedRow?.encrypted_jar).not.toBe(submittedRow?.encrypted_jar);
+      expect(JSON.stringify(rotatedRow)).not.toContain(
+        "offline-rotated-session-value",
+      );
+
+      const loadedRotation = await store.load(userId);
+      expect(loadedRotation).not.toBeNull();
+      expect(
+        loadedRotation
+          ? sameValue(loadedRotation, new TextEncoder().encode(rotatedJar))
+          : false,
+      ).toBe(true);
+
+      await expect(
+        store.persistRotated(randomUUID(), rotatedSession),
+      ).rejects.toThrow("Encrypted session storage operation failed.");
 
       await store.delete(userId);
       await expect(store.load(userId)).resolves.toBeNull();
