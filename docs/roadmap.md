@@ -69,6 +69,25 @@ The authoritative fixture does not define the shape of a present Night Market
 surfaced yet, and any future bundle surface must deduplicate the repeated bundle
 representations by bundle ID.
 
+### Phase 5 lifecycle blocker — authoritative v2.1 definition missing
+
+The Phase 5 foundation request references a “v2.1 consecutive-failure-counter
+correction,” but the merged repository and its PR/commit history do not define it.
+The only authoritative counter statement currently available is the historical
+Version 2.0 sentence in §8: “3 consecutive failures → `REAUTH_REQUIRED`.” That is
+not precise enough to implement the requested regression safely because it does
+not specify:
+
+- which of `UNKNOWN`, `ERROR`, or other non-`OK` results increment the counter;
+- the exact threshold correction and comparison semantics;
+- when an `OK` result resets the counter;
+- how existing lifecycle/account states affect counting and transitions; or
+- the historical bug that the required regression test must reproduce.
+
+Accordingly, no lifecycle decision function or guessed counter behavior is added.
+The independent Phase 5 foundation items may continue. Item 6 remains blocked
+until an authoritative v2.1 definition supplies the algorithm and bug case.
+
 ---
 
 ## 0. Agent operating rules — read first, obey always
