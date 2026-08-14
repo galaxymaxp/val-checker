@@ -49,6 +49,28 @@ type RiotConnectionRow = {
   created_at: string;
 };
 
+type ShopCheckRow = {
+  id: string;
+  connection_id: string;
+  checked_at: string;
+  shop_hash: string;
+  offer_skin_uuids: string[];
+  total_cost: number | null;
+  expires_at: string | null;
+  night_market: unknown | null;
+  bundle: unknown | null;
+  rotation_date: string;
+};
+
+type NotificationRow = {
+  id: string;
+  user_id: string;
+  skin_uuid: string;
+  shop_check_id: string;
+  created_at: string;
+  emailed_at: string | null;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -98,12 +120,59 @@ export interface Database {
         Update: Partial<RiotConnectionRow>;
         Relationships: [];
       };
+      shop_checks: {
+        Row: ShopCheckRow;
+        Insert: Pick<
+          ShopCheckRow,
+          "connection_id" | "rotation_date" | "shop_hash"
+        > &
+          Partial<
+            Omit<
+              ShopCheckRow,
+              "connection_id" | "rotation_date" | "shop_hash"
+            >
+          >;
+        Update: Partial<ShopCheckRow>;
+        Relationships: [];
+      };
+      notifications: {
+        Row: NotificationRow;
+        Insert: Pick<
+          NotificationRow,
+          "shop_check_id" | "skin_uuid" | "user_id"
+        > &
+          Partial<
+            Omit<
+              NotificationRow,
+              "shop_check_id" | "skin_uuid" | "user_id"
+            >
+          >;
+        Update: Partial<NotificationRow>;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: {
       health_check: {
         Args: Record<PropertyKey, never>;
         Returns: number;
+      };
+      reserve_storefront_notification: {
+        Args: {
+          p_checked_at: string;
+          p_connection_id: string;
+          p_expires_at: string | null;
+          p_offer_skin_uuids: string[];
+          p_rotation_date: string;
+          p_shop_hash: string;
+          p_skin_uuid: string;
+          p_user_id: string;
+        };
+        Returns: {
+          notification_emailed_at: string | null;
+          notification_id: string;
+          shop_check_id: string;
+        }[];
       };
     };
     Enums: {
