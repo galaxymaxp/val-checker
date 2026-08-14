@@ -1,9 +1,6 @@
 import type { CapturedSession } from "@/src/lib/riot/session-provider";
 
-/**
- * Riot network boundary. Phase 5 may build fixture-driven foundations, but the
- * ship gate remains closed and no live adapter implementation belongs here yet.
- */
+/** Riot network boundary. No Riot URL, header, or response type crosses it. */
 export type Session = CapturedSession;
 
 export interface Entitlements {
@@ -12,6 +9,8 @@ export interface Entitlements {
 
 export interface Storefront {
   readonly levelUuids: readonly string[];
+  /** The single fetched response, retained for the existing pure pipeline. */
+  readonly payload: unknown;
 }
 
 export interface HealthStatus {
