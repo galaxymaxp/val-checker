@@ -1,13 +1,14 @@
 import "server-only";
 
+import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import type {
   Entitlements,
+  FetchedStorefront,
   HealthStatus,
   RiotAdapter,
   Session,
-  Storefront,
 } from "@/src/lib/riot/adapter";
 import type { SessionCheckResult } from "@/src/lib/riot/session-lifecycle";
 import { extractStorefrontSkinLevelUuids } from "@/src/lib/storefront/schema";
@@ -79,7 +80,7 @@ type AuthorizationContext = {
   readonly accessToken: string;
   entitlementsToken?: string;
   puuid?: string;
-  readonly session: Session;
+  readonly sessionFingerprint: Uint8Array;
 };
 
 type FailureClassification = Exclude<SessionCheckResult, "OK">;
@@ -398,6 +399,34 @@ function serializeCookieJar(cookies: readonly CanonicalCookie[]): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(cookies));
 }
 
+function fingerprintSession(session: Session): Uint8Array {
+  const digest = createHash("sha256");
+  digest.update(
+    JSON.stringify([
+      session.capturedAt,
+      session.fixtureOnly,
+      session.kind,
+      session.provider,
+    ]),
+    "utf8",
+  );
+  digest.update("\0", "utf8");
+  digest.update(session.material);
+  return new Uint8Array(digest.digest());
+}
+
+function sameSessionValue(
+  expectedFingerprint: Uint8Array,
+  session: Session,
+): boolean {
+  try {
+    const candidateFingerprint = fingerprintSession(session);
+    return timingSafeEqual(expectedFingerprint, candidateFingerprint);
+  } catch {
+    return false;
+  }
+}
+
 export function classifyReauthLocation(location: string | null): SessionCheckResult {
   if (!location) {
     return "UNKNOWN";
@@ -542,7 +571,7 @@ export class RiotClient implements RiotAdapter {
     this.initialSession = refreshedSession;
     this.activeAuthorization = {
       accessToken,
-      session: refreshedSession,
+      sessionFingerprint: fingerprintSession(refreshedSession),
     };
     return refreshedSession;
   }
@@ -618,7 +647,7 @@ export class RiotClient implements RiotAdapter {
     return this.region;
   }
 
-  async getStore(session: Session): Promise<Storefront> {
+  async getStore(session: Session): Promise<FetchedStorefront> {
     const authorization = this.requireAuthorization(session);
     const entitlements = await this.getEntitlements(session);
     const puuid = await this.getPUUID(session);
@@ -690,7 +719,7 @@ export class RiotClient implements RiotAdapter {
   private requireAuthorization(session: Session): AuthorizationContext {
     if (
       !this.activeAuthorization ||
-      this.activeAuthorization.session !== session
+      !sameSessionValue(this.activeAuthorization.sessionFingerprint, session)
     ) {
       throw new RiotClientError("ERROR");
     }

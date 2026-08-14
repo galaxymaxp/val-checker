@@ -291,6 +291,29 @@ describe("RiotClient", () => {
     });
   });
 
+  it("accepts an equal refreshed-session clone but rejects different material", async () => {
+    const client = new RiotClient({
+      fetchImplementation: fullFlowFetch(),
+      session: sessionWithCookies(),
+    });
+    const refreshed = await client.authenticate();
+    const clonedSession: CapturedSession = {
+      ...refreshed,
+      material: new Uint8Array(refreshed.material),
+    };
+
+    await expect(client.getStore(clonedSession)).resolves.toMatchObject({
+      levelUuids: expect.any(Array),
+      payload: storefrontFixture,
+    });
+
+    const differentMaterial = new Uint8Array(refreshed.material);
+    differentMaterial[differentMaterial.length - 1] ^= 1;
+    await expect(
+      client.getStore({ ...refreshed, material: differentMaterial }),
+    ).rejects.toMatchObject({ classification: "ERROR" });
+  });
+
   it("keeps health checks offline-injectable and redacts malformed data", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

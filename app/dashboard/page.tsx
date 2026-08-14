@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 
 import { setSkinWatched } from "@/app/dashboard/actions";
 import { CollectionBrowser } from "@/app/dashboard/collection-browser";
-import { disconnectRiotSession } from "@/app/dashboard/riot-actions";
+import {
+  connectRiotSession,
+  disconnectRiotSession,
+} from "@/app/dashboard/riot-actions";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
 import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
@@ -48,6 +51,7 @@ export default async function DashboardPage() {
       </header>
       <RiotConnectionPanel
         connectAllowed={riotConnectAllowed}
+        connectSession={riotConnectAllowed ? connectRiotSession : undefined}
         disconnect={disconnectRiotSession}
         initialState={riotConnectionState}
       />

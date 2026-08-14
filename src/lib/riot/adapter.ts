@@ -9,6 +9,10 @@ export interface Entitlements {
 
 export interface Storefront {
   readonly levelUuids: readonly string[];
+}
+
+/** Concrete fetch result retained for the neutral parsing pipeline. */
+export interface FetchedStorefront extends Storefront {
   /** The single fetched response, retained for the existing pure pipeline. */
   readonly payload: unknown;
 }

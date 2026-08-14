@@ -1,11 +1,17 @@
 import {
   type ManualCookieFixtureInput,
   ManualCookieProvider,
+  type SubmittedCookieJarInput,
+  SubmittedCookieProvider,
 } from "@/src/lib/riot/session-provider";
 import {
   type RiotConnectIdentity,
   RiotConnectAllowlist,
 } from "@/src/lib/riot/connect-allowlist";
+import {
+  parseRiotRegion,
+  type RiotRegion,
+} from "@/src/lib/riot/account-config";
 import type { SessionStore } from "@/src/lib/riot/session-store";
 import type { RiotConnectionState } from "@/src/types/riot-connection";
 
@@ -22,13 +28,36 @@ type ConnectFixtureRequest = {
   readonly identity: RiotConnectIdentity;
 };
 
-/** Fixture-only application flow. No request or browser input reaches this class. */
+export type ConnectSubmittedSessionRequest = {
+  readonly consentGranted: boolean;
+  readonly identity: RiotConnectIdentity;
+  readonly region?: unknown;
+  readonly session: SubmittedCookieJarInput;
+};
+
+/** Offline connection flow. Live Riot access remains exclusive to the daily worker. */
 export class RiotConnectionService {
   constructor(
     private readonly provider: ManualCookieProvider,
     private readonly store: SessionStore,
     private readonly allowlist: RiotConnectAllowlist,
+    private readonly submittedProvider = new SubmittedCookieProvider(),
   ) {}
+
+  async connect(
+    request: ConnectSubmittedSessionRequest,
+  ): Promise<RiotConnectionState> {
+    this.allowlist.assertAllowed(request.identity);
+
+    if (!request.consentGranted) {
+      throw new RiotConsentRequiredError();
+    }
+
+    const region: RiotRegion = parseRiotRegion(request.region);
+    const session = await this.submittedProvider.capture(request.session);
+    await this.store.save(request.identity.userId, session, { region });
+    return "connected";
+  }
 
   async connectFixture(
     request: ConnectFixtureRequest,

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CapturedSession } from "@/src/lib/riot/session-provider";
+import type { RiotRegion } from "@/src/lib/riot/account-config";
 import {
   AesGcmSessionCipher,
   type EncryptedSessionValue,
@@ -19,7 +20,11 @@ export class SessionStorageError extends Error {
 export interface SessionStore {
   delete(userId: string): Promise<void>;
   load(userId: string): Promise<Uint8Array | null>;
-  save(userId: string, session: CapturedSession): Promise<void>;
+  save(
+    userId: string,
+    session: CapturedSession,
+    account?: { readonly region: RiotRegion },
+  ): Promise<void>;
 }
 
 function encodeBytea(value: Uint8Array): string {
@@ -52,8 +57,16 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     private readonly cipher: AesGcmSessionCipher,
   ) {}
 
-  async save(userId: string, session: CapturedSession): Promise<void> {
-    if (session.fixtureOnly !== true) {
+  async save(
+    userId: string,
+    session: CapturedSession,
+    account?: { readonly region: RiotRegion },
+  ): Promise<void> {
+    if (
+      session.kind !== "captured-session" ||
+      !(session.material instanceof Uint8Array) ||
+      session.material.byteLength === 0
+    ) {
       throw new SessionStorageError();
     }
 
@@ -65,6 +78,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
         encrypted_jar: encodeBytea(encrypted.ciphertext),
         jar_nonce: encodeBytea(encrypted.nonce),
         last_refresh_at: session.capturedAt,
+        ...(account ? { region: account.region } : {}),
         session_key_version: encrypted.keyVersion,
         user_id: userId,
       },

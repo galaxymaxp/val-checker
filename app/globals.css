@@ -197,6 +197,31 @@ button {
   accent-color: var(--accent);
 }
 
+.riot-session-fields,
+.riot-session-fields label {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.riot-session-fields {
+  gap: 1rem;
+}
+
+.riot-session-fields textarea,
+.riot-session-fields select {
+  width: 100%;
+  border: 1px solid #2f3744;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  padding: 0.75rem;
+}
+
+.riot-session-fields textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
 .riot-connection-panel button {
   cursor: pointer;
 }

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -56,6 +56,70 @@ describe("Riot connection consent UI", () => {
       expect(screen.getByRole("heading", { name: "Connection paused" })).toBeInTheDocument();
     });
     expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits allowlisted cookie material with consent and the AP default", async () => {
+    const user = userEvent.setup();
+    const connectSession = vi.fn().mockResolvedValue({ ok: true });
+    const jar = JSON.stringify([
+      {
+        domain: ".riotgames.com",
+        name: "ssid",
+        path: "/",
+        value: "offline-session-value",
+      },
+    ]);
+
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={connectSession}
+        disconnect={vi.fn().mockResolvedValue({ ok: true })}
+        initialState="disconnected"
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Cookie export JSON" }),
+      { target: { value: jar } },
+    );
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Connect Riot session" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Riot connected" })).toBeInTheDocument();
+    });
+    expect(connectSession).toHaveBeenCalledWith({
+      consentGranted: true,
+      region: "ap",
+      serializedJar: jar,
+    });
+  });
+
+  it("clears submitted session material after a rejected connection attempt", async () => {
+    const user = userEvent.setup();
+    const connectSession = vi.fn().mockResolvedValue({
+      error: "The Riot session could not be connected.",
+      ok: false,
+    });
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={connectSession}
+        disconnect={vi.fn().mockResolvedValue({ ok: true })}
+        initialState="disconnected"
+      />,
+    );
+    const input = screen.getByRole("textbox", { name: "Cookie export JSON" });
+
+    fireEvent.change(input, { target: { value: "sensitive-session-material" } });
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Connect Riot session" }));
+
+    await waitFor(() => expect(input).toHaveValue(""));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The Riot session could not be connected.",
+    );
   });
 
   it("plainly discloses storage, access, encryption, revocation, and Riot logout", () => {

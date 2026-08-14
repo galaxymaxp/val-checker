@@ -10,7 +10,10 @@ import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { ManualCookieProvider } from "@/src/lib/riot/session-provider";
+import {
+  ManualCookieProvider,
+  SubmittedCookieProvider,
+} from "@/src/lib/riot/session-provider";
 import {
   AesGcmSessionCipher,
   loadSessionKeyring,
@@ -118,6 +121,37 @@ describe("encrypted Supabase session storage", () => {
       const loaded = await store.load(userId);
       expect(loaded).not.toBeNull();
       expect(loaded ? sameValue(loaded, fixtureMaterial) : false).toBe(true);
+
+      const submittedJar = JSON.stringify([
+        {
+          domain: ".riotgames.com",
+          name: "ssid",
+          path: "/",
+          value: "offline-submitted-session-value",
+        },
+      ]);
+      const submittedSession = await new SubmittedCookieProvider().capture({
+        serializedJar: submittedJar,
+      });
+      await store.save(userId, submittedSession, { region: "ap" });
+
+      const { data: submittedRow, error: submittedReadError } = await admin
+        .from("riot_connections")
+        .select("encrypted_jar, region")
+        .eq("user_id", userId)
+        .single();
+      expect(submittedReadError).toBeNull();
+      expect(submittedRow?.region).toBe("ap");
+      expect(JSON.stringify(submittedRow)).not.toContain(
+        "offline-submitted-session-value",
+      );
+      const loadedSubmission = await store.load(userId);
+      expect(loadedSubmission).not.toBeNull();
+      expect(
+        loadedSubmission
+          ? sameValue(loadedSubmission, new TextEncoder().encode(submittedJar))
+          : false,
+      ).toBe(true);
 
       await store.delete(userId);
       await expect(store.load(userId)).resolves.toBeNull();
