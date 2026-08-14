@@ -12,3 +12,7 @@ does not use the positional `SingleItemOffers` values for extraction. `PluginSto
 ignored because its newer structure is outside this phase, and `BonusStore` is optional
 because the authoritative non-Night-Market fixture omits it. The shape of a present
 Night Market `BonusStore` remains an open schema question.
+
+`../storefront/resolve.ts` hands those extracted levels to the existing catalog
+resolver. It preserves the resolver's fail-closed behavior when even one level is
+missing instead of silently dropping an offer.

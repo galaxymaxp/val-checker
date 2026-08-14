@@ -1,12 +1,19 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
-import { SKIN_LEVEL_ITEM_TYPE_ID } from "@/src/lib/catalog/resolve-skin-uuids";
+import {
+  SKIN_LEVEL_ITEM_TYPE_ID,
+  UnknownSkinLevelsError,
+} from "@/src/lib/catalog/resolve-skin-uuids";
+import { resolveStorefrontSkinUuidsWithClient } from "@/src/lib/storefront/resolve";
 import {
   extractStorefrontSkinLevelUuids,
   parseStorefrontPayload,
 } from "@/src/lib/storefront/schema";
+import type { Database } from "@/src/types/database";
 
 vi.mock("server-only", () => ({}));
 
@@ -16,6 +23,22 @@ const fixturePath = path.join(
   "storefront-real.json",
 );
 const fixture: unknown = JSON.parse(readFileSync(fixturePath, "utf8"));
+
+type SkinLevelRow = {
+  level_uuid: string;
+  skin_uuid: string;
+};
+
+function resolverClient(rows: readonly SkinLevelRow[]) {
+  const inFilter = vi.fn().mockResolvedValue({ data: rows, error: null });
+  const select = vi.fn(() => ({ in: inFilter }));
+  const from = vi.fn(() => ({ select }));
+
+  return {
+    inFilter,
+    supabase: { from } as unknown as SupabaseClient<Database>,
+  };
+}
 
 describe("storefront payload boundary", () => {
   it("parses the real non-Night-Market storefront and ignores plugin data", () => {
@@ -54,5 +77,43 @@ describe("storefront payload boundary", () => {
     expect(dailyCurrencies).toHaveLength(1);
     expect(accessoryCurrencies).toHaveLength(1);
     expect(accessoryCurrencies).not.toEqual(dailyCurrencies);
+  });
+});
+
+describe("storefront resolver handoff", () => {
+  it("passes real fixture reward levels through the catalog resolver", async () => {
+    const levelUuids = extractStorefrontSkinLevelUuids(fixture);
+    const rows = levelUuids.map((level_uuid) => ({
+      level_uuid,
+      skin_uuid: randomUUID(),
+    }));
+    const { inFilter, supabase } = resolverClient(rows);
+
+    await expect(
+      resolveStorefrontSkinUuidsWithClient(supabase, fixture),
+    ).resolves.toEqual(rows.map(({ skin_uuid }) => skin_uuid));
+    expect(inFilter).toHaveBeenCalledWith("level_uuid", levelUuids);
+  });
+
+  it("fails explicitly when a real fixture level is unmapped", async () => {
+    const levelUuids = extractStorefrontSkinLevelUuids(fixture);
+    const unmappedLevelUuid = levelUuids.at(-1);
+    const mappedRows = levelUuids.slice(0, -1).map((level_uuid) => ({
+      level_uuid,
+      skin_uuid: randomUUID(),
+    }));
+    const { supabase } = resolverClient(mappedRows);
+
+    expect(unmappedLevelUuid).toBeDefined();
+
+    try {
+      await resolveStorefrontSkinUuidsWithClient(supabase, fixture);
+      expect.unreachable("The storefront resolver must surface a stale catalog.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnknownSkinLevelsError);
+      expect((error as UnknownSkinLevelsError).unknownLevelUuids).toEqual([
+        unmappedLevelUuid,
+      ]);
+    }
   });
 });
