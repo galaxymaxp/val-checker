@@ -38,10 +38,12 @@ detection caused by the operating model.
   until the external durability spike has not failed in a way that resembles
   Riot enforcement or abuse detection rather than ordinary session expiry. The
   spike continues as an abuse-detection canary.
-- **Public signup remains available.** The Version 2.0 invite-only/allowlist
-  statement in §8 is superseded. The ship gate applies only to Riot
-  account-access material, not to public website signup, ordinary site auth,
-  catalog browsing, watchlists, or other Riot-independent functionality.
+- **Public signup remains available.** The Version 2.0 website-wide
+  invite-only statement in §8 is superseded. Public website signup, ordinary
+  site auth, catalog browsing, watchlists, and other Riot-independent
+  functionality remain open. Riot **connection**, however, is protected by a
+  separate fail-closed server-side allowlist of verified user IDs and emails;
+  that narrow authorization boundary does not satisfy or replace the ship gate.
 
 Encryption keys remain outside Supabase. Fixture-driven Phase 5 work must never
 persist keys in Supabase, introduce real credential/session material, make live
@@ -69,7 +71,13 @@ The authoritative fixture does not define the shape of a present Night Market
 surfaced yet, and any future bundle surface must deduplicate the repeated bundle
 representations by bundle ID.
 
-### Phase 5 lifecycle blocker — authoritative v2.1 definition missing
+### Phase 5 lifecycle decision — three-failure rule made operational
+
+> **Historical blocker:** The initial Phase 5 implementation correctly stopped
+> here because no merged material defined the requested v2.1 counter correction
+> precisely enough to implement without guessing. The investigation and missing
+> details are preserved below. The project owner's superseding decision after
+> that investigation now supplies the authoritative semantics.
 
 The Phase 5 foundation request references a “v2.1 consecutive-failure-counter
 correction,” but the merged repository and its PR/commit history do not define it.
@@ -84,9 +92,23 @@ not specify:
 - how existing lifecycle/account states affect counting and transitions; or
 - the historical bug that the required regression test must reproduce.
 
-Accordingly, no lifecycle decision function or guessed counter behavior is added.
-The independent Phase 5 foundation items may continue. Item 6 remains blocked
-until an authoritative v2.1 definition supplies the algorithm and bug case.
+Accordingly, at that point no lifecycle decision function or guessed counter
+behavior was added, and independent Phase 5 foundation items continued.
+
+The project owner subsequently made the merged Version 2.0 rule operational and
+authoritative, superseding the unavailable v2.1 detail:
+
+- `OK` resets `consecutive_failures` to zero;
+- `DEAD` is authoritative and immediately transitions to disconnected with no
+  further checks; it is never added to the failure counter;
+- `UNKNOWN` and `ERROR` each increment `consecutive_failures`;
+- a count greater than or equal to 3 transitions to `REAUTH_REQUIRED`; and
+- a below-threshold ambiguous failure does not disconnect the account.
+
+This narrower decision preserves the merged “3 consecutive failures →
+`REAUTH_REQUIRED`” rule while making its reset, classification, and threshold
+semantics testable. It supersedes only the unavailable v2.1 counter specification;
+the historical decision not to invent those details remains part of this record.
 
 ---
 

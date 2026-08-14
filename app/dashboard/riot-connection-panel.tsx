@@ -8,18 +8,18 @@ import type {
 } from "@/src/types/riot-connection";
 
 interface RiotConnectionPanelProps {
+  readonly connectAllowed: boolean;
   readonly connectFixture?: (
     consentGranted: boolean,
   ) => Promise<RiotConnectionMutationResult>;
   readonly disconnect: () => Promise<RiotConnectionMutationResult>;
-  readonly fixtureMode?: boolean;
   readonly initialState: RiotConnectionState;
 }
 
 export function RiotConnectionPanel({
+  connectAllowed,
   connectFixture,
   disconnect,
-  fixtureMode = false,
   initialState,
 }: RiotConnectionPanelProps) {
   const [connectionState, setConnectionState] =
@@ -29,7 +29,7 @@ export function RiotConnectionPanel({
   const [error, setError] = useState<string>();
 
   async function connect() {
-    if (!fixtureMode || !connectFixture || !consentGranted || isPending) {
+    if (!connectAllowed || !connectFixture || !consentGranted || isPending) {
       return;
     }
 
@@ -118,17 +118,24 @@ export function RiotConnectionPanel({
             </span>
           </label>
           <button
-            disabled={!fixtureMode || !connectFixture || !consentGranted || isPending}
+            disabled={!connectAllowed || !connectFixture || !consentGranted || isPending}
             onClick={connect}
             type="button"
           >
-            {fixtureMode
-              ? isPending
-                ? "Connecting fixture…"
-                : "Connect fixture session"
-              : "Riot connection not yet available"}
+            {!connectAllowed
+              ? "Riot connection access not enabled"
+              : connectFixture
+                ? isPending
+                  ? "Connecting fixture…"
+                  : "Connect fixture session"
+                : "Riot connection not yet available"}
           </button>
-          {!fixtureMode ? (
+          {!connectAllowed ? (
+            <p className="ship-gate-note" role="note">
+              Riot connection access is limited to explicitly allowlisted accounts.
+              Public VAL Checker signup and Riot-independent features remain available.
+            </p>
+          ) : !connectFixture ? (
             <p className="ship-gate-note" role="note">
               The ship gate is closed. This site does not accept real Riot credentials or
               session material; connection remains fixture-only during development.

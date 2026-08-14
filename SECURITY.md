@@ -4,7 +4,7 @@
 
 Phase 5 may be developed with fixtures, injected boundaries, and local tests. The Riot credential **ship gate remains closed**: VAL Checker must not accept, store, use, or deploy functionality that handles real Riot credentials or session material until the durability spike has shown no failure resembling Riot enforcement or abuse detection. This restriction is separate from normal public website signup, which remains available.
 
-The current Riot connection UI cannot accept real session material. Its connect path is fixture/test-only, QR authentication is an explicit unsupported stub, and tests must not make Riot network requests.
+The current Riot connection UI cannot accept real session material. Its connect path is fixture/test-only, QR authentication is an explicit unsupported stub, and tests must not make Riot network requests. Connect eligibility is controlled by an explicit server-only allowlist of verified Supabase user IDs and emails. Empty or malformed configuration fails closed; a client-visible eligibility flag is presentation only, and the connection service enforces the allowlist again before capture or storage. Public signup and Riot-independent features are not allowlisted.
 
 ## Assets and trust boundaries
 
@@ -32,6 +32,18 @@ Runtime keys must be supplied through environment or runtime secret configuratio
 
 The authenticated user's `user_id` is passed to AES-GCM as authenticated additional data (AAD). This cryptographically binds a ciphertext to its owner without putting the identifier inside the plaintext. Moving one user's ciphertext to another user's row therefore causes authentication to fail. Database authorization and row-level security remain required; AAD is defense in depth, not a replacement for access control.
 
+### Unauthorized connection attempts
+
+Every working connection service entry point requires an explicit allowlist and
+checks the verified Supabase user ID or email before reading fixture material or
+writing storage. Runtime configuration contains comma-separated IDs and emails;
+no configured entries means no account can connect, and malformed entries reject
+the configuration rather than applying a partial list. Email matching is
+case-normalized, user ID matching is exact after UUID normalization, and neither
+client input nor `user_metadata` is trusted for authorization. Removing a user
+from the allowlist blocks future connects but never blocks disconnect and local
+deletion.
+
 ### Leaked logs, exceptions, and telemetry
 
 Logs, exception messages, test names, assertion messages, snapshots, and telemetry must not include plaintext sessions, cookies, jars, access tokens, ID tokens, Authorization headers, encryption keys, ciphertext-derived plaintext, or user-provided credential values. Encryption and provider failures use generic messages. Operational diagnostics should record only safe categories, versions, and correlation identifiers.
@@ -55,6 +67,7 @@ The external durability spike is an abuse-detection canary, not a development pr
 - AAD prevents undetected cross-user substitution only when the application supplies the correct authenticated user identifier.
 - Disconnecting from VAL Checker deletes local storage but does not itself revoke Riot-side sessions.
 - The durability spike is evidence from a limited observation window, not a guarantee against later enforcement or protocol changes.
-- The lifecycle v2.1 consecutive-failure correction remains unimplemented until authoritative project material defines its algorithm, reset semantics, threshold, and regression precisely enough to avoid inventing security behavior.
+- The connect allowlist limits who can enter the fixture-only flow; it does not make real credential handling safe or open the ship gate.
+- The unavailable lifecycle v2.1 detail has been superseded by an explicit project decision: `OK` resets the counter, `DEAD` disconnects immediately without being counted, `UNKNOWN` and `ERROR` increment it, and a count greater than or equal to 3 requires reauthentication. This reduces ambiguity but does not make ambiguous failures authoritative evidence of session death.
 
 Please report suspected vulnerabilities privately to the repository owner. Do not include real Riot credentials, cookies, tokens, session material, or encryption keys in a report.

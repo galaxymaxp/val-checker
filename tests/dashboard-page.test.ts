@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
+const canRiotConnect = vi.fn();
 const loadCatalogForBrowse = vi.fn();
 const loadRiotConnectionStateWithClient = vi.fn();
 const loadWatchedSkinUuids = vi.fn();
@@ -14,6 +15,7 @@ vi.mock("@/src/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/src/lib/catalog/browse", () => ({ loadCatalogForBrowse }));
+vi.mock("@/src/lib/riot/connect-allowlist", () => ({ canRiotConnect }));
 vi.mock("@/src/lib/riot/connection-state", () => ({
   loadRiotConnectionStateWithClient,
 }));
@@ -28,17 +30,21 @@ vi.mock("next/navigation", () => ({ redirect }));
 describe("dashboard page", () => {
   beforeEach(() => {
     getClaims.mockReset();
+    canRiotConnect.mockReset();
     loadCatalogForBrowse.mockReset();
     loadRiotConnectionStateWithClient.mockReset();
     loadWatchedSkinUuids.mockReset();
     redirect.mockReset();
     loadCatalogForBrowse.mockResolvedValue([]);
+    canRiotConnect.mockReturnValue(false);
     loadRiotConnectionStateWithClient.mockResolvedValue("disconnected");
     loadWatchedSkinUuids.mockResolvedValue([]);
   });
 
   it("renders after an authenticated magic-link session", async () => {
-    getClaims.mockResolvedValue({ data: { claims: { sub: "user-id" } } });
+    getClaims.mockResolvedValue({
+      data: { claims: { email: "user@example.com", sub: "user-id" } },
+    });
     const { default: DashboardPage } = await import("@/app/dashboard/page");
     const content = await DashboardPage();
 
@@ -48,6 +54,10 @@ describe("dashboard page", () => {
       admin,
       "user-id",
     );
+    expect(canRiotConnect).toHaveBeenCalledWith({
+      email: "user@example.com",
+      userId: "user-id",
+    });
   });
 
   it("keeps a server-side redirect as a second protection layer", async () => {

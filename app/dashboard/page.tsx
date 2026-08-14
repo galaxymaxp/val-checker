@@ -5,6 +5,7 @@ import { CollectionBrowser } from "@/app/dashboard/collection-browser";
 import { disconnectRiotSession } from "@/app/dashboard/riot-actions";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
+import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotConnectionStateWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -17,6 +18,12 @@ export default async function DashboardPage() {
   if (!data?.claims.sub) {
     redirect("/sign-in?next=/dashboard");
   }
+
+  const riotConnectAllowed = canRiotConnect({
+    email:
+      typeof data.claims.email === "string" ? data.claims.email : undefined,
+    userId: data.claims.sub,
+  });
 
   const [weapons, watchedSkinUuids, riotConnectionState] = await Promise.all([
     loadCatalogForBrowse(supabase),
@@ -40,6 +47,7 @@ export default async function DashboardPage() {
         </p>
       </header>
       <RiotConnectionPanel
+        connectAllowed={riotConnectAllowed}
         disconnect={disconnectRiotSession}
         initialState={riotConnectionState}
       />

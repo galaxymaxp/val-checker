@@ -18,6 +18,8 @@ describe("security documentation", () => {
     expect(security).toMatch(/session revocation and expiry/i);
     expect(security).toMatch(/Riot enforcement and abuse detection/i);
     expect(security).toMatch(/outside Supabase/i);
+    expect(security).toMatch(/explicit server-only allowlist/i);
+    expect(security).toMatch(/Public signup and Riot-independent features are not allowlisted/i);
     expect(security).toMatch(/residual risk and limitations/i);
   });
 
@@ -30,5 +32,6 @@ describe("security documentation", () => {
     expect(readme).toMatch(/No real Riot credentials or session material/i);
     expect(readme).toMatch(/public website signup remains available/i);
     expect(readme).toMatch(/must not be converted to invite-only/i);
+    expect(readme).toMatch(/connection service repeats the\s+authorization/is);
   });
 });

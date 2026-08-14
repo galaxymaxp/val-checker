@@ -12,17 +12,18 @@ describe("Riot connection consent UI", () => {
   it("keeps production connection closed without accepting credential input", () => {
     render(
       <RiotConnectionPanel
+        connectAllowed={false}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
       />,
     );
 
     expect(
-      screen.getByRole("button", { name: "Riot connection not yet available" }),
+      screen.getByRole("button", { name: "Riot connection access not enabled" }),
     ).toBeDisabled();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent(
-      "does not accept real Riot credentials or session material",
+      "limited to explicitly allowlisted accounts",
     );
   });
 
@@ -32,9 +33,9 @@ describe("Riot connection consent UI", () => {
     const disconnect = vi.fn().mockResolvedValue({ ok: true });
     render(
       <RiotConnectionPanel
+        connectAllowed
         connectFixture={connectFixture}
         disconnect={disconnect}
-        fixtureMode
         initialState="disconnected"
       />,
     );
@@ -60,6 +61,7 @@ describe("Riot connection consent UI", () => {
   it("plainly discloses storage, access, encryption, revocation, and Riot logout", () => {
     render(
       <RiotConnectionPanel
+        connectAllowed={false}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
       />,

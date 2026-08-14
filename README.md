@@ -10,6 +10,15 @@ Stored session material is encrypted with AES-256-GCM using a fresh nonce and th
 
 The working session provider accepts injected fixture/test bytes only. The deployed connection UI does not accept real credentials or real session material, QR authentication remains an explicit unsupported stub, and no live Riot request path is implemented.
 
+Riot connection eligibility is enforced separately on the server with explicit,
+comma-separated `RIOT_CONNECT_ALLOWED_USER_IDS` and
+`RIOT_CONNECT_ALLOWED_EMAILS` runtime values. The IDs and emails come from
+verified Supabase claims, not client input or editable user metadata. Missing or
+empty lists allow nobody, and malformed entries fail closed. The dashboard uses
+the check only to explain availability; the connection service repeats the
+authorization before fixture capture or storage, so the UI is not the security
+boundary. Disconnect is deliberately not allowlisted.
+
 ## Build and ship gates
 
 The former single 14-day durability gate has been split because session storage, consent, encryption, connect/disconnect behavior, and expiry handling do not depend on the observed Riot session lifetime:
@@ -19,7 +28,7 @@ The former single 14-day durability gate has been split because session storage,
 
 The durability spike continues as an abuse-detection canary. It is evidence for the credential-bearing ship decision, not a gate on offline development or Riot-independent features.
 
-Normal public website signup remains available and is separate from the Riot credential ship gate. Public signup, website authentication, catalog browsing, watchlists, and other Riot-independent functionality must not be converted to invite-only or placed behind a general allowlist.
+Normal public website signup remains available and is separate from both the Riot credential ship gate and the Riot connect allowlist. Public signup, website authentication, catalog browsing, watchlists, and other Riot-independent functionality must not be converted to invite-only or placed behind a general website allowlist.
 
 ## Requirements
 
