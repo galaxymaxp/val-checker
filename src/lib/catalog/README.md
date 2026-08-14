@@ -5,3 +5,10 @@ weapons payload before converting it to database-shaped weapon, skin, and skin-l
 
 `resolve-skin-uuids.ts` is the load-bearing boundary between storefront SkinLevel UUIDs
 and watchlist Skin UUIDs. Unknown levels are surfaced as `UnknownSkinLevelsError`.
+
+`../storefront/schema.ts` validates the scrubbed real storefront fixture and extracts
+daily SkinLevel UUIDs from `SingleItemStoreOffers[].Rewards[].ItemID`. It deliberately
+does not use the positional `SingleItemOffers` values for extraction. `PluginStores` is
+ignored because its newer structure is outside this phase, and `BonusStore` is optional
+because the authoritative non-Night-Market fixture omits it. The shape of a present
+Night Market `BonusStore` remains an open schema question.

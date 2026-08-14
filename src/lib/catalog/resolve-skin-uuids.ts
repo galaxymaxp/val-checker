@@ -3,6 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import type { Database } from "@/src/types/database";
 
+export const SKIN_LEVEL_ITEM_TYPE_ID =
+  "e7c63390-eda7-46e0-bb7a-a6abdacd2433";
+
 export class UnknownSkinLevelsError extends Error {
   readonly unknownLevelUuids: readonly string[];
 
