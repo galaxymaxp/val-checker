@@ -2,7 +2,9 @@
 
 **Version:** 2.0 · **Date:** 2026-08-14
 **Audience:** a coding agent (Codex-style) executing tasks autonomously, plus the human reviewing.
-**Mode:** Track B (Phases 1–4) is IN SCOPE now. Track C (Phases 5–9) is BLOCKED — see §8.
+**Mode:** Phase 6 is OPEN for allowlisted, single-user dogfooding. The Track C
+blockers retained in the Version 2.0/2.1 text are historical and superseded by
+the Version 2.2 decision below.
 
 > **Historical specification notice:** The Version 2.0 text below is preserved as
 > the decision record that governed Phases 1–4. Where it conflicts with the
@@ -50,6 +52,24 @@ allowlisted account.
 Phase 6 implements the real Riot adapter and daily worker path under these
 controls. The pending `skins.weapon_uuid` migration is still excluded until the
 project owner separately approves it.
+
+### Current operating and deployment contract
+
+- Production starts with only the operator's verified Supabase user ID or email
+  in the Riot connection allowlist for approximately three weeks. Additional
+  users are added explicitly after that dogfood window; public magic-link signup
+  remains open throughout.
+- The only live Riot request path is the protected daily cron, scheduled for
+  00:05 UTC. A per-user UTC-rotation database claim is authoritative even if the
+  scheduler invokes the route more than once. No UI action, public API route,
+  debug route, or polling loop may fetch a storefront.
+- Runtime configuration uses a public Supabase URL and publishable/legacy anon
+  key, a server-only Supabase secret/legacy service-role key, the versioned
+  `SESSION_ENCRYPTION_KEY_V<n>` keyring and current version, the Riot connect
+  allowlist, Resend credentials, and `CRON_SECRET`. The server-side values remain
+  outside source control; encryption keys remain outside Supabase.
+- Supabase schema changes are applied only from the reviewed migration history.
+  The full local and deployment procedure is maintained in the root README.
 
 ## Version 2.1 decision addendum — build and ship gates separated
 
@@ -155,9 +175,11 @@ the historical decision not to invent those details remains part of this record.
 
 ---
 
-## 0. Agent operating rules — read first, obey always
+## 0. Historical Version 2.0 agent operating rules
 
-These are hard constraints, not suggestions. Violating any is a failed task.
+These were the hard constraints for the Version 2.0 Track B implementation and
+are retained as decision history. The Version 2.2 addendum controls current
+Phase 6 work.
 
 1. **Work one task at a time.** Each task below has an ID (e.g. `1.3`) and an **Acceptance** block. Implement, then satisfy Acceptance (write/run the test or command), then move on. Do not batch phases.
 2. **Stop at the end of Phase 4 and report.** Do NOT begin Phase 5 or anything under Track C (§8). Those depend on an external experiment that has not returned. If you believe a Track-C task is unblocked, stop and ask the human instead of proceeding.
@@ -179,10 +201,10 @@ These are hard constraints, not suggestions. Violating any is a failed task.
 - Cookie-reauth returns a usable token without fresh login: **yes** (`GET /authorize`, `allow_redirects=False`, 301 → `playvalorant.com/opt_in#access_token=…`).
 - Rotation/persistence chain holds locally: **yes** (55/55 `OK` over ~13.5h, cookie count steady at 26).
 
-### Unknown (external experiment, not this agent's job)
-- Does an AP-region session survive ~21 days unattended from a datacenter IP without MFA? → measured by a separate VPS spike. **Track C stays blocked until this returns.**
+### Unknown in Version 2.0 (external experiment, not that agent's job)
+- Does an AP-region session survive ~21 days unattended from a datacenter IP without MFA? → measured by a separate VPS spike. **At that time, Track C stayed blocked until this returned.**
 
-### In scope for this agent, now
+### In scope for the Version 2.0 agent at that time
 - Phases 1–4: foundation, catalog sync + resolver, collection frontend, watchlist. **None of it touches Riot.**
 
 ---
@@ -217,7 +239,11 @@ These are hard constraints, not suggestions. Violating any is a failed task.
 
 ---
 
-## 3. Environment variables
+## 3. Historical Version 2.0 environment variables
+
+This table records the original plan. The Version 2.2 operating contract above
+and the root README define the current versioned keyring, Resend, allowlist, and
+cron configuration.
 
 Create `.env.local` (gitignored) and a committed `.env.example` with empty values.
 
@@ -411,9 +437,11 @@ Add/remove watch entries writing to `watchlist`; optimistic UI with rollback on 
 
 ---
 
-## 8. Track C — BLOCKED (Phases 5–9)
+## 8. Historical Version 2.0 Track C blocker — BLOCKED at that time
 
-> ⛔ **Do not implement any task in this section.** It depends on the durability spike (an external 3-week VPS measurement) returning a pass. Definitions are here so the agent understands the boundaries it must not cross, and so Phase 1–4 choices stay compatible.
+> **Historical instruction, superseded by Version 2.2:** Do not implement any
+> task in this section until the durability spike returns a pass. Definitions
+> are retained to preserve the reasoning that governed Phases 1–4.
 
 **Gate to unblock:** VPS reauth loop ≥14 consecutive unattended days, no manual login, no MFA prompt. Until the human confirms this, Track C stays closed.
 

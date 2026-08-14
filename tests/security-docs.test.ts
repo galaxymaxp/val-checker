@@ -14,24 +14,76 @@ describe("security documentation", () => {
     expect(security).toMatch(/cross-user ciphertext substitution/i);
     expect(security).toMatch(/user_id.*authenticated additional data \(AAD\)/is);
     expect(security).toMatch(/logs, exceptions, and telemetry/i);
-    expect(security).toMatch(/malicious or compromised fixtures/i);
+    expect(security).toMatch(/malicious submissions, fixtures, and test data/i);
     expect(security).toMatch(/session revocation and expiry/i);
     expect(security).toMatch(/Riot enforcement and abuse detection/i);
     expect(security).toMatch(/outside Supabase/i);
+    expect(security).toMatch(/AES-256-GCM encryption is load-bearing/i);
     expect(security).toMatch(/explicit server-only allowlist/i);
-    expect(security).toMatch(/Public signup and Riot-independent features are not allowlisted/i);
+    expect(security).toMatch(
+      /Public signup and Riot-independent features are not\s+allowlisted/i,
+    );
+    expect(security).toMatch(/one storefront attempt per user/i);
+    expect(security).toMatch(/deterministic idempotency key/i);
     expect(security).toMatch(/residual risk and limitations/i);
   });
 
-  it("keeps the credential ship gate distinct from public signup", () => {
+  it("documents the open gate, staged rollout, and hard cadence boundary", () => {
     const readme = readRepositoryFile("README.md");
+    const security = readRepositoryFile("SECURITY.md");
 
-    expect(readme).toMatch(/build gate is removed/i);
-    expect(readme).toMatch(/ship gate is retained and remains closed/i);
-    expect(readme).toMatch(/abuse-detection canary/i);
-    expect(readme).toMatch(/No real Riot credentials or session material/i);
-    expect(readme).toMatch(/public website signup remains available/i);
-    expect(readme).toMatch(/must not be converted to invite-only/i);
-    expect(readme).toMatch(/connection service repeats the\s+authorization/is);
+    expect(readme).toMatch(/single-user dogfooding/i);
+    expect(readme).toMatch(/operator's own account only for approximately three\s+weeks/i);
+    expect(readme).toMatch(/Public magic-link signup remains open/i);
+    expect(readme).toMatch(/session submission is a separate,\s+fail-closed capability/is);
+    expect(readme).toMatch(/exactly one storefront attempt per user and UTC rotation/i);
+    expect(readme).toMatch(/scheduled for 00:05 UTC/i);
+    expect(readme).toMatch(/no on-demand\s+refresh endpoint/i);
+    expect(readme).toMatch(/Server-side session encryption is load-bearing/i);
+    expect(readme).toMatch(/riot_run_logs/);
+    expect(readme).toMatch(/Raw error messages\s+are deliberately never stored/i);
+    expect(readme).not.toMatch(/ship gate is retained and remains closed/i);
+    expect(security).not.toMatch(/ship gate remains closed/i);
+  });
+
+  it("preserves the superseded gate history in the roadmap", () => {
+    const roadmap = readRepositoryFile("docs/roadmap.md");
+
+    expect(roadmap).toMatch(/Version 2\.2 decision addendum/i);
+    expect(roadmap).toMatch(/14-day durability gate is retired/i);
+    expect(roadmap).toMatch(/Historical Version 2\.0 Track C blocker/i);
+    expect(roadmap).toMatch(/SHIP GATE — RETAINED AND CLOSED/i);
+    expect(roadmap).toMatch(/superseded by Version 2\.2/i);
+  });
+
+  it("lists required configuration without checked-in values", () => {
+    const example = readRepositoryFile(".env.example");
+    const readme = readRepositoryFile("README.md");
+    const variables = [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SUPABASE_SECRET_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SESSION_ENCRYPTION_CURRENT_VERSION",
+      "SESSION_ENCRYPTION_KEY_V1",
+      "RIOT_CONNECT_ALLOWED_USER_IDS",
+      "RIOT_CONNECT_ALLOWED_EMAILS",
+      "RESEND_API_KEY",
+      "RESEND_FROM_EMAIL",
+      "CRON_SECRET",
+    ];
+
+    for (const variable of variables) {
+      expect(example).toMatch(new RegExp(`^${variable}=$`, "m"));
+      expect(readme).toContain(`\`${variable}\``);
+    }
+
+    const configuredLines = example
+      .split(/\r?\n/)
+      .filter((line) => line.length > 0 && !line.startsWith("#"));
+    expect(configuredLines.every((line) => line.endsWith("="))).toBe(true);
+    expect(readme).toMatch(/supabase migration up --local/i);
+    expect(readme).toMatch(/supabase db push --dry-run/i);
   });
 });
