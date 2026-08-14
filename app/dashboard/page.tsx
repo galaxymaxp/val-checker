@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 
 import { setSkinWatched } from "@/app/dashboard/actions";
 import { CollectionBrowser } from "@/app/dashboard/collection-browser";
+import { disconnectRiotSession } from "@/app/dashboard/riot-actions";
+import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
+import { loadRiotConnectionStateWithClient } from "@/src/lib/riot/connection-state";
+import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import { loadWatchedSkinUuids } from "@/src/lib/watchlist/load";
 
@@ -14,9 +18,13 @@ export default async function DashboardPage() {
     redirect("/sign-in?next=/dashboard");
   }
 
-  const [weapons, watchedSkinUuids] = await Promise.all([
+  const [weapons, watchedSkinUuids, riotConnectionState] = await Promise.all([
     loadCatalogForBrowse(supabase),
     loadWatchedSkinUuids(supabase),
+    loadRiotConnectionStateWithClient(
+      createAdminSupabaseClient(),
+      data.claims.sub,
+    ),
   ]);
 
   return (
@@ -31,6 +39,10 @@ export default async function DashboardPage() {
           access is not involved.
         </p>
       </header>
+      <RiotConnectionPanel
+        disconnect={disconnectRiotSession}
+        initialState={riotConnectionState}
+      />
       <CollectionBrowser
         initialWatchedSkinUuids={watchedSkinUuids}
         updateWatch={setSkinWatched}
