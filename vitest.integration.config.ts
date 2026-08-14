@@ -1,4 +1,4 @@
-import { configDefaults, defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -6,9 +6,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    exclude: [...configDefaults.exclude, "tests/**/*.integration.test.{ts,tsx}"],
     fileParallelism: false,
-    include: ["tests/**/*.test.{ts,tsx}"],
+    include: ["tests/**/*.integration.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
     testTimeout: 15_000,
   },

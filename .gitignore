@@ -21,6 +21,7 @@ test-results/
 !.env.example
 cookies*.json
 jar_live.json
+reauth_log.csv
 *.pem
 *.key
 
