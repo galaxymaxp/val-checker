@@ -18,10 +18,15 @@ export class UnknownSkinLevelsError extends Error {
   }
 }
 
-export async function resolveSkinUuidsWithClient(
+export interface ResolvedSkinLevel {
+  readonly levelUuid: string;
+  readonly skinUuid: string;
+}
+
+export async function resolveSkinLevelsWithClient(
   supabase: SupabaseClient<Database>,
   levelUuids: readonly string[],
-): Promise<string[]> {
+): Promise<ResolvedSkinLevel[]> {
   const uniqueLevelUuids = [...new Set(levelUuids)];
 
   if (uniqueLevelUuids.length === 0) {
@@ -47,6 +52,24 @@ export async function resolveSkinUuidsWithClient(
   if (unknownLevelUuids.length > 0) {
     throw new UnknownSkinLevelsError(unknownLevelUuids);
   }
+
+  return uniqueLevelUuids.map((levelUuid) => ({
+    levelUuid,
+    skinUuid: skinByLevel.get(levelUuid)!,
+  }));
+}
+
+export async function resolveSkinUuidsWithClient(
+  supabase: SupabaseClient<Database>,
+  levelUuids: readonly string[],
+): Promise<string[]> {
+  const resolvedLevels = await resolveSkinLevelsWithClient(
+    supabase,
+    levelUuids,
+  );
+  const skinByLevel = new Map(
+    resolvedLevels.map(({ levelUuid, skinUuid }) => [levelUuid, skinUuid]),
+  );
 
   const resolvedSkinUuids: string[] = [];
   const seenSkinUuids = new Set<string>();
