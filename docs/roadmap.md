@@ -4,6 +4,71 @@
 **Audience:** a coding agent (Codex-style) executing tasks autonomously, plus the human reviewing.
 **Mode:** Track B (Phases 1–4) is IN SCOPE now. Track C (Phases 5–9) is BLOCKED — see §8.
 
+> **Historical specification notice:** The Version 2.0 text below is preserved as
+> the decision record that governed Phases 1–4. Where it conflicts with the
+> Version 2.1 decision addendum immediately below, the addendum controls.
+
+## Version 2.1 decision addendum — build and ship gates separated
+
+**Decision date:** 2026-08-14
+
+### Historical gate and why it changed
+
+Version 2.0 used one durability gate for two different questions: whether Phase 5
+could be built, and whether the product could safely accept real Riot
+account-access material. It blocked all of Track C until an external VPS reauth
+loop reached at least 14 unattended days without manual login or MFA. That
+reasoning remains recorded in §0.2, §1, §8, and §11 below rather than being
+silently erased.
+
+The single gate was too broad. Session TTL does not change the Phase 5 design:
+consent, encryption, key separation, connect/disconnect behavior, revocation,
+and expiry handling are required whether a Riot session lasts 5 days or 21 days.
+The external spike still answers a separate and important shipping-risk question:
+whether failures look like ordinary expiry or like Riot enforcement/abuse
+detection caused by the operating model.
+
+### Current gates
+
+- **BUILD GATE — REMOVED.** Fixture-driven, test-driven Phase 5 foundation work
+  may proceed without a session-TTL result. External boundaries must be injected
+  or mocked, and no live Riot request is permitted.
+- **SHIP GATE — RETAINED AND CLOSED.** No real user's Riot credentials, cookies,
+  jars, tokens, or session material may be accepted, stored, used, or deployed
+  until the external durability spike has not failed in a way that resembles
+  Riot enforcement or abuse detection rather than ordinary session expiry. The
+  spike continues as an abuse-detection canary.
+- **Public signup remains available.** The Version 2.0 invite-only/allowlist
+  statement in §8 is superseded. The ship gate applies only to Riot
+  account-access material, not to public website signup, ordinary site auth,
+  catalog browsing, watchlists, or other Riot-independent functionality.
+
+Encryption keys remain outside Supabase. Fixture-driven Phase 5 work must never
+persist keys in Supabase, introduce real credential/session material, make live
+Riot requests, or deploy credential-bearing functionality.
+
+### Phase 4.5 delivered state
+
+The merged Phase 4.5 work added the scrubbed authoritative real storefront
+fixture and a Zod boundary for its observed storefront sections. It:
+
+- recognizes daily rewards as SkinLevel items using item-type UUID
+  `e7c63390-eda7-46e0-bb7a-a6abdacd2433`;
+- extracts normalized level UUIDs from
+  `SingleItemStoreOffers[].Rewards[].ItemID`, without relying on positional
+  `SingleItemOffers` values;
+- hands those levels through the existing SkinLevel-to-Skin resolver and fails
+  closed with `UnknownSkinLevelsError` for any unmapped level;
+- preserves per-offer, currency-keyed prices rather than assuming VP;
+- treats the absent `BonusStore` as optional and non-null when present; and
+- ignores the newer, substantial `PluginStores` structure instead of rejecting
+  the payload.
+
+The authoritative fixture does not define the shape of a present Night Market
+`BonusStore`; that remains an explicit schema question. Featured bundles are not
+surfaced yet, and any future bundle surface must deduplicate the repeated bundle
+representations by bundle ID.
+
 ---
 
 ## 0. Agent operating rules — read first, obey always
