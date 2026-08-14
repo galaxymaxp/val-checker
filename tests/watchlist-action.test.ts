@@ -4,13 +4,13 @@ const deleteEqSkin = vi.fn();
 const deleteEqUser = vi.fn(() => ({ eq: deleteEqSkin }));
 const deleteRows = vi.fn(() => ({ eq: deleteEqUser }));
 const getClaims = vi.fn();
-const insert = vi.fn();
 const revalidatePath = vi.fn();
+const upsert = vi.fn();
 
 vi.mock("@/src/lib/supabase/server", () => ({
   createServerSupabaseClient: async () => ({
     auth: { getClaims },
-    from: () => ({ delete: deleteRows, insert }),
+    from: () => ({ delete: deleteRows, upsert }),
   }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath }));
@@ -24,9 +24,9 @@ describe("watchlist server action", () => {
     deleteEqUser.mockClear();
     deleteRows.mockClear();
     getClaims.mockReset();
-    insert.mockReset();
-    insert.mockResolvedValue({ error: null });
     revalidatePath.mockReset();
+    upsert.mockReset();
+    upsert.mockResolvedValue({ error: null });
   });
 
   it("derives user ownership from verified claims when adding", async () => {
@@ -34,11 +34,40 @@ describe("watchlist server action", () => {
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
     await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({ ok: true });
-    expect(insert).toHaveBeenCalledWith({
-      skin_uuid: skinUuid,
-      user_id: "verified-user",
-    });
+    expect(upsert).toHaveBeenCalledWith(
+      {
+        skin_uuid: skinUuid,
+        user_id: "verified-user",
+      },
+      {
+        ignoreDuplicates: true,
+        onConflict: "user_id,skin_uuid",
+      },
+    );
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("treats replayed watched=true requests as successful", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
+    const { setSkinWatched } = await import("@/app/dashboard/actions");
+
+    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({ ok: true });
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(revalidatePath).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects malformed watched values before authentication", async () => {
+    const { setSkinWatched } = await import("@/app/dashboard/actions");
+
+    await expect(setSkinWatched(skinUuid, "true")).resolves.toEqual({
+      error: "This watch request is not valid.",
+      ok: false,
+    });
+    expect(getClaims).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(deleteRows).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("removes only the verified user's matching row", async () => {
@@ -52,7 +81,7 @@ describe("watchlist server action", () => {
 
   it("returns a redacted error when the database rejects a mutation", async () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
-    insert.mockResolvedValue({ error: { message: "sensitive database detail" } });
+    upsert.mockResolvedValue({ error: { message: "sensitive database detail" } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
     await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({

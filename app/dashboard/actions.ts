@@ -12,12 +12,18 @@ const databaseUuidSchema = z.string().regex(
 
 export async function setSkinWatched(
   skinUuid: string,
-  watched: boolean,
+  watched: unknown,
 ): Promise<WatchMutationResult> {
   const parsedSkinUuid = databaseUuidSchema.safeParse(skinUuid);
 
   if (!parsedSkinUuid.success) {
     return { error: "This skin is not valid.", ok: false };
+  }
+
+  const parsedWatched = z.boolean().safeParse(watched);
+
+  if (!parsedWatched.success) {
+    return { error: "This watch request is not valid.", ok: false };
   }
 
   const supabase = await createServerSupabaseClient();
@@ -28,11 +34,17 @@ export async function setSkinWatched(
     return { error: "Please sign in again.", ok: false };
   }
 
-  const { error } = watched
-    ? await supabase.from("watchlist").insert({
-        skin_uuid: parsedSkinUuid.data,
-        user_id: userId,
-      })
+  const { error } = parsedWatched.data
+    ? await supabase.from("watchlist").upsert(
+        {
+          skin_uuid: parsedSkinUuid.data,
+          user_id: userId,
+        },
+        {
+          ignoreDuplicates: true,
+          onConflict: "user_id,skin_uuid",
+        },
+      )
     : await supabase
         .from("watchlist")
         .delete()
