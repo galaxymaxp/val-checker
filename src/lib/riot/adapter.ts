@@ -1,10 +1,10 @@
+import type { CapturedSession } from "@/src/lib/riot/session-provider";
+
 /**
- * Track C boundary from Build Spec §8. This file intentionally contains only
- * an interface. Implementations stay blocked until the durability gate passes.
+ * Riot network boundary. Phase 5 may build fixture-driven foundations, but the
+ * ship gate remains closed and no live adapter implementation belongs here yet.
  */
-export interface Session {
-  readonly kind: "captured-session";
-}
+export type Session = CapturedSession;
 
 export interface Entitlements {
   readonly token: string;
