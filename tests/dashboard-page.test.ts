@@ -23,7 +23,9 @@ vi.mock("@/src/lib/supabase/server-admin", () => ({
   createAdminSupabaseClient: () => admin,
 }));
 vi.mock("@/src/lib/watchlist/load", () => ({ loadWatchedSkinUuids }));
-vi.mock("@/app/dashboard/actions", () => ({ setSkinWatched }));
+const signOut = vi.fn();
+
+vi.mock("@/app/dashboard/actions", () => ({ setSkinWatched, signOut }));
 vi.mock("@/app/dashboard/riot-actions", () => ({ disconnectRiotSession }));
 vi.mock("next/navigation", () => ({ redirect }));
 

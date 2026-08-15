@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -57,4 +58,10 @@ export async function setSkinWatched(
 
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+export async function signOut(): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  await supabase.auth.signOut();
+  redirect("/sign-in");
 }

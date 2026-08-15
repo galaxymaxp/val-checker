@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { setSkinWatched } from "@/app/dashboard/actions";
+import { setSkinWatched, signOut } from "@/app/dashboard/actions";
 import { CollectionBrowser } from "@/app/dashboard/collection-browser";
 import {
   connectRiotSession,
@@ -43,11 +43,23 @@ export default async function DashboardPage() {
         <div>
           <p className="eyebrow">YOUR COLLECTION</p>
           <h1>Find your next favorite.</h1>
+          <p className="lede">
+            Watch any skin and get an email the morning it lands in your store.
+          </p>
         </div>
-        <p className="lede">
-          Browse every synced weapon skin and build a personal watch list. Riot account
-          access is not involved.
-        </p>
+        <div className="session-bar">
+          <span>
+            Signed in as{" "}
+            <strong>
+              {typeof data.claims.email === "string" ? data.claims.email : "your account"}
+            </strong>
+          </span>
+          <form action={signOut}>
+            <button className="sign-out-button" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
       </header>
       <RiotConnectionPanel
         connectAllowed={riotConnectAllowed}
