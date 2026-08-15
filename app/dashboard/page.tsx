@@ -2,12 +2,14 @@ import { redirect } from "next/navigation";
 
 import { setSkinWatched, signOut } from "@/app/dashboard/actions";
 import { CollectionBrowser } from "@/app/dashboard/collection-browser";
+import { DailyShopPanel } from "@/app/dashboard/daily-shop-panel";
 import {
   connectRiotSession,
   disconnectRiotSession,
 } from "@/app/dashboard/riot-actions";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
+import { loadDailyShop } from "@/src/lib/storefront/daily-shop";
 import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotConnectionStateWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
@@ -28,14 +30,14 @@ export default async function DashboardPage() {
     userId: data.claims.sub,
   });
 
-  const [weapons, watchedSkinUuids, riotConnectionState] = await Promise.all([
-    loadCatalogForBrowse(supabase),
-    loadWatchedSkinUuids(supabase),
-    loadRiotConnectionStateWithClient(
-      createAdminSupabaseClient(),
-      data.claims.sub,
-    ),
-  ]);
+  const adminSupabase = createAdminSupabaseClient();
+  const [weapons, watchedSkinUuids, riotConnectionState, dailyShop] =
+    await Promise.all([
+      loadCatalogForBrowse(supabase),
+      loadWatchedSkinUuids(supabase),
+      loadRiotConnectionStateWithClient(adminSupabase, data.claims.sub),
+      loadDailyShop(adminSupabase, data.claims.sub),
+    ]);
 
   return (
     <main className="catalog-shell">
@@ -61,6 +63,10 @@ export default async function DashboardPage() {
           </form>
         </div>
       </header>
+      <DailyShopPanel
+        connected={riotConnectionState === "connected"}
+        shop={dailyShop}
+      />
       <RiotConnectionPanel
         connectAllowed={riotConnectAllowed}
         connectSession={riotConnectAllowed ? connectRiotSession : undefined}

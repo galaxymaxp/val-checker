@@ -5,6 +5,7 @@ const canRiotConnect = vi.fn();
 const loadCatalogForBrowse = vi.fn();
 const loadRiotConnectionStateWithClient = vi.fn();
 const loadWatchedSkinUuids = vi.fn();
+const loadDailyShop = vi.fn();
 const redirect = vi.fn();
 const disconnectRiotSession = vi.fn();
 const setSkinWatched = vi.fn();
@@ -23,6 +24,7 @@ vi.mock("@/src/lib/supabase/server-admin", () => ({
   createAdminSupabaseClient: () => admin,
 }));
 vi.mock("@/src/lib/watchlist/load", () => ({ loadWatchedSkinUuids }));
+vi.mock("@/src/lib/storefront/daily-shop", () => ({ loadDailyShop }));
 const signOut = vi.fn();
 
 vi.mock("@/app/dashboard/actions", () => ({ setSkinWatched, signOut }));
@@ -36,6 +38,8 @@ describe("dashboard page", () => {
     loadCatalogForBrowse.mockReset();
     loadRiotConnectionStateWithClient.mockReset();
     loadWatchedSkinUuids.mockReset();
+    loadDailyShop.mockReset();
+    loadDailyShop.mockResolvedValue(null);
     redirect.mockReset();
     loadCatalogForBrowse.mockResolvedValue([]);
     canRiotConnect.mockReturnValue(false);

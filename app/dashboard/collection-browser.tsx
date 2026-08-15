@@ -162,8 +162,8 @@ export function CollectionBrowser({
               {categoryWeapons.map((weapon) => (
                 <article className="weapon-card" key={weapon.weaponUuid}>
                   <header>
-                    <p>{weapon.skins.length} skins</p>
                     <h3>{weapon.displayName}</h3>
+                    <p>{weapon.skins.length}</p>
                   </header>
                   <ul className="skin-grid">
                     {weapon.skins.map((skin) => {
