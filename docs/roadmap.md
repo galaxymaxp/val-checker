@@ -108,6 +108,87 @@ public refresh endpoint, and no debug route that reaches Riot.
 The scheduled 00:05 UTC cron remains the primary path. The dashboard trigger is
 a fallback for the case where the schedule has not yet produced a result.
 
+## Version 2.4 decision addendum — credential connect, transit-only
+
+**Decision date:** 2026-08-15
+
+Connecting an account previously required pasting a browser cookie export. That
+is impractical from a phone: the `ssid` cookie is `httpOnly`, so no bookmarklet
+or in-page script can read it, and capturing it needs a desktop cookie-export
+extension. The project owner asked for a Riot sign-in form instead.
+
+### Why not Riot's own OAuth
+
+Riot Sign On was considered and rejected on capability, not on principle. RSO
+issues an identity token whose scopes do not reach the storefront; the store
+endpoint requires an entitlements token from the game authentication path, which
+RSO does not mint. RSO would establish who a user is and nothing about their
+shop, so it cannot replace this flow.
+
+### The middleman model
+
+VAL Checker accepts a Riot username and password, exchanges them with Riot for a
+cookie jar, and stores only the jar. The credential is **transit-only**:
+
+- it exists solely for the duration of one connect request;
+- it is never written to Postgres — no column, no table, no JSON blob;
+- it is never logged, never placed in an error message or stack trace, and never
+  returned to the client; and
+- it is confined to `src/lib/riot/login-provider.ts`. No other module receives
+  it, and nothing downstream of that provider can observe it.
+
+The jar produced by the exchange is identical in kind to a pasted export, so the
+existing AES-256-GCM storage, keyring, rotation, and worker paths are unchanged.
+
+Encryption of the credential itself was considered and rejected as ineffective.
+The password is replayed to a third party rather than verified locally, so it
+must be plaintext in process memory at the moment of the outbound request. Any
+scheme the server can reverse leaves the server holding the plaintext, and
+client-side encryption only relocates the key. The honest control is the narrow
+window and the absence of storage, not a cipher. Zeroing is likewise not claimed:
+JavaScript strings are immutable and cannot be reliably scrubbed from memory.
+
+### Amendments to earlier text
+
+- The `RiotAdapter` contract in §8 reads `authenticate() // from a captured jar,
+  never a password`. That rule is amended: a password may be exchanged for a jar
+  at connect time. It remains true that no password is ever stored, and that the
+  adapter's own session handling continues to operate on jars alone.
+- The Version 2.2 statement that "the only live Riot request path is the
+  protected daily cron" is amended. There are now two live paths: the
+  user-initiated authentication request at connect time, and the daily storefront
+  check. The authentication request does not read a storefront.
+- **The storefront cadence is unchanged.** The Version 2.3 cap of one storefront
+  request per connected account per UTC rotation, enforced by
+  `claim_riot_daily_run`, still governs every storefront read. Connecting does
+  not fetch a shop and does not consume or refund the daily allowance.
+
+### Multi-factor authentication
+
+Riot answers most logins with an MFA challenge, and the flow must serve accounts
+with Riot's authenticator, accounts with emailed codes, and accounts with no MFA
+at all. An emailed code cannot be known before the credential is submitted, so
+connect is two steps: submit credentials, receive the challenge, submit the code.
+
+The intermediate pending-authentication cookie that links the two steps is not an
+authenticated session, but it is still session material and is therefore
+encrypted at rest with the existing cipher and `user_id` as AAD, in a
+service-role-only table, and expires after ten minutes. No password is written to
+it. Accounts without MFA complete in one step and never create such a row.
+
+MFA on the connected Riot account is recommended rather than required. It is the
+control that most reduces the value of a password intercepted during the transit
+window.
+
+### Cookie-jar paste retained, admin-only
+
+The pasted-export path is kept as a fallback, because the authentication endpoint
+sits behind Cloudflare fingerprinting and may begin refusing requests from
+datacenter IPs without warning; losing it would otherwise leave no way to
+connect. It is restricted to administrators, so ordinary allowlisted users see
+only the sign-in form. The existing fail-closed connect allowlist continues to
+gate both paths.
+
 ## Version 2.1 decision addendum — build and ship gates separated
 
 **Decision date:** 2026-08-14
@@ -493,6 +574,9 @@ Add/remove watch entries writing to `watchlist`; optimistic UI with rollback on 
 // src/lib/riot/adapter.ts  — interface only until Track C unblocks
 export interface RiotAdapter {
   authenticate(): Promise<Session>;      // from a captured jar, never a password
+                                         // (amended by Version 2.4: a password may
+                                         // be exchanged for a jar at connect time
+                                         // and is never stored)
   refreshSession(s: Session): Promise<Session>;
   getEntitlements(s: Session): Promise<Entitlements>;
   getPUUID(s: Session): Promise<string>;
