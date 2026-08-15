@@ -11,6 +11,15 @@ import type {
   Session,
 } from "@/src/lib/riot/adapter";
 import type { SessionCheckResult } from "@/src/lib/riot/session-lifecycle";
+import {
+  type CanonicalCookie,
+  CookieJarError,
+  cookieHeader,
+  getSetCookieHeaders,
+  parseCookieJar,
+  rotateCookieJar,
+  serializeCookieJar,
+} from "@/src/lib/riot/cookie-jar";
 import { extractStorefrontSkinLevelUuids } from "@/src/lib/storefront/schema";
 
 const REAUTH_URL =
@@ -52,30 +61,6 @@ const versionSchema = z.object({
   status: z.literal(200),
 });
 
-type CanonicalCookie = {
-  readonly domain: string;
-  readonly expires?: number;
-  readonly hostOnly?: boolean;
-  readonly httpOnly?: boolean;
-  readonly name: string;
-  readonly path: string;
-  readonly sameSite?: string;
-  readonly secure?: boolean;
-  readonly value: string;
-};
-
-type MutableCookie = {
-  domain: string;
-  expires?: number;
-  hostOnly?: boolean;
-  httpOnly?: boolean;
-  name: string;
-  path: string;
-  sameSite?: string;
-  secure?: boolean;
-  value: string;
-};
-
 type AuthorizationContext = {
   readonly accessToken: string;
   entitlementsToken?: string;
@@ -108,295 +93,6 @@ export class RiotClientError extends Error {
     );
     this.name = "RiotClientError";
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requiredString(
-  record: Record<string, unknown>,
-  key: string,
-): string {
-  const value = record[key];
-  if (typeof value !== "string" || value.length === 0) {
-    throw new RiotClientError("ERROR");
-  }
-
-  return value;
-}
-
-function cookieValue(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  if (typeof value !== "string") {
-    throw new RiotClientError("ERROR");
-  }
-
-  return value;
-}
-
-function optionalBoolean(
-  record: Record<string, unknown>,
-  key: string,
-): boolean | undefined {
-  const value = record[key];
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function optionalString(
-  record: Record<string, unknown>,
-  key: string,
-): string | undefined {
-  const value = record[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function optionalExpiry(record: Record<string, unknown>): number | undefined {
-  const value = record.expires ?? record.expirationDate;
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return value;
-  }
-
-  return undefined;
-}
-
-function normalizeCookie(value: unknown): CanonicalCookie {
-  if (!isRecord(value)) {
-    throw new RiotClientError("ERROR");
-  }
-
-  if ("name" in value && "value" in value) {
-    return {
-      domain: requiredString(value, "domain")
-        .trim()
-        .toLowerCase()
-        .replace(/\.$/, ""),
-      expires: optionalExpiry(value),
-      hostOnly: optionalBoolean(value, "hostOnly"),
-      httpOnly: optionalBoolean(value, "httpOnly"),
-      name: requiredString(value, "name"),
-      path: optionalString(value, "path") ?? "/",
-      sameSite: optionalString(value, "sameSite"),
-      secure: optionalBoolean(value, "secure"),
-      value: cookieValue(value, "value"),
-    };
-  }
-
-  if ("Name raw" in value && "Content raw" in value) {
-    const host = requiredString(value, "Host raw");
-    let domain: string;
-
-    try {
-      domain = new URL(
-        host.startsWith("http://") || host.startsWith("https://")
-          ? host
-          : `https://${host}`,
-      ).hostname;
-    } catch {
-      throw new RiotClientError("ERROR");
-    }
-
-    const rawExpiry = optionalString(value, "Expires raw");
-    const parsedExpiry = rawExpiry ? Date.parse(rawExpiry) / 1_000 : Number.NaN;
-
-    return {
-      domain,
-      expires:
-        Number.isFinite(parsedExpiry) && parsedExpiry > 0
-          ? parsedExpiry
-          : undefined,
-      name: requiredString(value, "Name raw"),
-      path: optionalString(value, "Path raw") ?? "/",
-      value: cookieValue(value, "Content raw"),
-    };
-  }
-
-  throw new RiotClientError("ERROR");
-}
-
-function parseCookieJar(material: Uint8Array): CanonicalCookie[] {
-  try {
-    const parsed: unknown = JSON.parse(
-      new TextDecoder("utf-8", { fatal: true }).decode(material),
-    );
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      throw new RiotClientError("ERROR");
-    }
-
-    return parsed.map(normalizeCookie);
-  } catch (error) {
-    if (error instanceof RiotClientError) {
-      throw error;
-    }
-
-    throw new RiotClientError("ERROR");
-  }
-}
-
-function normalizedDomain(domain: string): string {
-  return domain.trim().toLowerCase().replace(/^\./, "").replace(/\.$/, "");
-}
-
-function domainMatches(
-  cookieDomain: string,
-  requestHost: string,
-  hostOnly = false,
-): boolean {
-  const domain = normalizedDomain(cookieDomain);
-  return (
-    domain.length > 0 &&
-    (requestHost === domain || (!hostOnly && requestHost.endsWith(`.${domain}`)))
-  );
-}
-
-function pathMatches(cookiePath: string, requestPath: string): boolean {
-  if (cookiePath === requestPath) {
-    return true;
-  }
-
-  if (!requestPath.startsWith(cookiePath)) {
-    return false;
-  }
-
-  return cookiePath.endsWith("/") || requestPath[cookiePath.length] === "/";
-}
-
-function cookieHeader(
-  cookies: readonly CanonicalCookie[],
-  target: URL,
-  now: Date,
-): string {
-  const nowInSeconds = now.getTime() / 1_000;
-
-  return cookies
-    .filter(
-      (cookie) =>
-        (!cookie.expires || cookie.expires > nowInSeconds) &&
-        (!cookie.secure || target.protocol === "https:") &&
-        domainMatches(cookie.domain, target.hostname, cookie.hostOnly) &&
-        pathMatches(cookie.path, target.pathname),
-    )
-    .sort((left, right) => right.path.length - left.path.length)
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join("; ");
-}
-
-function defaultCookiePath(requestPath: string): string {
-  if (!requestPath.startsWith("/") || requestPath === "/") {
-    return "/";
-  }
-
-  const lastSlash = requestPath.lastIndexOf("/");
-  return lastSlash <= 0 ? "/" : requestPath.slice(0, lastSlash);
-}
-
-function parseSetCookie(
-  header: string,
-  requestUrl: URL,
-  now: Date,
-): MutableCookie | null {
-  const parts = header.split(";");
-  const nameValue = parts.shift()?.trim() ?? "";
-  const separator = nameValue.indexOf("=");
-  if (separator <= 0) {
-    return null;
-  }
-
-  const cookie: MutableCookie = {
-    domain: requestUrl.hostname,
-    hostOnly: true,
-    name: nameValue.slice(0, separator).trim(),
-    path: defaultCookiePath(requestUrl.pathname),
-    value: nameValue.slice(separator + 1),
-  };
-
-  let maxAge: number | undefined;
-  for (const part of parts) {
-    const trimmed = part.trim();
-    const attributeSeparator = trimmed.indexOf("=");
-    const attributeName = (
-      attributeSeparator === -1
-        ? trimmed
-        : trimmed.slice(0, attributeSeparator)
-    ).toLowerCase();
-    const attributeValue =
-      attributeSeparator === -1
-        ? ""
-        : trimmed.slice(attributeSeparator + 1).trim();
-
-    if (attributeName === "domain" && attributeValue) {
-      if (!domainMatches(attributeValue, requestUrl.hostname)) {
-        return null;
-      }
-      cookie.domain = attributeValue.toLowerCase();
-      cookie.hostOnly = false;
-    } else if (attributeName === "path" && attributeValue.startsWith("/")) {
-      cookie.path = attributeValue;
-    } else if (attributeName === "expires") {
-      const expires = Date.parse(attributeValue) / 1_000;
-      if (Number.isFinite(expires)) {
-        cookie.expires = expires;
-      }
-    } else if (attributeName === "max-age") {
-      const parsed = Number.parseInt(attributeValue, 10);
-      if (Number.isFinite(parsed)) {
-        maxAge = parsed;
-      }
-    } else if (attributeName === "secure") {
-      cookie.secure = true;
-    } else if (attributeName === "httponly") {
-      cookie.httpOnly = true;
-    } else if (attributeName === "samesite" && attributeValue) {
-      cookie.sameSite = attributeValue;
-    }
-  }
-
-  if (maxAge !== undefined) {
-    cookie.expires = now.getTime() / 1_000 + maxAge;
-  }
-
-  return cookie;
-}
-
-function rotateCookieJar(
-  current: readonly CanonicalCookie[],
-  setCookieHeaders: readonly string[],
-  requestUrl: URL,
-  now: Date,
-): CanonicalCookie[] {
-  const rotated: MutableCookie[] = current.map((cookie) => ({ ...cookie }));
-  const nowInSeconds = now.getTime() / 1_000;
-
-  for (const header of setCookieHeaders) {
-    const replacement = parseSetCookie(header, requestUrl, now);
-    if (!replacement) {
-      continue;
-    }
-
-    const index = rotated.findIndex(
-      (cookie) =>
-        cookie.name === replacement.name &&
-        normalizedDomain(cookie.domain) ===
-          normalizedDomain(replacement.domain) &&
-        cookie.path === replacement.path,
-    );
-
-    if (replacement.expires !== undefined && replacement.expires <= nowInSeconds) {
-      if (index !== -1) {
-        rotated.splice(index, 1);
-      }
-    } else if (index === -1) {
-      rotated.push(replacement);
-    } else {
-      rotated[index] = replacement;
-    }
-  }
-
-  return rotated;
-}
-
-function serializeCookieJar(cookies: readonly CanonicalCookie[]): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify(cookies));
 }
 
 function fingerprintSession(session: Session): Uint8Array {
@@ -463,10 +159,6 @@ function accessTokenFromLocation(location: string): string | null {
   }
 }
 
-function getSetCookieHeaders(headers: Headers): string[] {
-  return headers.getSetCookie();
-}
-
 function normalizeRegion(value: string | null | undefined): string {
   const region = value?.trim().toLowerCase() || DEFAULT_REGION;
   if (region === "latam" || region === "br") {
@@ -522,7 +214,17 @@ export class RiotClient implements RiotAdapter {
 
   async refreshSession(session: Session): Promise<Session> {
     this.activeAuthorization = null;
-    const cookies = parseCookieJar(session.material);
+    let cookies: CanonicalCookie[];
+
+    try {
+      cookies = parseCookieJar(session.material);
+    } catch (error) {
+      // Malformed stored material stays an ERROR, as before the jar helpers moved.
+      throw error instanceof CookieJarError
+        ? new RiotClientError("ERROR")
+        : error;
+    }
+
     const requestUrl = new URL(REAUTH_URL);
     const requestTime = this.now();
     let response: Response;

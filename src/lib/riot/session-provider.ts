@@ -5,7 +5,11 @@ export type CapturedSession = {
   readonly fixtureOnly: boolean;
   readonly kind: "captured-session";
   readonly material: Uint8Array;
-  readonly provider: "manual-cookie";
+  /**
+   * `riot-login` jars are produced by exchanging a credential with Riot at
+   * connect time. The credential itself is never part of a CapturedSession.
+   */
+  readonly provider: "manual-cookie" | "riot-login";
 };
 
 export type ManualCookieFixtureInput = {

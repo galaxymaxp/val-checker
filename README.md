@@ -13,6 +13,19 @@ fail-closed capability: only identities listed in
 account. The server derives the identity from verified Supabase claims and
 checks the allowlist again before accepting session material.
 
+Allowlisted users connect by signing in to Riot with a username and password.
+That credential is transit-only: it is exchanged with Riot for a session cookie
+jar, is never written to the database or the logs, and is discarded as soon as
+Riot answers. Only the resulting jar is stored, encrypted as before. Enabling
+MFA on the connected Riot account is recommended, and the sign-in flow prompts
+for both emailed and authenticator codes. The raw cookie-export paste path
+remains as a fallback but is restricted to `RIOT_ADMIN_USER_IDS` /
+`RIOT_ADMIN_EMAILS`. See the Version 2.4 addendum in
+[the roadmap](docs/roadmap.md) for the full decision.
+
+Signing in does not read a storefront. The daily cap is unchanged: one
+storefront request per connected account per UTC rotation.
+
 The rollout starts with the operator's own account only for approximately three
 weeks. Additional users may be added explicitly to the allowlist only after that
 dogfood period. Removing someone from the allowlist prevents a new connection;
@@ -71,6 +84,9 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `SESSION_ENCRYPTION_KEY_V<n>` | Server only | Base64 encoding of exactly 32 random bytes for each retained key version, such as the initial `V1`. |
 | `RIOT_CONNECT_ALLOWED_USER_IDS` | Server only | Comma-separated verified Supabase user UUIDs allowed to submit Riot session material. |
 | `RIOT_CONNECT_ALLOWED_EMAILS` | Server only | Comma-separated verified Supabase emails allowed to submit Riot session material. |
+| `RIOT_ADMIN_USER_IDS` | Server only | Comma-separated verified Supabase user UUIDs additionally allowed the raw cookie-export fallback. Empty grants nobody. |
+| `RIOT_ADMIN_EMAILS` | Server only | Comma-separated verified Supabase emails additionally allowed the raw cookie-export fallback. Empty grants nobody. |
+| `RIOT_TLS_CIPHERS` | Server only | Optional TLS cipher order for Riot's auth host. Leave unset unless sign-in begins returning 403. |
 | `RESEND_API_KEY` | Server only | Resend API key used by the daily worker. |
 | `RESEND_FROM_EMAIL` | Server only | Sender identity on a verified Resend domain. |
 | `CRON_SECRET` | Server only | Random Vercel cron authentication secret of at least 16 characters. |

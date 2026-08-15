@@ -5,13 +5,15 @@ import { CollectionBrowser } from "@/app/dashboard/collection-browser";
 import { DailyShopPanel } from "@/app/dashboard/daily-shop-panel";
 import {
   checkDailyShopNow,
+  connectRiotCredentials,
   connectRiotSession,
   disconnectRiotSession,
+  submitRiotMfaCode,
 } from "@/app/dashboard/riot-actions";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
 import { loadDailyShop } from "@/src/lib/storefront/daily-shop";
-import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
+import { canRiotConnect, isRiotAdmin } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotConnectionStateWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -25,11 +27,14 @@ export default async function DashboardPage() {
     redirect("/sign-in?next=/dashboard");
   }
 
-  const riotConnectAllowed = canRiotConnect({
+  const riotIdentity = {
     email:
       typeof data.claims.email === "string" ? data.claims.email : undefined,
     userId: data.claims.sub,
-  });
+  };
+  const riotConnectAllowed = canRiotConnect(riotIdentity);
+  // The raw cookie-jar paste is an admin-only fallback (Version 2.4).
+  const riotJarPasteAllowed = riotConnectAllowed && isRiotAdmin(riotIdentity);
 
   const adminSupabase = createAdminSupabaseClient();
   const [weapons, watchedSkinUuids, riotConnectionState, dailyShop] =
@@ -72,9 +77,13 @@ export default async function DashboardPage() {
       />
       <RiotConnectionPanel
         connectAllowed={riotConnectAllowed}
-        connectSession={riotConnectAllowed ? connectRiotSession : undefined}
+        connectCredentials={
+          riotConnectAllowed ? connectRiotCredentials : undefined
+        }
+        connectSession={riotJarPasteAllowed ? connectRiotSession : undefined}
         disconnect={disconnectRiotSession}
         initialState={riotConnectionState}
+        submitMfaCode={riotConnectAllowed ? submitRiotMfaCode : undefined}
       />
       <CollectionBrowser
         initialWatchedSkinUuids={watchedSkinUuids}

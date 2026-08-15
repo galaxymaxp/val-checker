@@ -48,18 +48,19 @@ function parseConfiguredList(
   return new Set(entries);
 }
 
-export class RiotConnectAllowlist {
+/** Shared membership test over a configured user-id and email list. */
+class IdentityAllowlist {
   private readonly allowedEmails: ReadonlySet<string>;
   private readonly allowedUserIds: ReadonlySet<string>;
 
-  constructor(environment: RiotConnectAllowlistEnvironment) {
+  constructor(userIds: string | undefined, emails: string | undefined) {
     this.allowedUserIds = parseConfiguredList(
-      environment.RIOT_CONNECT_ALLOWED_USER_IDS,
+      userIds,
       configuredUserIdSchema,
       (userId) => userId.toLowerCase(),
     );
     this.allowedEmails = parseConfiguredList(
-      environment.RIOT_CONNECT_ALLOWED_EMAILS,
+      emails,
       configuredEmailSchema,
       (email) => email.toLowerCase(),
     );
@@ -74,11 +75,36 @@ export class RiotConnectAllowlist {
       (normalizedEmail !== undefined && this.allowedEmails.has(normalizedEmail))
     );
   }
+}
+
+export class RiotConnectAllowlist extends IdentityAllowlist {
+  constructor(environment: RiotConnectAllowlistEnvironment) {
+    super(
+      environment.RIOT_CONNECT_ALLOWED_USER_IDS,
+      environment.RIOT_CONNECT_ALLOWED_EMAILS,
+    );
+  }
 
   assertAllowed(identity: RiotConnectIdentity): void {
     if (!this.allows(identity)) {
       throw new RiotConnectNotAllowedError();
     }
+  }
+}
+
+export type RiotAdminAllowlistEnvironment = {
+  readonly RIOT_ADMIN_EMAILS?: string;
+  readonly RIOT_ADMIN_USER_IDS?: string;
+};
+
+/**
+ * Administrators only. Gates the raw cookie-jar paste path, which stays
+ * available as a fallback for when Cloudflare refuses the login endpoint
+ * (roadmap Version 2.4) but is not offered to ordinary allowlisted users.
+ */
+export class RiotAdminAllowlist extends IdentityAllowlist {
+  constructor(environment: RiotAdminAllowlistEnvironment) {
+    super(environment.RIOT_ADMIN_USER_IDS, environment.RIOT_ADMIN_EMAILS);
   }
 }
 
@@ -94,4 +120,22 @@ export function loadRiotConnectAllowlist(
 
 export function canRiotConnect(identity: RiotConnectIdentity): boolean {
   return loadRiotConnectAllowlist().allows(identity);
+}
+
+export function loadRiotAdminAllowlist(
+  environment: RiotAdminAllowlistEnvironment = {
+    RIOT_ADMIN_EMAILS: process.env.RIOT_ADMIN_EMAILS,
+    RIOT_ADMIN_USER_IDS: process.env.RIOT_ADMIN_USER_IDS,
+  },
+): RiotAdminAllowlist {
+  return new RiotAdminAllowlist(environment);
+}
+
+/** Fail-closed: a misconfigured admin list grants nobody the paste path. */
+export function isRiotAdmin(identity: RiotConnectIdentity): boolean {
+  try {
+    return loadRiotAdminAllowlist().allows(identity);
+  } catch {
+    return false;
+  }
 }

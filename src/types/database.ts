@@ -75,6 +75,19 @@ type RiotRunLogRow = {
   emails_sent: number;
 };
 
+/** Short-lived MFA hand-off material. Never holds a credential. */
+type RiotPendingAuthRow = {
+  id: string;
+  user_id: string;
+  encrypted_jar: string;
+  jar_nonce: string;
+  session_key_version: number;
+  region: string | null;
+  label: string | null;
+  created_at: string;
+  expires_at: string;
+};
+
 type ShopCheckRow = {
   id: string;
   connection_id: string;
@@ -164,6 +177,21 @@ export interface Database {
         Update: Partial<RiotDailyRunRow>;
         Relationships: [];
       };
+      riot_pending_auth: {
+        Row: RiotPendingAuthRow;
+        Insert: Pick<
+          RiotPendingAuthRow,
+          "user_id" | "encrypted_jar" | "jar_nonce" | "expires_at"
+        > &
+          Partial<
+            Omit<
+              RiotPendingAuthRow,
+              "user_id" | "encrypted_jar" | "jar_nonce" | "expires_at"
+            >
+          >;
+        Update: Partial<RiotPendingAuthRow>;
+        Relationships: [];
+      };
       riot_run_logs: {
         Row: RiotRunLogRow;
         Insert: Pick<RiotRunLogRow, "user_id" | "connection_id" | "outcome"> &
@@ -207,6 +235,10 @@ export interface Database {
     Views: Record<never, never>;
     Functions: {
       health_check: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      purge_expired_riot_pending_auth: {
         Args: Record<PropertyKey, never>;
         Returns: number;
       };
