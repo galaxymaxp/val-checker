@@ -107,19 +107,19 @@ describe("encrypted Supabase session storage", () => {
         serializedJar: fixtureMaterial,
       });
 
-      await store.save(userId, session);
+      const firstConnectionId = await store.save(userId, session);
 
       const { data: persisted, error: readError } = await admin
         .from("riot_connections")
         .select("*")
-        .eq("user_id", userId)
+        .eq("id", firstConnectionId)
         .single();
       expect(readError).toBeNull();
       expect(persisted?.session_key_version).toBe(1);
       expect(persisted?.connection_epoch).toBeDefined();
       expect(Object.keys(persisted ?? {})).not.toContain("encryption_key");
 
-      const loaded = await store.load(userId);
+      const loaded = await store.load(userId, firstConnectionId);
       expect(loaded).not.toBeNull();
       expect(loaded ? sameValue(loaded, fixtureMaterial) : false).toBe(true);
 
@@ -134,12 +134,21 @@ describe("encrypted Supabase session storage", () => {
       const submittedSession = await new SubmittedCookieProvider().capture({
         serializedJar: submittedJar,
       });
-      await store.save(userId, submittedSession, { region: "ap" });
+      // save() now provisions an additional Riot account for the same login.
+      const secondConnectionId = await store.save(userId, submittedSession, {
+        region: "ap",
+      });
+
+      const { count: accountCount } = await admin
+        .from("riot_connections")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+      expect(accountCount).toBe(2);
 
       const { data: submittedRow, error: submittedReadError } = await admin
         .from("riot_connections")
         .select("connection_epoch, encrypted_jar, region")
-        .eq("user_id", userId)
+        .eq("id", secondConnectionId)
         .single();
       expect(submittedReadError).toBeNull();
       expect(submittedRow?.region).toBe("ap");
@@ -149,7 +158,7 @@ describe("encrypted Supabase session storage", () => {
       expect(JSON.stringify(submittedRow)).not.toContain(
         "offline-submitted-session-value",
       );
-      const loadedSubmission = await store.load(userId);
+      const loadedSubmission = await store.load(userId, secondConnectionId);
       expect(loadedSubmission).not.toBeNull();
       expect(
         loadedSubmission
@@ -165,7 +174,7 @@ describe("encrypted Supabase session storage", () => {
           puuid: randomUUID(),
           shard: "ap",
         })
-        .eq("user_id", userId);
+        .eq("id", secondConnectionId);
       expect(lifecycleSeedError).toBeNull();
 
       const rotatedJar = JSON.stringify([
@@ -182,6 +191,7 @@ describe("encrypted Supabase session storage", () => {
 
       await store.persistRotated(
         userId,
+        secondConnectionId,
         rotatedSession,
         submittedRow!.connection_epoch,
       );
@@ -191,7 +201,7 @@ describe("encrypted Supabase session storage", () => {
         .select(
           "auth_status, connection_epoch, consecutive_failures, encrypted_jar, jar_nonce, last_refresh_at, puuid, region, session_key_version, shard",
         )
-        .eq("user_id", userId)
+        .eq("id", secondConnectionId)
         .single();
       expect(rotatedReadError).toBeNull();
       expect(rotatedRow).toMatchObject({
@@ -209,7 +219,7 @@ describe("encrypted Supabase session storage", () => {
         "offline-rotated-session-value",
       );
 
-      const loadedRotation = await store.load(userId);
+      const loadedRotation = await store.load(userId, secondConnectionId);
       expect(loadedRotation).not.toBeNull();
       expect(
         loadedRotation
@@ -218,15 +228,34 @@ describe("encrypted Supabase session storage", () => {
       ).toBe(true);
 
       await expect(
-        store.persistRotated(userId, rotatedSession, randomUUID()),
+        store.persistRotated(
+          userId,
+          secondConnectionId,
+          rotatedSession,
+          randomUUID(),
+        ),
       ).rejects.toThrow("Encrypted session storage operation failed.");
 
       await expect(
-        store.persistRotated(randomUUID(), rotatedSession, randomUUID()),
+        store.persistRotated(
+          randomUUID(),
+          secondConnectionId,
+          rotatedSession,
+          randomUUID(),
+        ),
       ).rejects.toThrow("Encrypted session storage operation failed.");
 
-      await store.delete(userId);
-      await expect(store.load(userId)).resolves.toBeNull();
+      // Removing one account must leave the other connected.
+      await store.delete(userId, secondConnectionId);
+      await expect(
+        store.load(userId, secondConnectionId),
+      ).resolves.toBeNull();
+      await expect(
+        store.load(userId, firstConnectionId),
+      ).resolves.not.toBeNull();
+
+      await store.delete(userId, firstConnectionId);
+      await expect(store.load(userId, firstConnectionId)).resolves.toBeNull();
     } finally {
       await admin.auth.admin.deleteUser(userId);
     }

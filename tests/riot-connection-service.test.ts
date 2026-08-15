@@ -86,8 +86,10 @@ describe("offline Riot connection application flow", () => {
     ).resolves.toBe("connected");
     expect(store.save).toHaveBeenCalledTimes(1);
 
-    await expect(service.disconnect(userId)).resolves.toBe("disconnected");
-    expect(store.delete).toHaveBeenCalledWith(userId);
+    await expect(service.disconnect(userId, "conn-id")).resolves.toBe(
+      "disconnected",
+    );
+    expect(store.delete).toHaveBeenCalledWith(userId, "conn-id");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -139,7 +141,7 @@ describe("offline Riot connection application flow", () => {
     expect(store.save).toHaveBeenCalledWith(
       allowedUserId,
       expect.objectContaining({ fixtureOnly: false }),
-      { region: "ap" },
+      { label: null, region: "ap" },
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });

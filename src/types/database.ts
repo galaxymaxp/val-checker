@@ -38,6 +38,7 @@ type RiotConnectionRow = {
   id: string;
   user_id: string;
   connection_epoch: string;
+  label: string | null;
   puuid: string | null;
   region: string | null;
   shard: string | null;
@@ -138,6 +139,7 @@ export interface Database {
           puuid?: string | null;
           region?: string | null;
           shard?: string | null;
+          label?: string | null;
           auth_status?: AuthStatus;
           connection_epoch?: string;
           consecutive_failures?: number;

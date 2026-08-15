@@ -13,8 +13,13 @@ function stateClient(result: {
   data: { auth_status: Database["public"]["Enums"]["auth_status"]; id: string } | null;
   error: unknown;
 }) {
-  const maybeSingle = vi.fn().mockResolvedValue(result);
-  const eq = vi.fn(() => ({ maybeSingle }));
+  // The loader now lists every connected account for the login, so the stub
+  // resolves an ordered set rather than a single row.
+  const order = vi.fn().mockResolvedValue({
+    data: result.data ? [{ ...result.data, created_at: "2026-08-14T00:00:00Z", label: null, last_refresh_at: null, region: "ap" }] : [],
+    error: result.error,
+  });
+  const eq = vi.fn(() => ({ order }));
   const select = vi.fn(() => ({ eq }));
   const from = vi.fn(() => ({ select }));
 

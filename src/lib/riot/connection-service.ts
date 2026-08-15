@@ -31,6 +31,7 @@ type ConnectFixtureRequest = {
 export type ConnectSubmittedSessionRequest = {
   readonly consentGranted: boolean;
   readonly identity: RiotConnectIdentity;
+  readonly label?: unknown;
   readonly region?: unknown;
   readonly session: SubmittedCookieJarInput;
 };
@@ -55,7 +56,11 @@ export class RiotConnectionService {
 
     const region: RiotRegion = parseRiotRegion(request.region);
     const session = await this.submittedProvider.capture(request.session);
-    await this.store.save(request.identity.userId, session, { region });
+    const label =
+      typeof request.label === "string" && request.label.trim().length > 0
+        ? request.label.trim().slice(0, 60)
+        : null;
+    await this.store.save(request.identity.userId, session, { label, region });
     return "connected";
   }
 
@@ -73,8 +78,11 @@ export class RiotConnectionService {
     return "connected";
   }
 
-  async disconnect(userId: string): Promise<RiotConnectionState> {
-    await this.store.delete(userId);
+  async disconnect(
+    userId: string,
+    connectionId: string,
+  ): Promise<RiotConnectionState> {
+    await this.store.delete(userId, connectionId);
     return "disconnected";
   }
 }

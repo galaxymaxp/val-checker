@@ -4,6 +4,7 @@ import { setSkinWatched, signOut } from "@/app/dashboard/actions";
 import { CollectionBrowser } from "@/app/dashboard/collection-browser";
 import { DailyShopPanel } from "@/app/dashboard/daily-shop-panel";
 import {
+  checkDailyShopNow,
   connectRiotSession,
   disconnectRiotSession,
 } from "@/app/dashboard/riot-actions";
@@ -64,8 +65,10 @@ export default async function DashboardPage() {
         </div>
       </header>
       <DailyShopPanel
+        checkNow={riotConnectAllowed ? checkDailyShopNow : undefined}
         connected={riotConnectionState === "connected"}
         shop={dailyShop}
+        todaysRotation={new Date().toISOString().slice(0, 10)}
       />
       <RiotConnectionPanel
         connectAllowed={riotConnectAllowed}

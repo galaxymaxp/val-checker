@@ -108,7 +108,9 @@ export async function connectRiotSession(
   return { ok: true };
 }
 
-export async function disconnectRiotSession(): Promise<RiotConnectionMutationResult> {
+export async function disconnectRiotSession(
+  connectionId?: unknown,
+): Promise<RiotConnectionMutationResult> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims.sub;
@@ -118,13 +120,56 @@ export async function disconnectRiotSession(): Promise<RiotConnectionMutationRes
   }
 
   const admin = createAdminSupabaseClient();
-  const { error } = await admin
-    .from("riot_connections")
-    .delete()
-    .eq("user_id", userId);
+  let deletion = admin.from("riot_connections").delete().eq("user_id", userId);
+
+  // Disconnecting one account must not remove the others on this login.
+  if (typeof connectionId === "string" && connectionId.length > 0) {
+    deletion = deletion.eq("id", connectionId);
+  }
+
+  const { error } = await deletion;
 
   if (error) {
     return { error: "The Riot session could not be disconnected.", ok: false };
+  }
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Runs today's check for the signed-in user when the scheduled run has not
+ * recorded a storefront yet. The per-connection database claim still admits at
+ * most one Riot request per UTC rotation, so this spends that single allowance
+ * rather than adding a second one.
+ */
+export async function checkDailyShopNow(): Promise<RiotConnectionMutationResult> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  const userId = claims?.sub;
+
+  if (typeof userId !== "string") {
+    return { error: "Please sign in again.", ok: false };
+  }
+
+  try {
+    const allowlist = loadRiotConnectAllowlist();
+    allowlist.assertAllowed({
+      email: typeof claims?.email === "string" ? claims.email : undefined,
+      userId,
+    });
+  } catch {
+    return { error: "Riot connection access is not enabled.", ok: false };
+  }
+
+  try {
+    const { runDailyCheckForUser } = await import(
+      "@/src/lib/worker/on-demand-check"
+    );
+    await runDailyCheckForUser(userId);
+  } catch {
+    return { error: "The shop could not be checked right now.", ok: false };
   }
 
   revalidatePath("/dashboard");

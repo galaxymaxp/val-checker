@@ -1,10 +1,14 @@
 import Image from "next/image";
 
+import { DailyShopRefresh } from "@/app/dashboard/daily-shop-refresh";
 import type { DailyShopView } from "@/src/lib/storefront/daily-shop";
+import type { RiotConnectionMutationResult } from "@/src/types/riot-connection";
 
 interface DailyShopPanelProps {
+  readonly checkNow?: () => Promise<RiotConnectionMutationResult>;
   readonly connected: boolean;
   readonly shop: DailyShopView | null;
+  readonly todaysRotation: string;
 }
 
 function formatRotation(value: string) {
@@ -16,7 +20,14 @@ function formatRotation(value: string) {
   });
 }
 
-export function DailyShopPanel({ connected, shop }: DailyShopPanelProps) {
+export function DailyShopPanel({
+  checkNow,
+  connected,
+  shop,
+  todaysRotation,
+}: DailyShopPanelProps) {
+  const stale = connected && shop?.rotationDate !== todaysRotation;
+
   return (
     <section aria-label="Today's shop" className="daily-shop">
       <header className="daily-shop-heading">
@@ -34,6 +45,10 @@ export function DailyShopPanel({ connected, shop }: DailyShopPanelProps) {
           </p>
         ) : null}
       </header>
+
+      {connected && checkNow ? (
+        <DailyShopRefresh checkNow={checkNow} stale={stale} />
+      ) : null}
 
       {shop && shop.offers.length > 0 ? (
         <ul className="daily-shop-grid">

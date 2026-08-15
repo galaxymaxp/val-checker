@@ -62,7 +62,7 @@ describe("rotated session storage", () => {
     const client = updateClient({ data: { id: "connection-id" }, error: null });
     const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
 
-    await store.persistRotated("user-id", rotatedSession(), "epoch-id");
+    await store.persistRotated("user-id", "33333333-3333-4333-8333-333333333333", rotatedSession(), "epoch-id");
 
     expect(client.from).toHaveBeenCalledWith("riot_connections");
     expect(client.eq).toHaveBeenCalledWith("user_id", "user-id");
@@ -92,7 +92,7 @@ describe("rotated session storage", () => {
     const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
 
     try {
-      await store.persistRotated("user-id", rotatedSession(), "epoch-id");
+      await store.persistRotated("user-id", "33333333-3333-4333-8333-333333333333", rotatedSession(), "epoch-id");
       expect.unreachable("A failed rotation must fail the run.");
     } catch (error) {
       expect(error).toBeInstanceOf(SessionStorageError);
