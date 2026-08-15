@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 
+const PKCE_TOKEN_PREFIX = "pkce_";
+
 const emailOtpTypes = new Set<EmailOtpType>([
   "email",
   "email_change",
@@ -34,14 +36,19 @@ export async function GET(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
   let succeeded = false;
 
-  if (tokenHash && type && emailOtpTypes.has(type as EmailOtpType)) {
+  // A PKCE-issued token arrives in token_hash but must be exchanged, not
+  // verified. @supabase/ssr defaults the browser client to the PKCE flow, so
+  // signInWithOtp mints a "pkce_" token whose shape verifyOtp cannot accept.
+  const pkceToken = tokenHash?.startsWith(PKCE_TOKEN_PREFIX) ? tokenHash : code;
+
+  if (pkceToken) {
+    const { error } = await supabase.auth.exchangeCodeForSession(pkceToken);
+    succeeded = !error;
+  } else if (tokenHash && type && emailOtpTypes.has(type as EmailOtpType)) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: type as EmailOtpType,
     });
-    succeeded = !error;
-  } else if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
     succeeded = !error;
   }
 
