@@ -144,7 +144,39 @@ describe("service-only Riot daily run gate", () => {
         p_user_id: userId,
       });
       expect(duplicate.error).toBeNull();
+      // Reconnecting must not mint a fresh allowance: the run already spent
+      // today still counts against the accounts this login currently holds.
       expect(duplicate.data).toEqual([]);
+
+      // A genuinely additional account earns its own run for the same day.
+      const { data: second, error: secondError } = await admin
+        .from("riot_connections")
+        .insert({
+          encrypted_jar: "\\x00",
+          jar_nonce: "\\x00",
+          label: "second account",
+          user_id: userId,
+        })
+        .select("connection_epoch, id")
+        .single();
+      expect(secondError).toBeNull();
+      expect(second).not.toBeNull();
+      const secondClaim = await admin.rpc("claim_riot_daily_run", {
+        p_connection_epoch: second!.connection_epoch,
+        p_connection_id: second!.id,
+        p_user_id: userId,
+      });
+      expect(secondClaim.error).toBeNull();
+      expect(secondClaim.data).toHaveLength(1);
+
+      // But only one, even across repeated attempts.
+      const thirdClaim = await admin.rpc("claim_riot_daily_run", {
+        p_connection_epoch: second!.connection_epoch,
+        p_connection_id: second!.id,
+        p_user_id: userId,
+      });
+      expect(thirdClaim.error).toBeNull();
+      expect(thirdClaim.data).toEqual([]);
 
       expect((await anon.from("riot_daily_runs").select("id")).error).not.toBeNull();
       expect((await anon.rpc("claim_riot_daily_run", args)).error).not.toBeNull();

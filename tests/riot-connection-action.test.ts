@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const adminDelete = vi.fn();
 const adminUpsert = vi.fn();
-const adminFrom = vi.fn(() => ({ delete: adminDelete, upsert: adminUpsert }));
+const adminInsertSingle = vi.fn();
+const adminInsert = vi.fn((row: Record<string, unknown>) => {
+  void row;
+  return { select: () => ({ single: adminInsertSingle }) };
+});
+const adminFrom = vi.fn(() => ({
+  delete: adminDelete,
+  insert: adminInsert,
+  upsert: adminUpsert,
+}));
 const createAdminSupabaseClient = vi.fn(() => ({
   from: adminFrom,
 }));
@@ -36,6 +45,13 @@ describe("Riot disconnect server action", () => {
     adminFrom.mockClear();
     adminUpsert.mockReset();
     adminUpsert.mockResolvedValue({ error: null });
+    adminInsert.mockClear();
+    adminInsertSingle.mockReset();
+    // save() now provisions a new connection row and returns its id.
+    adminInsertSingle.mockResolvedValue({
+      data: { id: "44444444-4444-4444-8444-444444444444" },
+      error: null,
+    });
     createAdminSupabaseClient.mockClear();
     deleteEq.mockReset();
     deleteEq.mockResolvedValue({ error: null });
@@ -72,7 +88,7 @@ describe("Riot disconnect server action", () => {
 
     expect(createAdminSupabaseClient).toHaveBeenCalledTimes(1);
     expect(adminFrom).toHaveBeenCalledWith("riot_connections");
-    const [persisted] = adminUpsert.mock.calls[0];
+    const [persisted] = adminInsert.mock.calls[0];
     expect(persisted).toMatchObject({
       auth_status: "CONNECTED",
       region: "ap",

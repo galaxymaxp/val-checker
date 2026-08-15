@@ -16,19 +16,22 @@ import { SupabaseEncryptedSessionStore } from "@/src/lib/riot/session-store";
 import { planStorefrontNotificationsWithClient } from "@/src/lib/storefront/pipeline";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { SupabaseDailyStorefrontRepository } from "@/src/lib/worker/storefront-repository";
-import {
-  DailyStorefrontWorker,
-  type DailyStorefrontSummary,
-} from "@/src/lib/worker/storefront-worker";
+import { DailyStorefrontWorker } from "@/src/lib/worker/storefront-worker";
 
-export async function runConfiguredDailyStorefrontCron(): Promise<DailyStorefrontSummary> {
+/**
+ * Builds the worker from runtime configuration. Passing a userId narrows the
+ * run to that user; the per-connection daily claim bounds Riot work regardless.
+ */
+export async function buildConfiguredDailyStorefrontWorker(
+  onlyUserId?: string,
+): Promise<DailyStorefrontWorker> {
   const supabase = createAdminSupabaseClient();
   const sessionStore = new SupabaseEncryptedSessionStore(
     supabase,
     new AesGcmSessionCipher(loadSessionKeyring()),
   );
   const allowlist = loadRiotConnectAllowlist();
-  const repository = new SupabaseDailyStorefrontRepository(supabase);
+  const repository = new SupabaseDailyStorefrontRepository(supabase, onlyUserId);
   const storefrontDelivery = createStorefrontEmailDeliveryService(supabase);
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RESEND_FROM_EMAIL?.trim();
@@ -70,5 +73,10 @@ export async function runConfiguredDailyStorefrontCron(): Promise<DailyStorefron
       return { emailsSent };
     },
     sessionStore,
-  }).run();
+  });
+}
+
+export async function runConfiguredDailyStorefrontCron() {
+  const worker = await buildConfiguredDailyStorefrontWorker();
+  return worker.run();
 }

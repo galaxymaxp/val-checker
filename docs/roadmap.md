@@ -47,7 +47,10 @@ allowlisted account.
 - Storefront access is limited to **one check per user per day**, scheduled
   shortly after the 00:00 UTC store rotation. There is no on-demand refresh
   endpoint, polling, or user-triggered fetch. This is an architectural
-  constraint, not a configurable default.
+  constraint, not a configurable default. *(Superseded by the Version 2.3
+  addendum above: the cap is now one request per connected account per
+  rotation, and the dashboard may spend that same allowance when the schedule
+  has not run.)*
 
 Phase 6 implements the real Riot adapter and daily worker path under these
 controls. The pending `skins.weapon_uuid` migration is still excluded until the
@@ -70,6 +73,40 @@ project owner separately approves it.
   outside source control; encryption keys remain outside Supabase.
 - Supabase schema changes are applied only from the reviewed migration history.
   The full local and deployment procedure is maintained in the root README.
+
+## Version 2.3 decision addendum — per-account cadence and operator-triggered checks
+
+**Decision date:** 2026-08-15
+
+The Version 2.2 cadence read "one check per user per day" with "no on-demand
+refresh endpoint, polling, or user-triggered fetch". Two changes were requested
+by the project owner after that text was written, and both were confirmed after
+the conflict was raised.
+
+### Multiple Riot accounts per login
+
+One login may now connect several Riot accounts. The cadence moves with it: the
+cap becomes **one storefront request per connected account per UTC rotation**.
+A login holding N accounts therefore makes up to N requests per day rather than
+one, which is a deliberate increase in exposure proportional to accounts held.
+
+The anti-abuse property from Version 2.2 is preserved rather than dropped.
+`claim_riot_daily_run` refuses a claim once the runs already taken today reach
+the number of accounts the login currently holds, so disconnecting and
+reconnecting cannot mint a fresh allowance. Without that guard the
+per-connection key alone would have made the daily cap trivially resettable.
+
+### Operator-triggered check when the schedule has not run
+
+The dashboard may now run the daily check for the signed-in user when no
+storefront has been recorded for the current rotation. This is a change to
+*who* triggers the request, not to *how many* are permitted: the request still
+passes through the same database claim, so it either spends the day's single
+per-account allowance or does nothing. There is still no polling loop, no
+public refresh endpoint, and no debug route that reaches Riot.
+
+The scheduled 00:05 UTC cron remains the primary path. The dashboard trigger is
+a fallback for the case where the schedule has not yet produced a result.
 
 ## Version 2.1 decision addendum — build and ship gates separated
 

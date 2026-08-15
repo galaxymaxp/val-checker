@@ -265,6 +265,7 @@ export class DailyStorefrontWorker {
     try {
       const material = await this.dependencies.sessionStore.load(
         connection.userId,
+        connection.id,
         connection.connectionEpoch,
       );
       if (!material) {
@@ -279,6 +280,7 @@ export class DailyStorefrontWorker {
       phase = "REAUTH_FAILED";
       const rotated = await reauthenticateAndPersist({
         adapter: client,
+        connectionId: connection.id,
         expectedConnectionEpoch: connection.connectionEpoch,
         session,
         store: this.dependencies.sessionStore,

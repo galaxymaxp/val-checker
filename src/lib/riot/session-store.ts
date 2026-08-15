@@ -18,22 +18,34 @@ export class SessionStorageError extends Error {
   }
 }
 
+export interface SessionSaveOptions {
+  readonly label?: string | null;
+  readonly region: RiotRegion;
+}
+
+/**
+ * Rows are addressed per connection so one login can hold several Riot
+ * accounts. The encryption AAD stays bound to user_id, which keeps ciphertext
+ * from being replayed across owners.
+ */
 export interface SessionStore {
-  delete(userId: string): Promise<void>;
+  delete(userId: string, connectionId: string): Promise<void>;
   load(
     userId: string,
+    connectionId: string,
     expectedConnectionEpoch?: string,
   ): Promise<Uint8Array | null>;
   persistRotated(
     userId: string,
+    connectionId: string,
     session: CapturedSession,
     expectedConnectionEpoch: string,
   ): Promise<void>;
   save(
     userId: string,
     session: CapturedSession,
-    account?: { readonly region: RiotRegion },
-  ): Promise<void>;
+    account?: SessionSaveOptions,
+  ): Promise<string>;
 }
 
 function encodeBytea(value: Uint8Array): string {
@@ -68,6 +80,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
 
   async persistRotated(
     userId: string,
+    connectionId: string,
     session: CapturedSession,
     expectedConnectionEpoch: string,
   ): Promise<void> {
@@ -88,7 +101,8 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
         last_refresh_at: session.capturedAt,
         session_key_version: encrypted.keyVersion,
       })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("id", connectionId);
     query = query.eq("connection_epoch", expectedConnectionEpoch);
     const { data, error } = await query.select("id").maybeSingle();
 
@@ -100,8 +114,8 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
   async save(
     userId: string,
     session: CapturedSession,
-    account?: { readonly region: RiotRegion },
-  ): Promise<void> {
+    account?: SessionSaveOptions,
+  ): Promise<string> {
     if (
       session.kind !== "captured-session" ||
       !(session.material instanceof Uint8Array) ||
@@ -111,34 +125,40 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     }
 
     const encrypted = this.cipher.encrypt(userId, session.material);
-    const { error } = await this.supabase.from("riot_connections").upsert(
-      {
+    const { data, error } = await this.supabase
+      .from("riot_connections")
+      .insert({
         auth_status: "CONNECTED",
         connection_epoch: randomUUID(),
         consecutive_failures: 0,
         encrypted_jar: encodeBytea(encrypted.ciphertext),
         jar_nonce: encodeBytea(encrypted.nonce),
+        label: account?.label ?? null,
         last_refresh_at: session.capturedAt,
         ...(account ? { region: account.region } : {}),
         session_key_version: encrypted.keyVersion,
         user_id: userId,
-      },
-      { onConflict: "user_id" },
-    );
+      })
+      .select("id")
+      .single();
 
-    if (error) {
+    if (error || !data) {
       throw new SessionStorageError();
     }
+
+    return data.id;
   }
 
   async load(
     userId: string,
+    connectionId: string,
     expectedConnectionEpoch?: string,
   ): Promise<Uint8Array | null> {
     let query = this.supabase
       .from("riot_connections")
       .select("encrypted_jar, jar_nonce, session_key_version")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("id", connectionId);
     if (expectedConnectionEpoch) {
       query = query.eq("connection_epoch", expectedConnectionEpoch);
     }
@@ -155,11 +175,12 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     return this.cipher.decrypt(userId, storedValue(data));
   }
 
-  async delete(userId: string): Promise<void> {
+  async delete(userId: string, connectionId: string): Promise<void> {
     const { error } = await this.supabase
       .from("riot_connections")
       .delete()
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("id", connectionId);
 
     if (error) {
       throw new SessionStorageError();

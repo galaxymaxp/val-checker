@@ -112,10 +112,12 @@ describe("daily storefront worker", () => {
     });
     expect(fixture.sessionStore.load).toHaveBeenCalledWith(
       connection().userId,
+      connection().id,
       connection().connectionEpoch,
     );
     expect(fixture.sessionStore.persistRotated).toHaveBeenCalledWith(
       connection().userId,
+      connection().id,
       expect.objectContaining({ material: new Uint8Array([2]) }),
       connection().connectionEpoch,
     );

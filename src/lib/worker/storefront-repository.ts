@@ -27,15 +27,28 @@ function validDate(value: string): Date | null {
 export class SupabaseDailyStorefrontRepository
   implements DailyStorefrontRepository
 {
-  constructor(private readonly supabase: SupabaseClient<Database>) {}
+  /**
+   * onlyUserId narrows the run to a single signed-in user. The per-connection
+   * daily claim still bounds how much Riot work can happen either way.
+   */
+  constructor(
+    private readonly supabase: SupabaseClient<Database>,
+    private readonly onlyUserId?: string,
+  ) {}
 
   async listConnections(): Promise<readonly WorkerConnection[]> {
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from("riot_connections")
       .select(
         "auth_status, connection_epoch, consecutive_failures, created_at, id, last_refresh_at, region, user_id",
       )
       .order("user_id", { ascending: true });
+
+    if (this.onlyUserId) {
+      query = query.eq("user_id", this.onlyUserId);
+    }
+
+    const { data, error } = await query;
     if (error) {
       throw new StorefrontWorkerRepositoryError();
     }
