@@ -1,18 +1,33 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 import { getPublicSupabaseConfig } from "./public-env";
 
 export function createBrowserSupabaseClient() {
   const { key, url } = getPublicSupabaseConfig();
 
-  return createBrowserClient(url, key, {
+  return createBrowserClient(url, key);
+}
+
+/**
+ * Client used only to request an emailed sign-in link.
+ *
+ * createBrowserClient hard-codes flowType "pkce" after spreading caller
+ * options, and PKCE keeps a code_verifier in the requesting browser. An emailed
+ * link opened anywhere else then fails with "invalid flow state, no valid flow
+ * state found". Going through supabase-js directly keeps the link
+ * self-contained, so it works in whichever browser opens the mail. It holds no
+ * session: /auth/confirm establishes that server side as cookies.
+ */
+export function createMagicLinkRequestClient() {
+  const { key, url } = getPublicSupabaseConfig();
+
+  return createClient(url, key, {
     auth: {
-      // Emailed sign-in links must open in any browser, not only the one that
-      // requested them. PKCE stores a code_verifier in the requesting browser,
-      // so opening the link elsewhere -- or in a browser that partitions the
-      // cookie -- fails with "invalid flow state". The implicit flow issues a
-      // self-contained token that /auth/confirm verifies server side.
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
       flowType: "implicit",
+      persistSession: false,
     },
   });
 }

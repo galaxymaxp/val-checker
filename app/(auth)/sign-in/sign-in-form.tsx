@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 
-import { createBrowserSupabaseClient } from "@/src/lib/supabase/browser";
+import { createMagicLinkRequestClient } from "@/src/lib/supabase/browser";
 
 type Status = "idle" | "sending" | "sent" | "failed";
 
@@ -18,7 +18,7 @@ export function SignInForm({ linkError = false }: SignInFormProps) {
     event.preventDefault();
     setStatus("sending");
 
-    const supabase = createBrowserSupabaseClient();
+    const supabase = createMagicLinkRequestClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
