@@ -6,3 +6,6 @@ allowBuilds:
   sharp: true
   supabase: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - resend@6.20.0

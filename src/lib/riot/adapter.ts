@@ -1,10 +1,7 @@
-/**
- * Track C boundary from Build Spec §8. This file intentionally contains only
- * an interface. Implementations stay blocked until the durability gate passes.
- */
-export interface Session {
-  readonly kind: "captured-session";
-}
+import type { CapturedSession } from "@/src/lib/riot/session-provider";
+
+/** Riot network boundary. No Riot URL, header, or response type crosses it. */
+export type Session = CapturedSession;
 
 export interface Entitlements {
   readonly token: string;
@@ -12,6 +9,12 @@ export interface Entitlements {
 
 export interface Storefront {
   readonly levelUuids: readonly string[];
+}
+
+/** Concrete fetch result retained for the neutral parsing pipeline. */
+export interface FetchedStorefront extends Storefront {
+  /** The single fetched response, retained for the existing pure pipeline. */
+  readonly payload: unknown;
 }
 
 export interface HealthStatus {

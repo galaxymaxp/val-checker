@@ -135,6 +135,7 @@ describe("foundation schema RLS", () => {
 
       const { error: shopSeedError } = await admin.from("shop_checks").insert({
         connection_id: connection.id,
+        rotation_date: "2026-08-14",
         shop_hash: randomUUID(),
       });
       expect(shopSeedError, "service role seeds a shop check").toBeNull();

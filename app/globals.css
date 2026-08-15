@@ -131,6 +131,127 @@ button {
   gap: 4rem;
 }
 
+.riot-connection-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 4rem;
+  border: 1px solid #2f3744;
+  background: rgb(16 19 26 / 82%);
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.riot-connection-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.riot-connection-heading h2 {
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: -0.04em;
+}
+
+.connection-badge {
+  border: 1px solid #475163;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 0.45rem 0.6rem;
+  text-transform: uppercase;
+}
+
+.connection-badge-connected {
+  border-color: #4d9c76;
+  color: #a8e8c5;
+}
+
+.consent-copy {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 62rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.consent-copy p,
+.disconnect-controls p,
+.ship-gate-note {
+  margin: 0;
+}
+
+.consent-check {
+  display: flex;
+  gap: 0.75rem;
+  align-items: start;
+  max-width: 56rem;
+  line-height: 1.5;
+}
+
+.consent-check input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+}
+
+.riot-session-fields,
+.riot-session-fields label {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.riot-session-fields {
+  gap: 1rem;
+}
+
+.riot-session-fields textarea,
+.riot-session-fields select {
+  width: 100%;
+  border: 1px solid #2f3744;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  padding: 0.75rem;
+}
+
+.riot-session-fields textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.riot-connection-panel button {
+  cursor: pointer;
+}
+
+.riot-connection-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ship-gate-note,
+.disconnect-controls p {
+  max-width: 56rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.disconnect-controls {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.connection-error {
+  margin: 0;
+  border-left: 3px solid var(--accent);
+  background: rgb(255 70 85 / 10%);
+  color: #ffd7da;
+  padding: 0.8rem 1rem;
+}
+
 .collection-controls {
   position: sticky;
   z-index: 10;

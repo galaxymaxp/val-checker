@@ -21,11 +21,26 @@ describe("repository secret hygiene", () => {
   });
 
   it("ignores known Riot session and reauthentication artifacts", () => {
+    expect(git("check-ignore", "--no-index", "--", "cookies.json")).toBe(
+      "cookies.json",
+    );
     expect(git("check-ignore", "--no-index", "--", "jar_live.json")).toBe(
       "jar_live.json",
     );
+    expect(git("check-ignore", "--no-index", "--", "storefront_raw.json")).toBe(
+      "storefront_raw.json",
+    );
     expect(git("check-ignore", "--no-index", "--", "reauth_log.csv")).toBe(
       "reauth_log.csv",
+    );
+    expect(git("check-ignore", "--no-index", "--", ".env.local")).toBe(
+      ".env.local",
+    );
+    expect(git("check-ignore", "--no-index", "--", "session.pem")).toBe(
+      "session.pem",
+    );
+    expect(git("check-ignore", "--no-index", "--", "session.key")).toBe(
+      "session.key",
     );
   });
 
@@ -39,6 +54,7 @@ describe("repository secret hygiene", () => {
         isEnvironmentFile ||
         /^cookies.*\.json$/i.test(basename) ||
         /^jar_live\.json$/i.test(basename) ||
+        /^storefront_raw\.json$/i.test(basename) ||
         /^reauth_log\.csv$/i.test(basename) ||
         /\.(pem|key)$/i.test(basename)
       );

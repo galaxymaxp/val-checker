@@ -1,0 +1,140 @@
+/** @vitest-environment jsdom */
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
+
+afterEach(cleanup);
+
+describe("Riot connection consent UI", () => {
+  it("keeps production connection closed without accepting credential input", () => {
+    render(
+      <RiotConnectionPanel
+        connectAllowed={false}
+        disconnect={vi.fn().mockResolvedValue({ ok: true })}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Riot connection access not enabled" }),
+    ).toBeDisabled();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "limited to explicitly allowlisted accounts",
+    );
+  });
+
+  it("exercises fixture-only connect and disconnect behavior", async () => {
+    const user = userEvent.setup();
+    const connectFixture = vi.fn().mockResolvedValue({ ok: true });
+    const disconnect = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectFixture={connectFixture}
+        disconnect={disconnect}
+        initialState="disconnected"
+      />,
+    );
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Connect fixture session" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Fixture connected" })).toBeInTheDocument();
+    });
+    expect(connectFixture).toHaveBeenCalledWith(true);
+
+    await user.click(
+      screen.getByRole("button", { name: "Disconnect and delete stored session" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Connection paused" })).toBeInTheDocument();
+    });
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits allowlisted cookie material with consent and the AP default", async () => {
+    const user = userEvent.setup();
+    const connectSession = vi.fn().mockResolvedValue({ ok: true });
+    const jar = JSON.stringify([
+      {
+        domain: ".riotgames.com",
+        name: "ssid",
+        path: "/",
+        value: "offline-session-value",
+      },
+    ]);
+
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={connectSession}
+        disconnect={vi.fn().mockResolvedValue({ ok: true })}
+        initialState="disconnected"
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Cookie export JSON" }),
+      { target: { value: jar } },
+    );
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Connect Riot session" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Riot connected" })).toBeInTheDocument();
+    });
+    expect(connectSession).toHaveBeenCalledWith({
+      consentGranted: true,
+      region: "ap",
+      serializedJar: jar,
+    });
+  });
+
+  it("clears submitted session material after a rejected connection attempt", async () => {
+    const user = userEvent.setup();
+    const connectSession = vi.fn().mockResolvedValue({
+      error: "The Riot session could not be connected.",
+      ok: false,
+    });
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={connectSession}
+        disconnect={vi.fn().mockResolvedValue({ ok: true })}
+        initialState="disconnected"
+      />,
+    );
+    const input = screen.getByRole("textbox", { name: "Cookie export JSON" });
+
+    fireEvent.change(input, { target: { value: "sensitive-session-material" } });
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Connect Riot session" }));
+
+    await waitFor(() => expect(input).toHaveValue(""));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The Riot session could not be connected.",
+    );
+  });
+
+  it("plainly discloses storage, access, encryption, revocation, and Riot logout", () => {
+    render(
+      <RiotConnectionPanel
+        connectAllowed={false}
+        disconnect={vi.fn().mockResolvedValue({ ok: true })}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(screen.getByText(/stores Riot cookie and session account-access material/i)).toBeInTheDocument();
+    expect(screen.getByText(/can permit access to your Riot account/i)).toBeInTheDocument();
+    expect(screen.getByText(/encrypted at rest/i)).toBeInTheDocument();
+    expect(screen.getByText(/disconnect and delete it/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sign out everywhere/i)).toBeInTheDocument();
+  });
+});
