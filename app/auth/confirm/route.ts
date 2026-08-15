@@ -1,7 +1,8 @@
+import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
-import { createServerSupabaseClient } from "@/src/lib/supabase/server";
+import { getPublicSupabaseConfig } from "@/src/lib/supabase/public-env";
 
 const PKCE_TOKEN_PREFIX = "pkce_";
 
@@ -33,7 +34,24 @@ export async function GET(request: NextRequest) {
   const tokenHash = parameters.get("token_hash");
   const type = parameters.get("type");
   const next = safeNextPath(parameters.get("next"));
-  const supabase = await createServerSupabaseClient();
+
+  // The session cookies must be written onto the response this handler
+  // actually returns. Writing them through next/headers is silently dropped on
+  // a redirect, which produced a sign-in loop: Supabase created the session but
+  // the browser never received it.
+  const response = NextResponse.redirect(new URL(next, request.url));
+  const { key, url } = getPublicSupabaseConfig();
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll(cookiesToSet) {
+        for (const { name, options, value } of cookiesToSet) {
+          response.cookies.set(name, value, options);
+        }
+      },
+    },
+  });
+
   let succeeded = false;
 
   // A PKCE-issued token arrives in token_hash but must be exchanged, not
@@ -53,7 +71,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (succeeded) {
-    return NextResponse.redirect(new URL(next, request.url));
+    return response;
   }
 
   const signInUrl = new URL("/sign-in", request.url);
