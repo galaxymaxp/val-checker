@@ -94,17 +94,31 @@ export class RiotConnectAllowlist extends IdentityAllowlist {
 
 export type RiotAdminAllowlistEnvironment = {
   readonly RIOT_ADMIN_EMAILS?: string;
-  readonly RIOT_ADMIN_USER_IDS?: string;
 };
 
 /**
  * Administrators only. Gates the raw cookie-jar paste path, which stays
  * available as a fallback for when Cloudflare refuses the login endpoint
  * (roadmap Version 2.4) but is not offered to ordinary allowlisted users.
+ *
+ * Email-only by design: unlike the connect allowlist, nobody configuring this
+ * has their own Supabase auth UUID on hand, so a UUID option is a variable
+ * that only ever goes unused.
  */
-export class RiotAdminAllowlist extends IdentityAllowlist {
+export class RiotAdminAllowlist {
+  private readonly allowedEmails: ReadonlySet<string>;
+
   constructor(environment: RiotAdminAllowlistEnvironment) {
-    super(environment.RIOT_ADMIN_USER_IDS, environment.RIOT_ADMIN_EMAILS);
+    this.allowedEmails = parseConfiguredList(
+      environment.RIOT_ADMIN_EMAILS,
+      configuredEmailSchema,
+      (email) => email.toLowerCase(),
+    );
+  }
+
+  allows(identity: RiotConnectIdentity): boolean {
+    const normalizedEmail = identity.email?.trim().toLowerCase();
+    return normalizedEmail !== undefined && this.allowedEmails.has(normalizedEmail);
   }
 }
 
@@ -125,7 +139,6 @@ export function canRiotConnect(identity: RiotConnectIdentity): boolean {
 export function loadRiotAdminAllowlist(
   environment: RiotAdminAllowlistEnvironment = {
     RIOT_ADMIN_EMAILS: process.env.RIOT_ADMIN_EMAILS,
-    RIOT_ADMIN_USER_IDS: process.env.RIOT_ADMIN_USER_IDS,
   },
 ): RiotAdminAllowlist {
   return new RiotAdminAllowlist(environment);

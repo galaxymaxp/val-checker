@@ -59,9 +59,9 @@ describe("Riot disconnect server action", () => {
     revalidatePath.mockReset();
     vi.stubEnv("RIOT_CONNECT_ALLOWED_EMAILS", "");
     vi.stubEnv("RIOT_CONNECT_ALLOWED_USER_IDS", allowedUserId);
-    // The cookie-jar paste path is admin-only from Version 2.4 onward.
-    vi.stubEnv("RIOT_ADMIN_EMAILS", "");
-    vi.stubEnv("RIOT_ADMIN_USER_IDS", allowedUserId);
+    // The cookie-jar paste path is admin-only from Version 2.4 onward,
+    // gated by email since a Supabase user UUID isn't on hand to configure.
+    vi.stubEnv("RIOT_ADMIN_EMAILS", "operator@example.com");
     vi.stubEnv("SESSION_ENCRYPTION_CURRENT_VERSION", "1");
     vi.stubEnv(
       "SESSION_ENCRYPTION_KEY_V1",
@@ -131,7 +131,7 @@ describe("Riot disconnect server action", () => {
   it("refuses the cookie paste path for an allowlisted non-admin", async () => {
     const marker = "non-admin-jar-marker";
     // Connect-allowlisted, but not an administrator.
-    vi.stubEnv("RIOT_ADMIN_USER_IDS", "");
+    vi.stubEnv("RIOT_ADMIN_EMAILS", "");
     getClaims.mockResolvedValue({
       data: { claims: { email: "operator@example.com", sub: allowedUserId } },
     });
@@ -168,7 +168,9 @@ describe("Riot disconnect server action", () => {
   });
 
   it("requires explicit consent and redacts malformed submitted material", async () => {
-    getClaims.mockResolvedValue({ data: { claims: { sub: allowedUserId } } });
+    getClaims.mockResolvedValue({
+      data: { claims: { email: "operator@example.com", sub: allowedUserId } },
+    });
     const { connectRiotSession } = await import("@/app/dashboard/riot-actions");
 
     await expect(
