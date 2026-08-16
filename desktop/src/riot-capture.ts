@@ -1,4 +1,4 @@
-import { BrowserWindow, session, type Cookie } from "electron";
+import { app, BrowserWindow, session, type Cookie } from "electron";
 
 /**
  * Riot login-window capture. Riot's credential API now demands an hCaptcha
@@ -34,8 +34,8 @@ const CAPTURE_TIMEOUT_MS = 5 * 60 * 1000;
 // server-only modules or their zod dependency.
 const MAX_SUBMITTED_COOKIE_JAR_BYTES = 128 * 1024;
 
-// Cookies the documented cookie-reauth flow actually relies on. Used only to
-// shed bulk if a full export somehow exceeds the server's size ceiling.
+// Cookies the documented cookie-reauth flow actually relies on. Used to shed
+// bulk if a full export somehow exceeds the server's size ceiling.
 const ESSENTIAL_COOKIE_NAMES = new Set([
   "ssid",
   "clid",
@@ -46,9 +46,59 @@ const ESSENTIAL_COOKIE_NAMES = new Set([
   "did",
 ]);
 
+// A jar proves nothing about session state without at least one of these.
+// __cf_bm, Google Analytics, and tdid are all set on page load, before any
+// credential is entered, so their presence alone does not mean sign-in
+// completed. Excludes tdid deliberately: it was observed present alongside
+// only pre-login cookies after an interrupted attempt.
+const SESSION_PROOF_COOKIE_NAMES = new Set([
+  "ssid",
+  "clid",
+  "csid",
+  "sub",
+  "asid",
+  "did",
+]);
+
 export type RiotCaptureResult =
   | { readonly ok: true; readonly jar: string }
-  | { readonly ok: false; readonly reason: "cancelled" | "timeout" | "no-cookies" };
+  | {
+      readonly ok: false;
+      readonly reason: "cancelled" | "timeout" | "no-cookies" | "denied";
+    };
+
+/**
+ * Riot's authorize endpoint redirects to SUCCESS_PREFIX on both a completed
+ * login AND a declined or interrupted one — OAuth error responses go to the
+ * same redirect_uri, differing only in the URL fragment (access_token=... on
+ * success, error=... otherwise). Matching on the prefix alone treats both as
+ * success, which is how a captcha bounce or a closed challenge previously
+ * produced a "captured" jar holding nothing but cookies the page sets before
+ * login even starts (Cloudflare's __cf_bm, analytics, a device-trust token) —
+ * none of the session cookies cookie-reauth actually needs.
+ */
+function isCompletedLogin(url: string): boolean {
+  if (!url.startsWith(SUCCESS_PREFIX)) {
+    return false;
+  }
+  try {
+    return new URL(url).hash.includes("access_token=");
+  } catch {
+    return false;
+  }
+}
+
+function isDeniedRedirect(url: string): boolean {
+  if (!url.startsWith(SUCCESS_PREFIX)) {
+    return false;
+  }
+  try {
+    const target = new URL(url);
+    return target.hash.includes("error=") || target.search.includes("error=");
+  } catch {
+    return false;
+  }
+}
 
 /** The app's CanonicalCookie shape (see src/lib/riot/cookie-jar.ts). */
 type CanonicalCookie = {
@@ -146,8 +196,22 @@ function buildJar(cookies: readonly Cookie[]): string | null {
     : null;
 }
 
+/**
+ * Riot's login is behind Cloudflare bot detection, which scores the user agent.
+ * Electron's default advertises "Electron/<version>", marking the request as
+ * automation rather than the Chromium browser the operator is actually typing
+ * into. Stripping the Electron and application tokens leaves the genuine Chrome
+ * identity of this window.
+ */
+function browserUserAgent(): string {
+  return app.userAgentFallback
+    .replace(/\sElectron\/\S+/, "")
+    .replace(new RegExp(`\\s${app.getName()}\\/\\S+`, "i"), "");
+}
+
 export function captureRiotJar(): Promise<RiotCaptureResult> {
   const riotSession = session.fromPartition(RIOT_PARTITION);
+  riotSession.setUserAgent(browserUserAgent());
   const captureWindow = new BrowserWindow({
     width: 480,
     height: 720,
@@ -167,8 +231,14 @@ export function captureRiotJar(): Promise<RiotCaptureResult> {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const onNavigate = (_event: unknown, url: string): void => {
-      if (!settled && url.startsWith(SUCCESS_PREFIX)) {
+      if (settled) {
+        return;
+      }
+      if (isCompletedLogin(url)) {
         void onSuccess();
+      } else if (isDeniedRedirect(url)) {
+        console.log("Riot capture: sign-in was denied or interrupted.");
+        finish({ ok: false, reason: "denied" });
       }
     };
 
@@ -211,9 +281,48 @@ export function captureRiotJar(): Promise<RiotCaptureResult> {
         return;
       }
       try {
-        const cookies = await riotSession.cookies.get({
-          domain: "riotgames.com",
+        // Electron's { domain } filter matches only cookies whose own Domain
+        // attribute is riotgames.com or .riotgames.com — the classic
+        // "applies to this domain and its subdomains" scoping. Riot's actual
+        // session cookies (ssid, csid, clid, asid, ccid) are host-only,
+        // scoped specifically to auth.riotgames.com with no leading dot, so
+        // they are visible to that exact host but never to the bare parent —
+        // the filter was correctly excluding them by cookie-scoping rules,
+        // not failing to find something that should have matched. Querying
+        // with no filter and checking each cookie's own domain directly
+        // catches every *.riotgames.com host, however it is scoped.
+        const everything = await riotSession.cookies.get({});
+        const cookies = everything.filter((cookie) => {
+          const normalized = cookie.domain?.replace(/^\./, "") ?? "";
+          return (
+            normalized === "riotgames.com" ||
+            normalized.endsWith(".riotgames.com")
+          );
         });
+
+        // The redirect's fragment said the login completed, but a completed
+        // OAuth exchange should always leave at least one real session
+        // cookie behind. If none is here, something still went wrong that
+        // the fragment alone didn't reveal — do not hand back a jar known to
+        // be useless. Cookie NAMES are logged, never values.
+        const names = new Set(cookies.map((cookie) => cookie.name));
+        const hasSessionProof = [...SESSION_PROOF_COOKIE_NAMES].some((name) =>
+          names.has(name),
+        );
+        if (!hasSessionProof) {
+          const inventory = everything
+            .map((cookie) => `${cookie.domain} -> ${cookie.name}`)
+            .join(" | ");
+          console.log(
+            `Riot capture: redirect indicated success but no session cookie ` +
+              `was found among *.riotgames.com cookies (had: ` +
+              `${[...names].join(", ") || "none"}). Full partition ` +
+              `(${everything.length} cookies): ${inventory || "empty"}`,
+          );
+          finish({ ok: false, reason: "no-cookies" });
+          return;
+        }
+
         const jar = buildJar(cookies);
         if (!jar) {
           console.log("Riot capture: no usable cookies to submit.");

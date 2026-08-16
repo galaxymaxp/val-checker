@@ -14,8 +14,21 @@ import { captureRiotJar } from "./riot-capture.js";
 const APP_URL = process.env.VAL_CHECKER_URL ?? "http://localhost:3000";
 
 /**
- * The main window may only load the configured app origin plus *.supabase.co
- * (Supabase auth redirects). Everything else is refused.
+ * Hosts the sign-in flow legitimately passes through. Supabase issues the
+ * OAuth redirect, and the identity provider serves the consent screen, so
+ * blocking the provider's own host breaks sign-in outright rather than
+ * hardening anything.
+ */
+const AUTH_HOST_SUFFIXES = [
+  "supabase.co",
+  "accounts.google.com",
+  "google.com",
+  "googleusercontent.com",
+];
+
+/**
+ * The main window may only load the configured app origin plus the hosts the
+ * sign-in flow traverses. Everything else is refused.
  */
 function isAllowedOrigin(target: string): boolean {
   let url: URL;
@@ -31,10 +44,26 @@ function isAllowedOrigin(target: string): boolean {
     return true;
   }
 
-  return (
-    url.protocol === "https:" &&
-    (url.hostname === "supabase.co" || url.hostname.endsWith(".supabase.co"))
+  if (url.protocol !== "https:") {
+    return false;
+  }
+
+  return AUTH_HOST_SUFFIXES.some(
+    (suffix) => url.hostname === suffix || url.hostname.endsWith(`.${suffix}`),
   );
+}
+
+/**
+ * Electron's default user agent carries an "Electron/<version>" token, and
+ * Google refuses OAuth from a user agent it reads as an embedded webview,
+ * answering with disallowed_useragent instead of a consent screen. Stripping
+ * the Electron and application tokens leaves the Chrome identity this window
+ * genuinely is — a real Chromium browser the operator drives themselves.
+ */
+function browserUserAgent(): string {
+  return app.userAgentFallback
+    .replace(/\sElectron\/\S+/, "")
+    .replace(new RegExp(`\\s${app.getName()}\\/\\S+`, "i"), "");
 }
 
 function createMainWindow(): void {
@@ -50,6 +79,8 @@ function createMainWindow(): void {
       preload: path.join(import.meta.dirname, "preload.cjs"),
     },
   });
+
+  window.webContents.setUserAgent(browserUserAgent());
 
   // Block navigation to any origin other than the configured one (+ Supabase).
   window.webContents.on("will-navigate", (event, url) => {

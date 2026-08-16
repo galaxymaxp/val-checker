@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "node scripts/launch.mjs",
     "start": "node scripts/launch.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "capture": "node scripts/launch.mjs --capture"
   },
   "devDependencies": {
     "@types/node": "26.2.0",

@@ -127,9 +127,17 @@ try {
     path.join(desktopDir, "tsconfig.json"),
   ]);
 
+  // --capture runs the capture-only entry point: it skips the web app and goes
+  // straight to Riot's login, putting the resulting jar on the clipboard. That
+  // avoids signing into Supabase inside Electron, which Google blocks for OAuth.
+  const captureOnly = process.argv.includes("--capture");
+  const entry = captureOnly
+    ? path.join(desktopDir, "dist", "capture-main.js")
+    : ".";
+
   await run(
     process.execPath,
-    [path.join(desktopDir, "node_modules", "electron", "cli.js"), "."],
+    [path.join(desktopDir, "node_modules", "electron", "cli.js"), entry],
     { env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: distDir } },
   );
 } catch (error) {
