@@ -99,7 +99,7 @@ describe("Riot disconnect server action", () => {
     });
     expect(JSON.stringify(persisted)).not.toContain("offline-session-value");
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
   });
 
   it("rejects a non-allowlisted identity before constructing storage or processing material", async () => {
@@ -203,7 +203,7 @@ describe("Riot disconnect server action", () => {
 
     await expect(disconnectRiotSession()).resolves.toEqual({ ok: true });
     expect(deleteEq).toHaveBeenCalledWith("user_id", "verified-user");
-    expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
   });
 
   it("rejects unauthenticated disconnects before creating an admin client", async () => {

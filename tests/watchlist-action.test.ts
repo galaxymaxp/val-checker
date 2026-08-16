@@ -44,7 +44,7 @@ describe("watchlist server action", () => {
         onConflict: "user_id,skin_uuid",
       },
     );
-    expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
   });
 
   it("treats replayed watched=true requests as successful", async () => {

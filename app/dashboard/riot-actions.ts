@@ -21,6 +21,7 @@ import { RiotLoginError, RiotLoginProvider } from "@/src/lib/riot/login-provider
 import { SupabaseEncryptedPendingAuthStore } from "@/src/lib/riot/pending-auth-store";
 import {
   AesGcmSessionCipher,
+  SessionEncryptionConfigurationError,
   loadSessionKeyring,
 } from "@/src/lib/riot/session-crypto";
 import { SupabaseEncryptedSessionStore } from "@/src/lib/riot/session-store";
@@ -83,6 +84,14 @@ function buildCredentialService(allowlist: ReturnType<typeof loadRiotConnectAllo
 
 /** Maps a login failure to user-facing copy. Never echoes Riot's raw error. */
 function credentialFailureMessage(error: unknown): string {
+  // The keyring is built before any network call, so a missing or malformed
+  // SESSION_ENCRYPTION_* value fails with the credential still unsent. Naming
+  // it as a connection failure sends the operator off to re-check a password
+  // that Riot never saw, so this case reports the real cause.
+  if (error instanceof SessionEncryptionConfigurationError) {
+    return "Server misconfiguration: the session encryption keyring is missing or invalid. No credential was sent to Riot.";
+  }
+
   if (error instanceof RiotConsentRequiredError) {
     return "Please confirm consent before connecting.";
   }
@@ -94,7 +103,13 @@ function credentialFailureMessage(error: unknown): string {
   if (error instanceof RiotLoginError) {
     switch (error.failure) {
       case "invalid-credentials":
-        return "Riot rejected that username or password.";
+        return (
+          "Riot rejected that sign-in. Use your Riot account username — " +
+          "the one you log in with, not your email address and not your " +
+          "in-game Riot ID."
+        );
+      case "session-expired":
+        return "That sign-in attempt expired. Please start again.";
       case "invalid-mfa-code":
         return "That verification code was not accepted.";
       case "rate-limited":
@@ -164,7 +179,7 @@ export async function connectRiotCredentials(
     return { error: credentialFailureMessage(error), ok: false };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   return toCredentialResult(outcome);
 }
 
@@ -193,7 +208,7 @@ export async function submitRiotMfaCode(
     return { error: credentialFailureMessage(error), ok: false };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   return toCredentialResult(outcome);
 }
 
@@ -278,7 +293,7 @@ export async function connectRiotSession(
     return { error: CONNECT_FAILED_MESSAGE, ok: false };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   return { ok: true };
 }
 
@@ -307,7 +322,7 @@ export async function disconnectRiotSession(
     return { error: "The Riot session could not be disconnected.", ok: false };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   return { ok: true };
 }
 
@@ -346,6 +361,6 @@ export async function checkDailyShopNow(): Promise<RiotConnectionMutationResult>
     return { error: "The shop could not be checked right now.", ok: false };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   return { ok: true };
 }
