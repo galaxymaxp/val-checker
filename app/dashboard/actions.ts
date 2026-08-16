@@ -56,7 +56,7 @@ export async function setSkinWatched(
     return { error: "Your watchlist could not be updated.", ok: false };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
   return { ok: true };
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { type FormEvent, useState } from "react";
 
 import {
@@ -12,6 +13,13 @@ type Status = "idle" | "sending" | "sent" | "failed";
 interface SignInFormProps {
   readonly linkError?: boolean;
 }
+
+const noteMotion = {
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+  initial: { opacity: 0, y: 8 },
+  transition: { duration: 0.25 },
+} as const;
 
 export function SignInForm({ linkError = false }: SignInFormProps) {
   const [email, setEmail] = useState("");
@@ -56,17 +64,20 @@ export function SignInForm({ linkError = false }: SignInFormProps) {
   }
 
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       {linkError && status === "idle" ? (
-        <p className="auth-note auth-note--error" role="alert">
+        <p
+          className="rounded-card border border-line border-l-2 border-l-white/55 bg-white/5 px-4 py-3 text-sm text-ink"
+          role="alert"
+        >
           That link was already used or has expired. Each link works once —
           continue with Google below, or request a new link.
         </p>
       ) : null}
 
-      <div className="auth-card">
+      <div className="flex flex-col gap-4 rounded-panel border border-line bg-bg-card p-6 shadow-panel">
         <button
-          className="google-button"
+          className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-card bg-white px-4 py-2.5 font-medium text-neutral-900! transition-transform hocus:-translate-y-0.5 disabled:cursor-progress disabled:opacity-70 disabled:hocus:translate-y-0"
           disabled={googlePending}
           onClick={continueWithGoogle}
           type="button"
@@ -92,20 +103,33 @@ export function SignInForm({ linkError = false }: SignInFormProps) {
           {googlePending ? "Redirecting…" : "Continue with Google"}
         </button>
 
-        {googleFailed ? (
-          <p className="auth-note auth-note--error" role="alert">
-            Google sign-in is unavailable right now. Use an email link instead.
-          </p>
-        ) : null}
+        <AnimatePresence mode="wait">
+          {googleFailed ? (
+            <motion.p
+              {...noteMotion}
+              className="rounded-card border border-line border-l-2 border-l-white/55 bg-white/5 px-4 py-3 text-sm text-ink"
+              key="google-failed"
+              role="alert"
+            >
+              Google sign-in is unavailable right now. Use an email link
+              instead.
+            </motion.p>
+          ) : null}
+        </AnimatePresence>
 
-        <p className="auth-divider">
-          <span>or use email</span>
+        <p className="flex items-center gap-3 text-xs uppercase tracking-widest text-ink-dim">
+          <span aria-hidden="true" className="h-px flex-1 bg-line-soft" />
+          or use email
+          <span aria-hidden="true" className="h-px flex-1 bg-line-soft" />
         </p>
 
-        <form className="auth-form" onSubmit={requestMagicLink}>
-          <label htmlFor="email">Email address</label>
+        <form className="flex flex-col gap-2" onSubmit={requestMagicLink}>
+          <label className="text-sm font-medium text-ink-muted" htmlFor="email">
+            Email address
+          </label>
           <input
             autoComplete="email"
+            className="w-full rounded-card border border-line bg-bg-inset px-3 py-2.5 text-ink outline-accent placeholder:text-ink-dim focus-visible:outline-2"
             id="email"
             name="email"
             onChange={(event) => setEmail(event.target.value)}
@@ -114,24 +138,40 @@ export function SignInForm({ linkError = false }: SignInFormProps) {
             type="email"
             value={email}
           />
-          <button disabled={status === "sending"} type="submit">
+          <button
+            className="mt-1 cursor-pointer rounded-card bg-accent py-2.5 font-medium text-bg! hocus:bg-accent-hot disabled:cursor-progress disabled:opacity-60"
+            disabled={status === "sending"}
+            type="submit"
+          >
             {status === "sending" ? "Sending…" : "Email me a sign-in link"}
           </button>
         </form>
       </div>
 
-      {status === "sent" ? (
-        <p className="auth-note auth-note--sent" aria-live="polite">
-          Check your inbox. Open the newest email — requesting another link
-          invalidates the previous one.
-        </p>
-      ) : null}
+      <AnimatePresence mode="wait">
+        {status === "sent" ? (
+          <motion.p
+            {...noteMotion}
+            aria-live="polite"
+            className="rounded-card border border-line bg-white/5 px-4 py-3 text-sm text-ink"
+            key="sent"
+          >
+            Check your inbox. Open the newest email — requesting another link
+            invalidates the previous one.
+          </motion.p>
+        ) : null}
 
-      {status === "failed" ? (
-        <p className="auth-note auth-note--error" role="alert">
-          We could not send a sign-in link. Please try again in a moment.
-        </p>
-      ) : null}
-    </>
+        {status === "failed" ? (
+          <motion.p
+            {...noteMotion}
+            className="rounded-card border border-line border-l-2 border-l-white/55 bg-white/5 px-4 py-3 text-sm text-ink"
+            key="failed"
+            role="alert"
+          >
+            We could not send a sign-in link. Please try again in a moment.
+          </motion.p>
+        ) : null}
+      </AnimatePresence>
+    </MotionConfig>
   );
 }

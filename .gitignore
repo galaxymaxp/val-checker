@@ -15,6 +15,10 @@ test-results/
 .turbo/
 .vercel/
 *.tsbuildinfo
+.claude/settings.local.json
+
+# Desktop shell build output
+desktop/dist/
 
 # Environment and secret-bearing files
 .env*

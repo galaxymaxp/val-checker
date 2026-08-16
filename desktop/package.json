@@ -1,0 +1,20 @@
+{
+  "name": "val-checker-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Electron desktop shell for VAL Checker. Owns its own browser session so the operator can sign in on Riot's real login page and hand the captured cookie jar to the existing web app.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node scripts/launch.mjs",
+    "start": "node scripts/launch.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "capture": "node scripts/launch.mjs --capture"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "electron": "37.10.3",
+    "typescript": "6.0.3"
+  }
+}

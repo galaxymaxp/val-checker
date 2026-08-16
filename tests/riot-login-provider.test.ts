@@ -304,4 +304,71 @@ describe("RiotLoginProvider", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("reports a rejected auth session as expired, not as a bad credential", async () => {
+    const { RiotLoginProvider } = await loadProvider();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fetchMock } = recordingFetch([
+      opened(),
+      jsonResponse({ error: "invalid_session_id", type: "auth" }),
+    ]);
+
+    // Riot never evaluated the password here: the asid cookie was refused.
+    // Calling this "invalid-credentials" would send the user to re-check a
+    // password that was correct all along.
+    await expect(
+      new RiotLoginProvider({
+        fetchImplementation: fetchMock as unknown as typeof fetch,
+      }).submitCredentials({ password: PASSWORD, username: USERNAME }),
+    ).rejects.toMatchObject({ failure: "session-expired" });
+
+    warn.mockRestore();
+  });
+
+  it("reports an unusable pending jar as expired so the user restarts", async () => {
+    const { RiotLoginProvider } = await loadProvider();
+    const { fetchMock } = recordingFetch([]);
+
+    await expect(
+      new RiotLoginProvider({
+        fetchImplementation: fetchMock as unknown as typeof fetch,
+      }).submitMfaCode({
+        code: "123456",
+        pendingJar: new TextEncoder().encode("not-a-jar"),
+      }),
+    ).rejects.toMatchObject({ failure: "session-expired" });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs the failing step and Riot's error code, and nothing secret", async () => {
+    const { RiotLoginProvider } = await loadProvider();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fetchMock } = recordingFetch([
+      opened(),
+      jsonResponse({ error: "auth_failure", type: "auth" }),
+    ]);
+
+    await expect(
+      new RiotLoginProvider({
+        fetchImplementation: fetchMock as unknown as typeof fetch,
+      }).submitCredentials({ password: PASSWORD, username: USERNAME }),
+    ).rejects.toMatchObject({ failure: "invalid-credentials" });
+
+    // Without this line a failed sign-in is indistinguishable on the server
+    // from a Cloudflare refusal or an expired auth session.
+    expect(warn).toHaveBeenCalledWith(
+      "[riot-login] sign-in step failed",
+      expect.objectContaining({
+        riotError: "auth_failure",
+        riotType: "auth",
+        step: "credential",
+      }),
+    );
+
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).not.toContain(PASSWORD);
+    expect(logged).not.toContain("pending-value");
+    warn.mockRestore();
+  });
 });

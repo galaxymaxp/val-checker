@@ -5,7 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import type { CatalogSnapshot } from "@/src/lib/catalog/valorant-api";
+import type {
+  CatalogSnapshot,
+  ContentTierSnapshot,
+} from "@/src/lib/catalog/valorant-api";
 import { syncCatalog } from "@/src/lib/catalog/sync";
 import type { Database } from "@/src/types/database";
 
@@ -48,17 +51,23 @@ function localSupabaseStatus() {
 }
 
 async function catalogCounts(supabase: ReturnType<typeof createClient<Database>>) {
-  const [weapons, skins, levels] = await Promise.all([
+  const [weapons, skins, levels, chromas, tiers] = await Promise.all([
     supabase.from("weapons").select("*", { count: "exact", head: true }),
     supabase.from("skins").select("*", { count: "exact", head: true }),
     supabase.from("skin_levels").select("*", { count: "exact", head: true }),
+    supabase.from("skin_chromas").select("*", { count: "exact", head: true }),
+    supabase.from("content_tiers").select("*", { count: "exact", head: true }),
   ]);
 
   expect(weapons.error).toBeNull();
   expect(skins.error).toBeNull();
   expect(levels.error).toBeNull();
+  expect(chromas.error).toBeNull();
+  expect(tiers.error).toBeNull();
 
   return {
+    contentTiers: tiers.count,
+    skinChromas: chromas.count,
     skinLevels: levels.count,
     skins: skins.count,
     weapons: weapons.count,
@@ -78,23 +87,73 @@ describe("catalog sync", () => {
     const weaponUuid = randomUUID();
     const skinUuid = randomUUID();
     const levelUuid = randomUUID();
+    const chromaUuid = randomUUID();
+    const contentTierUuid = randomUUID();
+    const defaultSkinUuid = randomUUID();
     const snapshot: CatalogSnapshot = {
       weapons: [
-        { category: "Rifle", display_name: "Sync fixture", weapon_uuid: weaponUuid },
-      ],
-      skins: [
         {
-          content_tier: null,
+          category: "Rifle",
+          default_skin_uuid: defaultSkinUuid,
           display_icon: null,
-          display_name: "Sync fixture skin",
-          skin_uuid: skinUuid,
+          display_name: "Sync fixture",
+          inventory_label: "RIFLES",
+          inventory_ordinal: 2,
+          shop_category: "Rifles",
           weapon_uuid: weaponUuid,
         },
       ],
-      skinLevels: [{ level_uuid: levelUuid, ordinal: 0, skin_uuid: skinUuid }],
+      skins: [
+        {
+          content_tier_uuid: contentTierUuid,
+          display_icon: null,
+          display_name: "Sync fixture skin",
+          full_render: null,
+          skin_uuid: skinUuid,
+          theme_uuid: null,
+          wallpaper: null,
+          weapon_uuid: weaponUuid,
+        },
+      ],
+      skinLevels: [
+        {
+          display_icon: null,
+          display_name: "Sync fixture skin",
+          level_item: null,
+          level_uuid: levelUuid,
+          ordinal: 0,
+          skin_uuid: skinUuid,
+          streamed_video: null,
+        },
+      ],
+      skinChromas: [
+        {
+          chroma_uuid: chromaUuid,
+          display_icon: null,
+          display_name: "Sync fixture skin",
+          full_render: "https://example.test/sync-fixture-full.png",
+          ordinal: 0,
+          skin_uuid: skinUuid,
+          streamed_video: null,
+          swatch: null,
+          variant_label: null,
+        },
+      ],
+    };
+    const tierSnapshot: ContentTierSnapshot = {
+      contentTiers: [
+        {
+          content_tier_uuid: contentTierUuid,
+          dev_name: "Exclusive",
+          display_icon: null,
+          display_name: "Exclusive Edition",
+          highlight_color: "f5955bff",
+          rank: 4,
+        },
+      ],
     };
 
-    await syncCatalog(admin, snapshot);
+    await syncCatalog(admin, snapshot, tierSnapshot);
     const countsAfterFirstSync = await catalogCounts(admin);
     const { data: firstSeen, error: firstSeenError } = await admin
       .from("skins")
@@ -110,10 +169,14 @@ describe("catalog sync", () => {
     expect(firstSeenError).toBeNull();
     expect(firstLevelSeenError).toBeNull();
 
-    await syncCatalog(admin, {
-      ...snapshot,
-      skins: [{ ...snapshot.skins[0], display_name: "Sync fixture skin updated" }],
-    });
+    await syncCatalog(
+      admin,
+      {
+        ...snapshot,
+        skins: [{ ...snapshot.skins[0], display_name: "Sync fixture skin updated" }],
+      },
+      tierSnapshot,
+    );
 
     const countsAfterSecondSync = await catalogCounts(admin);
     const { data: secondSeen, error: secondSeenError } = await admin

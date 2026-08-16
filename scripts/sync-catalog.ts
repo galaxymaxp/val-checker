@@ -4,7 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { syncCatalog } from "../src/lib/catalog/sync.ts";
-import { fetchValorantCatalog } from "../src/lib/catalog/valorant-api.ts";
+import {
+  fetchValorantCatalog,
+  fetchValorantContentTiers,
+} from "../src/lib/catalog/valorant-api.ts";
 import type { Database } from "../src/types/database.ts";
 
 const localStatusSchema = z.object({
@@ -45,8 +48,25 @@ function localSupabaseStatus() {
   }
 }
 
+/**
+ * Resolves the sync target. An explicit remote URL plus secret key wins so the
+ * hosted catalog can be synced without Docker; otherwise the local stack is
+ * used, which keeps the default developer workflow unchanged.
+ */
+function syncTarget() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (url && key) {
+    return { API_URL: url, SERVICE_ROLE_KEY: key };
+  }
+
+  return localSupabaseStatus();
+}
+
 try {
-  const status = localSupabaseStatus();
+  const status = syncTarget();
   const supabase = createClient<Database>(status.API_URL, status.SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,
@@ -54,11 +74,16 @@ try {
       persistSession: false,
     },
   });
-  const snapshot = await fetchValorantCatalog();
-  const counts = await syncCatalog(supabase, snapshot);
+  const [snapshot, tierSnapshot] = await Promise.all([
+    fetchValorantCatalog(),
+    fetchValorantContentTiers(),
+  ]);
+  const counts = await syncCatalog(supabase, snapshot, tierSnapshot);
 
   console.log(
-    `Catalog sync complete: ${counts.weapons} weapons, ${counts.skins} skins, ${counts.skinLevels} skin levels.`,
+    `Catalog sync complete: ${counts.weapons} weapons, ${counts.skins} skins, ` +
+      `${counts.skinLevels} skin levels, ${counts.skinChromas} chromas, ` +
+      `${counts.contentTiers} content tiers.`,
   );
 } catch (error) {
   const message =

@@ -2,14 +2,22 @@ type WeaponRow = {
   weapon_uuid: string;
   display_name: string;
   category: string | null;
+  display_icon: string | null;
+  default_skin_uuid: string | null;
+  shop_category: string | null;
+  inventory_label: string | null;
+  inventory_ordinal: number | null;
 };
 
 type SkinRow = {
   skin_uuid: string;
   display_name: string;
   weapon_uuid: string | null;
-  content_tier: string | null;
+  content_tier_uuid: string | null;
   display_icon: string | null;
+  full_render: string | null;
+  theme_uuid: string | null;
+  wallpaper: string | null;
   first_seen_at: string;
 };
 
@@ -17,6 +25,33 @@ type SkinLevelRow = {
   level_uuid: string;
   skin_uuid: string;
   ordinal: number | null;
+  display_name: string | null;
+  level_item: string | null;
+  display_icon: string | null;
+  streamed_video: string | null;
+  first_seen_at: string;
+};
+
+type SkinChromaRow = {
+  chroma_uuid: string;
+  skin_uuid: string;
+  ordinal: number;
+  display_name: string;
+  variant_label: string | null;
+  display_icon: string | null;
+  full_render: string | null;
+  swatch: string | null;
+  streamed_video: string | null;
+  first_seen_at: string;
+};
+
+type ContentTierRow = {
+  content_tier_uuid: string;
+  display_name: string;
+  dev_name: string;
+  rank: number;
+  highlight_color: string | null;
+  display_icon: string | null;
   first_seen_at: string;
 };
 
@@ -116,20 +151,71 @@ export interface Database {
     Tables: {
       weapons: {
         Row: WeaponRow;
-        Insert: WeaponRow;
+        Insert: Omit<
+          WeaponRow,
+          | "default_skin_uuid"
+          | "display_icon"
+          | "inventory_label"
+          | "inventory_ordinal"
+          | "shop_category"
+        > & {
+          default_skin_uuid?: string | null;
+          display_icon?: string | null;
+          inventory_label?: string | null;
+          inventory_ordinal?: number | null;
+          shop_category?: string | null;
+        };
         Update: Partial<WeaponRow>;
         Relationships: [];
       };
       skins: {
         Row: SkinRow;
-        Insert: Omit<SkinRow, "first_seen_at"> & { first_seen_at?: string };
+        Insert: Omit<
+          SkinRow,
+          | "content_tier_uuid"
+          | "first_seen_at"
+          | "full_render"
+          | "theme_uuid"
+          | "wallpaper"
+        > & {
+          content_tier_uuid?: string | null;
+          first_seen_at?: string;
+          full_render?: string | null;
+          theme_uuid?: string | null;
+          wallpaper?: string | null;
+        };
         Update: Partial<SkinRow>;
         Relationships: [];
       };
       skin_levels: {
         Row: SkinLevelRow;
-        Insert: Omit<SkinLevelRow, "first_seen_at"> & { first_seen_at?: string };
+        Insert: Omit<
+          SkinLevelRow,
+          | "display_icon"
+          | "display_name"
+          | "first_seen_at"
+          | "level_item"
+          | "streamed_video"
+        > & {
+          display_icon?: string | null;
+          display_name?: string | null;
+          first_seen_at?: string;
+          level_item?: string | null;
+          streamed_video?: string | null;
+        };
         Update: Partial<SkinLevelRow>;
+        Relationships: [];
+      };
+      skin_chromas: {
+        Row: SkinChromaRow;
+        Insert: Omit<SkinChromaRow, "first_seen_at"> & { first_seen_at?: string };
+        Update: Partial<SkinChromaRow>;
+        Relationships: [];
+      };
+      content_tiers: {
+        Row: ContentTierRow;
+        Insert: Omit<ContentTierRow, "first_seen_at"> & { first_seen_at?: string };
+        Update: Partial<ContentTierRow>;
         Relationships: [];
       };
       watchlist: {

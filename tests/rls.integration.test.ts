@@ -96,6 +96,8 @@ describe("foundation schema RLS", () => {
       const weaponUuid = randomUUID();
       const skinUuid = randomUUID();
       const levelUuid = randomUUID();
+      const contentTierUuid = randomUUID();
+      const chromaUuid = randomUUID();
 
       const { error: weaponSeedError } = await admin.from("weapons").insert({
         category: "Rifle",
@@ -105,7 +107,6 @@ describe("foundation schema RLS", () => {
       expect(weaponSeedError, "service role seeds weapons").toBeNull();
 
       const { error: skinSeedError } = await admin.from("skins").insert({
-        content_tier: "Exclusive",
         display_icon: null,
         display_name: "RLS fixture skin",
         skin_uuid: skinUuid,
@@ -119,6 +120,23 @@ describe("foundation schema RLS", () => {
         skin_uuid: skinUuid,
       });
       expect(levelSeedError, "service role seeds skin levels").toBeNull();
+
+      const { error: tierSeedError } = await admin.from("content_tiers").insert({
+        content_tier_uuid: contentTierUuid,
+        dev_name: "Exclusive",
+        display_name: "Exclusive Edition",
+        highlight_color: "f5955bff",
+        rank: 4,
+      });
+      expect(tierSeedError, "service role seeds content tiers").toBeNull();
+
+      const { error: chromaSeedError } = await admin.from("skin_chromas").insert({
+        chroma_uuid: chromaUuid,
+        display_name: "RLS fixture chroma",
+        ordinal: 0,
+        skin_uuid: skinUuid,
+      });
+      expect(chromaSeedError, "service role seeds skin chromas").toBeNull();
 
       const { data: connection, error: connectionError } = await admin
         .from("riot_connections")
@@ -141,10 +159,15 @@ describe("foundation schema RLS", () => {
       expect(shopSeedError, "service role seeds a shop check").toBeNull();
 
       for (const { client } of [userA, userB]) {
-        const [weapons, skins, levels] = await Promise.all([
+        const [weapons, skins, levels, tiers, chromas] = await Promise.all([
           client.from("weapons").select("weapon_uuid").eq("weapon_uuid", weaponUuid),
           client.from("skins").select("skin_uuid").eq("skin_uuid", skinUuid),
           client.from("skin_levels").select("level_uuid").eq("level_uuid", levelUuid),
+          client
+            .from("content_tiers")
+            .select("content_tier_uuid")
+            .eq("content_tier_uuid", contentTierUuid),
+          client.from("skin_chromas").select("chroma_uuid").eq("chroma_uuid", chromaUuid),
         ]);
 
         expect(weapons.error).toBeNull();
@@ -153,7 +176,25 @@ describe("foundation schema RLS", () => {
         expect(skins.data).toHaveLength(1);
         expect(levels.error).toBeNull();
         expect(levels.data).toHaveLength(1);
+        expect(tiers.error).toBeNull();
+        expect(tiers.data).toHaveLength(1);
+        expect(chromas.error).toBeNull();
+        expect(chromas.data).toHaveLength(1);
       }
+
+      const anonClient = makeClient(status.API_URL, status.ANON_KEY);
+      const [anonTiers, anonChromas] = await Promise.all([
+        anonClient
+          .from("content_tiers")
+          .select("content_tier_uuid")
+          .eq("content_tier_uuid", contentTierUuid),
+        anonClient.from("skin_chromas").select("chroma_uuid").eq("chroma_uuid", chromaUuid),
+      ]);
+      const anonTiersAreDenied = anonTiers.error !== null || anonTiers.data?.length === 0;
+      const anonChromasAreDenied =
+        anonChromas.error !== null || anonChromas.data?.length === 0;
+      expect(anonTiersAreDenied).toBe(true);
+      expect(anonChromasAreDenied).toBe(true);
 
       const catalogInsertErrors = await Promise.all([
         userA.client.from("weapons").insert({

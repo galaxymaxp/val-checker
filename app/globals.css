@@ -1,40 +1,115 @@
+@import "tailwindcss";
+
 /* ---------------------------------------------------------------------------
-   VAL Checker design system
-   Dark-first, single committed look. Tokens drive every colour and radius so
-   the palette can shift in one place.
+   VAL Checker design system — monochrome + translucency.
+   Zero hue. Surfaces are translucent white-on-near-black layered over a
+   neutral gradient; state is carried by weight, opacity, and iconography,
+   never colour alone. Tokens drive every colour and radius so the palette
+   can shift in one place.
 --------------------------------------------------------------------------- */
 
 :root {
-  --bg: #0b0e13;
-  --bg-raised: #11161f;
-  --bg-card: #151b26;
-  --bg-inset: #0e131b;
-  --line: #232c3b;
-  --line-soft: #1b2231;
+  --bg: #08090b;
+  --bg-raised: rgba(255, 255, 255, 0.032);
+  --bg-card: rgba(255, 255, 255, 0.045);
+  --bg-inset: rgba(255, 255, 255, 0.022);
+  --line: rgba(255, 255, 255, 0.10);
+  --line-soft: rgba(255, 255, 255, 0.06);
 
-  --text: #eef2f8;
-  --text-muted: #9aa7bd;
-  --text-dim: #6b7a93;
+  --text: #f4f5f7;
+  --text-muted: rgba(255, 255, 255, 0.60);
+  --text-dim: rgba(255, 255, 255, 0.38);
 
-  --accent: #ff4655;
-  --accent-hot: #ff6b78;
-  --accent-dim: rgba(255, 70, 85, 0.14);
-  --mint: #22d3a7;
-  --mint-dim: rgba(34, 211, 167, 0.14);
-  --amber: #f5b544;
+  /* "Accent" is now light-on-dark, not a hue. Primary actions invert. */
+  --accent: #ffffff;
+  --accent-hot: rgba(255, 255, 255, 0.86);
+  --accent-dim: rgba(255, 255, 255, 0.08);
+  --mint: rgba(255, 255, 255, 0.92);
+  --mint-dim: rgba(255, 255, 255, 0.07);
+  --amber: rgba(255, 255, 255, 0.72);
 
-  --radius-sm: 8px;
+  --radius-sm: 10px;
   --radius: 14px;
-  --radius-lg: 20px;
+  --radius-lg: 22px;
 
-  --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.9);
-  --ring: 0 0 0 3px rgba(255, 70, 85, 0.35);
+  --shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.9);
+  --ring: 0 0 0 3px rgba(255, 255, 255, 0.18);
 
-  --measure: 62ch;
-  --page: 1600px;
+  --measure: 64ch;
+  --page: 1440px;
+
+  /* Motion system — every transition shares these. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 140ms;
+  --dur-2: 240ms;
+  --dur-3: 420ms;
 
   color-scheme: dark;
 }
+
+/* Tailwind v4 token bridge. The legacy :root block above stays the source of
+   truth; these aliases expose it to utility classes. Unlayered legacy rules
+   below always beat Tailwind's layered utilities, so adoption is additive. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-card: var(--bg-card);
+  --color-bg-inset: var(--bg-inset);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-ink: var(--text);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-dim: var(--text-dim);
+  --color-accent: var(--accent);
+  --color-accent-hot: var(--accent-hot);
+  --color-accent-dim: var(--accent-dim);
+  --color-mint: var(--mint);
+  --color-mint-dim: var(--mint-dim);
+  --color-amber: var(--amber);
+  --radius-chip: var(--radius-sm);
+  --radius-card: var(--radius);
+  --radius-panel: var(--radius-lg);
+  --shadow-panel: var(--shadow);
+  --container-page: var(--page);
+  --font-sans: var(--font-inter);
+}
+
+@theme {
+  /* Easing + duration bridge: same values as the :root motion tokens, exposed
+     so Tailwind utilities (ease-out-expo, duration-snap, ...) can use them. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-snap: 140ms;
+  --duration-move: 240ms;
+  --duration-drift: 420ms;
+  --animate-rise: rise 700ms var(--ease-out-expo) both;
+  --animate-sheen: sheen 2.6s var(--ease-out) infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 2.5rem;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  @keyframes sheen {
+    from {
+      background-position: -140% 0;
+    }
+    to {
+      background-position: 240% 0;
+    }
+  }
+}
+
+@custom-variant hocus (&:hover, &:focus-visible);
 
 *,
 *::before,
@@ -52,12 +127,12 @@ html {
 
 body {
   background:
-    radial-gradient(1100px 620px at 12% -10%, rgba(255, 70, 85, 0.10), transparent 60%),
-    radial-gradient(900px 520px at 88% 0%, rgba(34, 211, 167, 0.07), transparent 55%),
+    radial-gradient(1200px 700px at 50% -20%, rgba(255, 255, 255, 0.055), transparent 62%),
+    radial-gradient(900px 600px at 85% 8%, rgba(255, 255, 255, 0.03), transparent 55%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 16px;
   line-height: 1.6;
@@ -72,14 +147,37 @@ svg {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
 
+/* --- motion base ----------------------------------------------------------
+   One shared easing/duration vocabulary for every interactive element, so
+   hover and focus feel consistent across the app. */
+
+a,
+button,
+input,
+select,
+textarea,
+summary,
+[role="button"],
+[data-interactive] {
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out),
+    opacity var(--dur-1) var(--ease-out),
+    transform var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
+}
+
 :focus-visible {
   border-radius: var(--radius-sm);
-  outline: 2px solid var(--accent-hot);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
   outline-offset: 2px;
 }
 
@@ -115,7 +213,7 @@ p {
 }
 
 a {
-  color: var(--accent-hot);
+  color: var(--text);
   text-underline-offset: 3px;
 }
 
@@ -148,8 +246,22 @@ a {
   place-content: center;
 }
 
-.auth-shell {
-  max-width: 30rem;
+.primary-link {
+  align-self: flex-start;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  color: var(--bg);
+  display: inline-block;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  padding: 0.7rem 1.5rem;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  background: var(--accent-hot);
+  transform: translateY(-1px);
 }
 
 .catalog-shell {
@@ -159,147 +271,10 @@ a {
   margin-inline: auto;
   max-width: var(--page);
   padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2.5rem) 5rem;
-}
-
-.primary-link,
-.auth-form button,
-.watch-button,
-.filter-switch button,
-.riot-session-fields button,
-.disconnect-controls button {
-  border-radius: 999px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 120ms ease, border-color 120ms ease,
-    color 120ms ease, transform 120ms ease;
-}
-
-.primary-link {
-  align-self: flex-start;
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: #fff;
-  display: inline-block;
-  margin-top: 0.5rem;
-  padding: 0.7rem 1.5rem;
-  text-decoration: none;
-}
-
-.primary-link:hover {
-  background: var(--accent-hot);
-  border-color: var(--accent-hot);
-}
-
-/* --- auth ----------------------------------------------------------------- */
-
-.auth-form {
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 1rem;
-  padding: 1.5rem;
-}
-
-.auth-form label {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.auth-form input {
-  background: var(--bg-inset);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.75rem 0.95rem;
   width: 100%;
 }
 
-.auth-form input::placeholder {
-  color: var(--text-dim);
-}
-
-.auth-form input:focus-visible {
-  border-color: var(--accent);
-  box-shadow: var(--ring);
-  outline: none;
-}
-
-.auth-form button {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: #fff;
-  margin-top: 0.4rem;
-  padding: 0.75rem 1.25rem;
-}
-
-.auth-form button:hover:not(:disabled) {
-  background: var(--accent-hot);
-}
-
-.auth-form button:disabled {
-  cursor: progress;
-  opacity: 0.6;
-}
-
-.auth-note {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.auth-note--error {
-  background: var(--accent-dim);
-  border: 1px solid rgba(255, 70, 85, 0.32);
-  border-radius: var(--radius);
-  color: #ffd7db;
-  padding: 0.7rem 0.9rem;
-}
-
-.auth-note--sent {
-  background: var(--mint-dim);
-  border: 1px solid rgba(34, 211, 167, 0.32);
-  border-radius: var(--radius);
-  color: #b8f5e4;
-  padding: 0.7rem 0.9rem;
-}
-
-/* --- dashboard header ----------------------------------------------------- */
-
-.catalog-hero {
-  align-items: end;
-  border-bottom: 1px solid var(--line-soft);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2rem;
-  justify-content: space-between;
-  padding-bottom: 1.5rem;
-}
-
-.catalog-hero .lede {
-  flex-basis: 34ch;
-  flex-grow: 1;
-}
-
-.session-bar {
-  align-items: center;
-  color: var(--text-muted);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.85rem;
-  gap: 0.75rem;
-}
-
-.session-bar strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.session-bar form {
-  display: contents;
-}
+/* --- app header ------------------------------------------------------------ */
 
 .sign-out-button {
   background: transparent;
@@ -313,315 +288,263 @@ a {
 }
 
 .sign-out-button:hover {
-  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--text);
 }
 
-/* --- controls ------------------------------------------------------------- */
+/* --- surfaces --------------------------------------------------------------
+   The shared glass card: real translucency over the page gradient. */
 
-.collection-browser {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.collection-controls {
-  align-items: center;
-  background: var(--bg-raised);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: space-between;
-  padding: 1rem 1.1rem;
-  position: sticky;
-  top: 0.75rem;
-  z-index: 5;
-  backdrop-filter: blur(8px);
-}
-
-.search-field {
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  gap: 0.3rem;
-  max-width: 26rem;
-  min-width: 14rem;
-}
-
-.search-field span {
-  color: var(--text-dim);
-  font-size: 0.72rem;
-  font-weight: 640;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.search-field input {
-  background: var(--bg-inset);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.6rem 0.9rem;
-  width: 100%;
-}
-
-.search-field input:focus-visible {
-  border-color: var(--accent);
-  box-shadow: var(--ring);
-  outline: none;
-}
-
-.filter-switch {
-  background: var(--bg-inset);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  display: flex;
-  gap: 0.2rem;
-  padding: 0.22rem;
-}
-
-.filter-switch button {
-  background: transparent;
-  border: 0;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  padding: 0.45rem 1rem;
-}
-
-.filter-switch button[aria-pressed="true"] {
-  background: var(--accent);
-  color: #fff;
-}
-
-.filter-switch button:hover[aria-pressed="false"] {
-  color: var(--text);
-}
-
-/* --- catalog grid --------------------------------------------------------- */
-
-.category-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.category-heading {
-  align-items: baseline;
-  display: flex;
-  gap: 0.75rem;
-}
-
-.category-heading::after {
-  background: linear-gradient(90deg, var(--line), transparent);
-  content: "";
-  flex-grow: 1;
-  height: 1px;
-}
-
-.weapon-grid {
-  display: grid;
-  gap: 0.85rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
-}
-
-.weapon-card {
+.glass-card {
+  backdrop-filter: blur(20px) saturate(140%);
   background: var(--bg-card);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.7rem;
-}
-
-.weapon-card > header {
-  align-items: baseline;
-  border-bottom: 1px solid var(--line-soft);
-  display: flex;
-  gap: 0.5rem;
-  justify-content: space-between;
-  padding-bottom: 0.4rem;
-}
-
-.weapon-card > header h3 {
-  font-size: 0.82rem;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-
-.weapon-card > header p {
-  color: var(--text-dim);
-  font-size: 0.7rem;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Dense wrap: many small tiles per row rather than a few tall cards. */
-.skin-grid {
-  display: grid;
-  gap: 0.45rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.5rem), 1fr));
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.skin-card {
-  background: var(--bg-inset);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: border-color 120ms ease, background-color 120ms ease;
-}
-
-.skin-card:hover {
-  background: var(--bg-raised);
-  border-color: var(--line);
-}
-
-.skin-art {
-  align-items: center;
-  aspect-ratio: 2 / 1;
-  background: transparent;
-  display: flex;
-  justify-content: center;
-  position: relative;
-}
-
-.skin-art img {
-  object-fit: contain;
-  padding: 0.25rem;
-}
-
-.skin-art span {
-  color: var(--text-dim);
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.skin-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.4rem 0.45rem 0.5rem;
-}
-
-/* The tier line is noise at this density; the name and state carry it. */
-.skin-details p {
-  display: none;
-}
-
-.skin-details h4 {
-  font-size: 0.72rem;
-  font-weight: 550;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.watch-button {
-  background: transparent;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  font-size: 0.68rem;
-  margin-top: auto;
-  padding: 0.25rem 0.4rem;
-  width: 100%;
-}
-
-.watch-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.watch-button[aria-pressed="true"] {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: #ffd7db;
-}
-
-.watch-button:disabled {
-  cursor: progress;
-  opacity: 0.55;
-}
-
-/* --- states --------------------------------------------------------------- */
-
-.empty-catalog {
-  background: var(--bg-raised);
-  border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 3rem 1.5rem;
-  text-align: center;
 }
 
-.empty-catalog p:last-child {
-  color: var(--text-muted);
-}
+/* --- states ----------------------------------------------------------------
+   Monochrome status language: alerts get weight (a 2px left rail + glyph),
+   never a hue. The role attributes carry the semantics for AT. */
 
-.watchlist-error,
 .connection-error {
-  background: var(--accent-dim);
-  border: 1px solid rgba(255, 70, 85, 0.32);
+  align-items: baseline;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-left: 2px solid rgba(255, 255, 255, 0.55);
   border-radius: var(--radius);
-  color: #ffd7db;
+  color: var(--text);
+  display: flex;
+  font-size: 0.92rem;
+  gap: 0.6rem;
   padding: 0.75rem 1rem;
+}
+
+.connection-error::before {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  content: "!" / "";
+  display: inline-flex;
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  height: 1.05rem;
+  justify-content: center;
+  line-height: 1;
+  translate: 0 0.1rem;
+  width: 1.05rem;
 }
 
 /* --- riot connection panel ------------------------------------------------ */
 
 .riot-connection-panel {
+  backdrop-filter: blur(20px) saturate(140%);
   background: var(--bg-card);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.35rem;
+  gap: 1.25rem;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
 }
 
 .riot-connection-heading {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: space-between;
+}
+
+.riot-connection-heading > div {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.ship-gate-note {
+/* Status badge: a small pill whose leading dot carries the state —
+   filled when connected, hollow when disconnected. */
+
+.connection-badge {
+  align-items: center;
   background: var(--bg-inset);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--amber);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   color: var(--text-muted);
-  font-size: 0.88rem;
-  padding: 0.75rem 0.9rem;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 600;
+  gap: 0.45rem;
+  letter-spacing: 0.12em;
+  padding: 0.35rem 0.8rem;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.riot-session-fields {
+.connection-badge::before {
+  border-radius: 50%;
+  content: "";
+  height: 6px;
+  width: 6px;
+}
+
+.connection-badge-connected {
+  color: var(--text);
+}
+
+.connection-badge-connected::before {
+  background: var(--accent);
+}
+
+.connection-badge-disconnected::before {
+  background: transparent;
+  border: 1px solid var(--text-dim);
+}
+
+/* Consent copy folds into a <details> so it stops dominating the screen. */
+
+.consent-details {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 0;
+}
+
+.consent-details summary {
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.7rem 0.9rem;
+}
+
+.consent-details summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.consent-details[open] summary {
+  border-bottom: 1px solid var(--line-soft);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.consent-details .consent-copy {
+  padding: 0.9rem;
+}
+
+.consent-copy {
+  color: var(--text-muted);
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  font-size: 0.88rem;
+  gap: 0.6rem;
+  max-width: var(--measure);
 }
 
-.riot-session-fields label {
+.consent-copy strong {
+  color: var(--text);
+}
+
+.ship-gate-note {
+  background: var(--bg-inset);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
+  padding: 0.7rem 0.9rem;
+}
+
+/* Shared field language: stacked label + control, full width. */
+
+.riot-signin-fields,
+.riot-mfa-fields,
+.riot-session-fields {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.riot-signin-fields label,
+.riot-mfa-fields label,
+.riot-session-fields label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.riot-signin-fields label > span,
+.riot-mfa-fields label > span,
+.riot-session-fields label > span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
+.riot-signin-fields input,
+.riot-signin-fields select,
+.riot-mfa-fields input,
 .riot-session-fields input,
 .riot-session-fields textarea {
   background: var(--bg-inset);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  color: inherit;
-  font: inherit;
+  border-radius: var(--radius-sm);
+  color: var(--text);
   padding: 0.7rem 0.9rem;
   width: 100%;
+}
+
+.riot-signin-fields input::placeholder,
+.riot-mfa-fields input::placeholder,
+.riot-session-fields textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.riot-signin-fields input:focus-visible,
+.riot-signin-fields select:focus-visible,
+.riot-mfa-fields input:focus-visible,
+.riot-session-fields input:focus-visible,
+.riot-session-fields textarea:focus-visible {
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* The region select renders as our control, not the OS one: appearance off,
+   with an inline white chevron. */
+
+.riot-signin-fields select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 0.9rem center;
+  background-repeat: no-repeat;
+  cursor: pointer;
+  padding-right: 2.4rem;
+}
+
+.riot-signin-fields select option {
+  background: #16171a;
+  color: var(--text);
+}
+
+/* MFA: its own inset section, with the one-time code styled as such. */
+
+.riot-mfa-fields {
+  background: var(--bg-inset);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.riot-mfa-fields [role="status"] {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.riot-mfa-fields input {
+  font-size: 1.1rem;
+  letter-spacing: 0.4em;
+  text-align: center;
 }
 
 .riot-session-fields textarea {
@@ -631,44 +554,74 @@ a {
   resize: vertical;
 }
 
-.riot-session-fields input:focus-visible,
-.riot-session-fields textarea:focus-visible {
-  border-color: var(--accent);
-  box-shadow: var(--ring);
-  outline: none;
-}
+/* --- buttons ---------------------------------------------------------------
+   Primary actions invert (white on near-black); secondary actions are ghosts.
+   Every button in the panel starts primary, then the ghost variants opt out. */
 
-.riot-session-fields button,
-.disconnect-controls button {
-  align-self: flex-start;
+.riot-connection-panel button {
   background: var(--accent);
-  border: 1px solid var(--accent);
-  color: #fff;
-  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--bg);
+  cursor: pointer;
+  font-weight: 600;
+  justify-self: start;
+  padding: 0.65rem 1.4rem;
+  width: fit-content;
 }
 
-.riot-session-fields button:hover:not(:disabled) {
+.riot-connection-panel button:hover:not(:disabled) {
   background: var(--accent-hot);
+  transform: translateY(-1px);
 }
 
-.riot-session-fields button:disabled {
+.riot-connection-panel button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
+@media (max-width: 480px) {
+  .riot-connection-panel button {
+    width: 100%;
+  }
+}
+
+/* Ghost variants: MFA "Start over", the admin-fallback toggle, disconnect. */
+
+.riot-mfa-fields button + button,
+.riot-admin-fallback > button,
 .disconnect-controls button {
   background: transparent;
   border-color: var(--line);
   color: var(--text-muted);
 }
 
-.disconnect-controls button:hover {
-  border-color: var(--accent);
+.riot-mfa-fields button + button:hover:not(:disabled),
+.riot-admin-fallback > button:hover:not(:disabled),
+.disconnect-controls button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--text);
+  transform: none;
+}
+
+/* Admin cookie-export fallback: tucked behind a hairline, de-emphasised. */
+
+.riot-admin-fallback {
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 1rem;
+}
+
+.riot-admin-fallback > button {
+  font-size: 0.82rem;
+  padding: 0.45rem 1rem;
 }
 
 .consent-check {
-  align-items: flex-start;
+  align-items: start;
   color: var(--text-muted);
   display: flex;
   font-size: 0.88rem;
@@ -678,21 +631,26 @@ a {
 
 .consent-check input {
   accent-color: var(--accent);
+  flex: none;
   height: 1.05rem;
   margin-top: 0.18rem;
   width: 1.05rem;
 }
 
-.consent-copy {
+.disconnect-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.disconnect-controls p {
   color: var(--text-muted);
   font-size: 0.88rem;
   max-width: var(--measure);
 }
 
-.disconnect-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+.disconnect-controls strong {
+  color: var(--text);
 }
 
 /* --- motion --------------------------------------------------------------- */
@@ -704,148 +662,47 @@ a {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
 
-  .skin-card:hover {
-    transform: none;
+/* ---- Phase H: daily shop stage glow (additive) ---- */
+/* Drives the blurred gradient plates behind the pinned shop stage. Only
+   opacity and scale animate so the utilities that position the plates
+   (translate, inset) stay untouched. Applied via motion-safe: only. */
+@keyframes shop-glow {
+  from {
+    opacity: 0.55;
+    scale: 1;
+  }
+  to {
+    opacity: 1;
+    scale: 1.07;
   }
 }
 
-/* --- google sign-in + auth card ------------------------------------------- */
-
-.auth-card {
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  margin-top: 1rem;
-  padding: 1.5rem;
+/* ---- Phase I: view-transition reduced-motion guard (additive) ---- */
+/* TransitionLink already skips startViewTransition for reduced-motion users;
+   this belt-and-braces rule also stills any transition the browser starts. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
 
-.auth-card .auth-form {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  margin-top: 0;
-  padding: 0;
-}
-
-.google-button {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #fff;
-  border-radius: 999px;
-  color: #1f2328;
-  cursor: pointer;
-  display: flex;
-  font-weight: 600;
-  gap: 0.6rem;
-  justify-content: center;
-  padding: 0.75rem 1.25rem;
-  transition: background-color 120ms ease;
-  width: 100%;
-}
-
-.google-button:hover:not(:disabled) {
-  background: #eef1f5;
-}
-
-.google-button:disabled {
-  cursor: progress;
-  opacity: 0.7;
-}
-
-.auth-divider {
-  align-items: center;
-  color: var(--text-dim);
-  display: flex;
-  font-size: 0.72rem;
-  gap: 0.75rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.auth-divider::before,
-.auth-divider::after {
-  background: var(--line);
-  content: "";
-  flex-grow: 1;
-  height: 1px;
-}
-
-/* --- daily shop ----------------------------------------------------------- */
-
-.daily-shop {
-  background: var(--bg-card);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.35rem;
-}
-
-.daily-shop-heading {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  justify-content: space-between;
-}
-
-.daily-shop-meta {
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.daily-shop-grid {
+/* ---- Desktop shell: Riot login capture (additive) ---- */
+/* Rendered only inside the Electron desktop shell, where window.valChecker is
+   present. It is the recommended path, so the credential form below it is
+   visually de-emphasised rather than removed. */
+.riot-desktop-connect {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  gap: 0.6rem;
 }
 
-.daily-shop-card {
-  background: var(--bg-inset);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  overflow: hidden;
-  padding-bottom: 0.6rem;
-}
-
-.daily-shop-card--watched {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent-dim);
-}
-
-.daily-shop-card .skin-art {
-  aspect-ratio: 2 / 1;
-}
-
-.daily-shop-card h3 {
-  font-size: 0.8rem;
-  padding-inline: 0.6rem;
-}
-
-.daily-shop-hit {
-  color: var(--accent-hot);
-  font-size: 0.68rem;
+.riot-desktop-connect-button {
   font-weight: 600;
-  letter-spacing: 0.06em;
-  padding-inline: 0.6rem;
-  text-transform: uppercase;
 }
 
-.daily-shop-empty {
-  color: var(--text-muted);
-  font-size: 0.92rem;
-  max-width: var(--measure);
+.riot-signin-fields-deemphasized {
+  opacity: 0.6;
 }

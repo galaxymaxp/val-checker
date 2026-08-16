@@ -86,14 +86,12 @@ describe("SkinLevel-to-Skin resolver", () => {
       (
         await admin.from("skins").insert([
           {
-            content_tier: null,
             display_icon: null,
             display_name: "Resolver fixture one",
             skin_uuid: firstSkinUuid,
             weapon_uuid: weaponUuid,
           },
           {
-            content_tier: null,
             display_icon: null,
             display_name: "Resolver fixture two",
             skin_uuid: secondSkinUuid,

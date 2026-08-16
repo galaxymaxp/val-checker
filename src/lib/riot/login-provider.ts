@@ -55,6 +55,7 @@ export type RiotLoginFailure =
   | "invalid-mfa-code"
   | "malformed-input"
   | "rate-limited"
+  | "session-expired"
   | "unavailable";
 
 /** Carries a classification only. Never a credential, cookie, or token. */
@@ -117,8 +118,13 @@ const errorSchema = z.object({
 function classifyRiotError(error: string | undefined): RiotLoginFailure {
   switch (error) {
     case "auth_failure":
-    case "invalid_session_id":
       return "invalid-credentials";
+    // Not a rejected credential: the `asid` cookie from the opening POST
+    // was missing or had already expired, so Riot never evaluated the
+    // password. Reporting it as a bad credential sends the user off to
+    // re-check a password that was fine, so it carries its own class.
+    case "invalid_session_id":
+      return "session-expired";
     case "multifactor_attempt_failed":
     case "invalid_multifactor_code":
       return "invalid-mfa-code";
@@ -127,6 +133,34 @@ function classifyRiotError(error: string | undefined): RiotLoginFailure {
     default:
       return "unavailable";
   }
+}
+
+type AuthStep = "credential" | "mfa" | "open";
+
+/**
+ * Emits the one thing that makes a failed sign-in diagnosable: which step
+ * failed, the HTTP status, and Riot's own error code.
+ *
+ * Every field is a fixed-vocabulary value from Riot's auth API
+ * ("auth_failure", "rate_limited", ...) or an HTTP status. The credential,
+ * the cookie jar, and the response body are all excluded, so this stays
+ * inside the module's no-secrets contract while making the difference
+ * between a wrong password, an expired auth session, and a Cloudflare
+ * refusal visible in the server log. Without it every one of those
+ * collapses into the same sentence on screen with nothing behind it.
+ */
+function reportAuthDiagnostic(detail: {
+  readonly riotError?: string;
+  readonly riotType?: string;
+  readonly status?: number;
+  readonly step: AuthStep;
+}): void {
+  console.warn("[riot-login] sign-in step failed", {
+    riotError: detail.riotError ?? null,
+    riotType: detail.riotType ?? null,
+    status: detail.status ?? null,
+    step: detail.step,
+  });
 }
 
 export type RiotLoginProviderOptions = {
@@ -166,7 +200,12 @@ export class RiotLoginProvider {
     }
 
     // Step one establishes the `asid` cookie that binds the following PUT.
-    const opened = await this.send("POST", AUTHORIZATION_REQUEST_BODY, []);
+    const opened = await this.send(
+      "POST",
+      AUTHORIZATION_REQUEST_BODY,
+      [],
+      "open",
+    );
 
     // Step two carries the credential. Nothing retains it past this call.
     const authenticated = await this.send(
@@ -179,9 +218,14 @@ export class RiotLoginProvider {
         username,
       },
       opened.jar,
+      "credential",
     );
 
-    return this.classify(authenticated.payload, authenticated.jar);
+    return this.classify(
+      authenticated.payload,
+      authenticated.jar,
+      "credential",
+    );
   }
 
   /** Completes a challenged login using the pending-auth jar from step one. */
@@ -195,8 +239,10 @@ export class RiotLoginProvider {
     try {
       pending = parseCookieJar(input.pendingJar);
     } catch (error) {
+      // A pending jar that no longer parses is a stale or corrupt challenge,
+      // not an outage. The user needs to start the sign-in again.
       throw error instanceof CookieJarError
-        ? new RiotLoginError("unavailable")
+        ? new RiotLoginError("session-expired")
         : error;
     }
 
@@ -204,15 +250,17 @@ export class RiotLoginProvider {
       "PUT",
       { code, rememberDevice: true, type: "multifactor" },
       pending,
+      "mfa",
     );
 
-    return this.classify(completed.payload, completed.jar);
+    return this.classify(completed.payload, completed.jar, "mfa");
   }
 
   private async send(
     method: "POST" | "PUT",
     body: unknown,
     jar: readonly CanonicalCookie[],
+    step: AuthStep,
   ): Promise<{ jar: CanonicalCookie[]; payload: unknown }> {
     const requestUrl = new URL(AUTHORIZATION_URL);
     const requestTime = this.now();
@@ -234,21 +282,26 @@ export class RiotLoginProvider {
       });
     } catch {
       // Network-level detail is deliberately dropped: the request body held a
-      // credential and must not reach a log or a wrapped error.
+      // credential and must not reach a log or a wrapped error. The step
+      // alone is safe, and is what tells an operator where it died.
+      reportAuthDiagnostic({ step });
       throw new RiotLoginError("unavailable");
     }
 
     if (response.status === 429) {
+      reportAuthDiagnostic({ status: response.status, step });
       throw new RiotLoginError("rate-limited");
     }
 
     // Cloudflare answers a fingerprint challenge with 403 well before Riot sees
     // the request. Surfaced as unavailable so the caller can fall back.
     if (response.status === 403) {
+      reportAuthDiagnostic({ status: response.status, step });
       throw new RiotLoginError("unavailable");
     }
 
     if (!response.ok) {
+      reportAuthDiagnostic({ status: response.status, step });
       throw new RiotLoginError("unavailable");
     }
 
@@ -256,6 +309,8 @@ export class RiotLoginProvider {
     try {
       payload = await response.json();
     } catch {
+      // A non-JSON 200 is the shape a Cloudflare interstitial arrives in.
+      reportAuthDiagnostic({ status: response.status, step });
       throw new RiotLoginError("unavailable");
     }
 
@@ -273,6 +328,7 @@ export class RiotLoginProvider {
   private classify(
     payload: unknown,
     jar: readonly CanonicalCookie[],
+    step: AuthStep,
   ): RiotLoginOutcome {
     // Checked first: a rejected MFA code comes back as type "multifactor" with
     // an error field, so matching the challenge shape ahead of this would
@@ -283,6 +339,11 @@ export class RiotLoginProvider {
       typeof failed.data.error === "string" &&
       failed.data.error.length > 0
     ) {
+      reportAuthDiagnostic({
+        riotError: failed.data.error,
+        riotType: failed.data.type,
+        step,
+      });
       throw new RiotLoginError(classifyRiotError(failed.data.error));
     }
 
@@ -292,6 +353,7 @@ export class RiotLoginProvider {
       // the stored jar is the only artefact, and the worker mints its own token
       // through cookie-reauth when it needs one.
       if (jar.length === 0) {
+        reportAuthDiagnostic({ riotType: "response", step });
         throw new RiotLoginError("unavailable");
       }
 
@@ -319,6 +381,16 @@ export class RiotLoginProvider {
       };
     }
 
+    // An answer in none of the three documented shapes. The type alone is
+    // the only safe thing to record, and is enough to recognise a format
+    // change on Riot's side.
+    reportAuthDiagnostic({
+      riotType:
+        typeof (payload as { type?: unknown })?.type === "string"
+          ? (payload as { type: string }).type
+          : undefined,
+      step,
+    });
     throw new RiotLoginError("unavailable");
   }
 }

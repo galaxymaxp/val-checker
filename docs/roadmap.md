@@ -189,6 +189,87 @@ connect. It is restricted to administrators, so ordinary allowlisted users see
 only the sign-in form. The existing fail-closed connect allowlist continues to
 gate both paths.
 
+## Version 2.5 decision addendum — interface rebuild, phased
+
+**Decision date:** 2026-08-16
+
+### Why a rebuild rather than a restyle
+
+The dashboard renders the consent copy, the Riot sign-in form, the daily shop
+and the full skin catalog into a single `catalog-shell` at one density. The page
+runs to several thousand pixels because the catalog is unbounded, and the
+consent wall sits between the user and every task on the page. That is an
+information-architecture problem, not a stylesheet problem: restyling the
+current layout would produce a better-looking version of the same unusable page.
+
+A component system is nonetheless adopted, because the project is committing to
+Tailwind and shadcn/ui for the long run and the migration cost only grows as
+more hand-written CSS accumulates against the current 851-line `globals.css`.
+
+The two decisions are sequenced deliberately: **structure first, styling
+second.** Restyling a layout that is about to be split apart is wasted work, so
+no component migration begins until the surfaces it will migrate are stable.
+
+### Constraints that remain load-bearing
+
+- No phase may introduce a Riot request path. The daily cron and the existing
+  operator-triggered check remain the only ones, under the per-account
+  per-rotation claim from the Version 2.3 addendum.
+- The fail-closed connect allowlist keeps gating both connection paths, and the
+  admin-only cookie-export fallback (Version 2.4) stays reachable.
+- The §10 copy constraints apply to every screen this work touches.
+- Each phase lands with the suite green. No phase may leave the app unusable
+  between merges; a half-migrated interface is an acceptable state, a broken
+  one is not.
+
+### Phase 7.1 — Route split
+Move the Riot connection flow off the catalog page onto its own route. The
+dashboard keeps the daily shop and the collection; connecting, disconnecting and
+the MFA challenge live together on the connection route. The consent copy
+collapses behind a disclosure that is expanded by default only when no account
+is connected.
+**Acceptance:** connecting an account is reachable from a dedicated route and no
+longer renders above the catalog; the dashboard renders for a connected user
+with no consent wall; no new Riot request path exists.
+
+### Phase 7.2 — Catalog containment
+Bound the catalog. Pagination or virtualization so rendered height is
+independent of catalog size, with the search and All / Watched-Only filters
+lifted into a persistent control bar rather than scrolling away with the list.
+**Acceptance:** rendered row count stays bounded as the catalog grows; search
+and the Watched-Only toggle behave as in §3.1; the existing catalog-browse tests
+pass unchanged.
+
+### Phase 7.3 — Tailwind adopted alongside the existing CSS
+Install Tailwind and express the current dark palette as design tokens. No
+rewrite in this phase: `globals.css` and Tailwind coexist, so the diff is
+additive and reviewable.
+**Acceptance:** the build succeeds with Tailwind configured; every existing
+screen renders as it did before the phase; tokens reproduce the current palette.
+
+### Phase 7.4 — shadcn/ui primitives on the connection flow
+Initialize shadcn/ui and add only the primitives the app actually uses. Migrate
+the connection route first: it is the smallest surface, the one with the most
+form state, and the one where the failure copy from the credential-connect work
+must read clearly.
+**Acceptance:** the connection route renders on shadcn primitives; the existing
+connection-panel behaviour tests pass unchanged; every credential failure
+classification still surfaces its own distinct message.
+
+### Phase 7.5 — Remaining surfaces migrated, dead CSS retired
+Migrate the dashboard, the daily shop panel, the catalog and the sign-in screen.
+Delete the class rules left behind as each surface moves, so `globals.css`
+finishes reduced to tokens and base styles.
+**Acceptance:** no surface depends on a hand-written class rule that has no
+remaining consumer; `globals.css` contains only tokens and base styles.
+
+### Phase 7.6 — Accessibility and copy pass
+Contrast, focus order, keyboard reachability and touch target sizing across the
+migrated interface, plus a copy review against §10.
+**Acceptance:** text meets WCAG AA contrast; every interactive control is
+keyboard reachable with a visible focus state; the §10 copy constraints hold on
+every screen that mentions reconnection or Riot affiliation.
+
 ## Version 2.1 decision addendum — build and ship gates separated
 
 **Decision date:** 2026-08-14

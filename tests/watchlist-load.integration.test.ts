@@ -127,7 +127,6 @@ describe("watchlist loader pagination", () => {
 
         for (const batch of batches(
           skinUuids.map((skinUuid, ordinal) => ({
-            content_tier: null,
             display_icon: null,
             display_name: `Pagination fixture ${ordinal}`,
             skin_uuid: skinUuid,

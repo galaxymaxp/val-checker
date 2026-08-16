@@ -101,7 +101,6 @@ describe("storefront notification reservation", () => {
         expect(
           (
             await admin.from("skins").insert({
-              content_tier: null,
               display_icon: null,
               display_name: "Notification reservation fixture",
               skin_uuid: skinUuid,

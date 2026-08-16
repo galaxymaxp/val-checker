@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/src/types/database";
 
-import type { CatalogSnapshot } from "./valorant-api";
+import type { CatalogSnapshot, ContentTierSnapshot } from "./valorant-api";
 
 const BATCH_SIZE = 500;
 
@@ -33,7 +33,14 @@ async function upsertRows<Row>(
 export async function syncCatalog(
   supabase: SupabaseClient<Database>,
   snapshot: CatalogSnapshot,
+  tierSnapshot: ContentTierSnapshot,
 ) {
+  // Foreign-key parents first: tiers before skins, skins before chromas.
+  await upsertRows(tierSnapshot.contentTiers, "content_tiers", async (batch) => {
+    return supabase
+      .from("content_tiers")
+      .upsert(batch, { onConflict: "content_tier_uuid" });
+  });
   await upsertRows(snapshot.weapons, "weapons", async (batch) => {
     return supabase.from("weapons").upsert(batch, { onConflict: "weapon_uuid" });
   });
@@ -43,8 +50,13 @@ export async function syncCatalog(
   await upsertRows(snapshot.skinLevels, "skin_levels", async (batch) => {
     return supabase.from("skin_levels").upsert(batch, { onConflict: "level_uuid" });
   });
+  await upsertRows(snapshot.skinChromas, "skin_chromas", async (batch) => {
+    return supabase.from("skin_chromas").upsert(batch, { onConflict: "chroma_uuid" });
+  });
 
   return {
+    contentTiers: tierSnapshot.contentTiers.length,
+    skinChromas: snapshot.skinChromas.length,
     skinLevels: snapshot.skinLevels.length,
     skins: snapshot.skins.length,
     weapons: snapshot.weapons.length,
