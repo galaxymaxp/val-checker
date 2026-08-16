@@ -9,6 +9,7 @@ export default defineConfig([
     ".next/**",
     ".pnpm-store/**",
     "coverage/**",
+    "desktop/**",
     "next-env.d.ts",
     "supabase/.branches/**",
     "supabase/.temp/**",

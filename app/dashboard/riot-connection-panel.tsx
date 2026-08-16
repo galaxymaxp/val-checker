@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
+import type { RiotDesktopCaptureResult } from "@/src/types/desktop-bridge";
 import type {
   RiotConnectionMutationResult,
   RiotConnectionState,
@@ -35,6 +36,20 @@ type MfaChallenge = {
   readonly method: string | null;
 };
 
+// The desktop bridge is injected once, before the app loads, and never changes
+// for the life of the window, so there is nothing to subscribe to.
+function subscribeToDesktopBridge(): () => void {
+  return () => {};
+}
+
+function getDesktopBridgeSnapshot(): boolean {
+  return window.valChecker?.isDesktop === true;
+}
+
+function getDesktopBridgeServerSnapshot(): boolean {
+  return false;
+}
+
 export function RiotConnectionPanel({
   connectAllowed,
   connectCredentials,
@@ -57,6 +72,18 @@ export function RiotConnectionPanel({
   const [showJarPaste, setShowJarPaste] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
+  // Detect the Electron desktop shell without breaking SSR or hydration. The
+  // server snapshot is always false, so the server-rendered HTML never contains
+  // the desktop button; after hydration React reconciles to the client snapshot.
+  // window is only touched in the client snapshot, which never runs during SSR
+  // (and stays undefined in jsdom, so the button does not render under test).
+  const isDesktop = useSyncExternalStore(
+    subscribeToDesktopBridge,
+    getDesktopBridgeSnapshot,
+    getDesktopBridgeServerSnapshot,
+  );
+
+  const desktopConnectAvailable = isDesktop && Boolean(connectSession);
 
   const credentialsReady =
     username.trim().length > 0 && password.length > 0 && consentGranted;
@@ -159,6 +186,53 @@ export function RiotConnectionPanel({
     }
   }
 
+  function desktopCaptureError(
+    result: Extract<RiotDesktopCaptureResult, { ok: false }>,
+  ): string {
+    switch (result.reason) {
+      case "cancelled":
+        return "Riot sign-in was cancelled.";
+      case "timeout":
+        return "The Riot sign-in window timed out. Please try again.";
+      default:
+        return "No Riot session was captured. Please complete the Riot sign-in.";
+    }
+  }
+
+  async function connectViaDesktop() {
+    const bridge = window.valChecker;
+    if (!bridge || !connectSession || !consentGranted || isPending) {
+      return;
+    }
+
+    setIsPending(true);
+    setError(undefined);
+
+    try {
+      const capture = await bridge.connectRiot();
+      if (!capture.ok) {
+        setError(desktopCaptureError(capture));
+        return;
+      }
+
+      const result = await connectSession({
+        consentGranted: true,
+        region,
+        serializedJar: capture.jar,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      setConnectionState("connected");
+    } catch {
+      setError("The Riot session could not be connected.");
+    } finally {
+      setIsPending(false);
+    }
+  }
+
   async function connectFixtureSession() {
     if (!connectFixture || !consentGranted || isPending) {
       return;
@@ -224,27 +298,36 @@ export function RiotConnectionPanel({
         </span>
       </div>
 
-      <div className="consent-copy">
-        <p>
-          VAL Checker signs in to Riot on your behalf and stores the resulting
-          session so it can check your shop once a day.
-        </p>
-        <p>
-          Your password is used only to complete that sign-in. It is never
-          stored, never written to our logs, and is discarded as soon as Riot
-          answers.
-        </p>
-        <p>
-          The session we keep can permit access to your Riot account. It is
-          encrypted at rest, and you can disconnect and delete it at any time.
-        </p>
-        <p>
-          VAL Checker is not affiliated with Riot Games. To invalidate existing
-          sessions outside VAL Checker, use Riot&apos;s
-          <strong> Sign out everywhere</strong> option in your account security
-          settings.
-        </p>
-      </div>
+      <details
+        className="consent-details"
+        // Open while disconnected (consent copy matters before connecting);
+        // collapsed once connected so it stops dominating the screen.
+        {...(connectionState === "disconnected" ? { open: true } : {})}
+      >
+        <summary>How your Riot credentials are handled</summary>
+        <div className="consent-copy">
+          <p>
+            VAL Checker signs in to Riot on your behalf and stores the
+            resulting session so it can check your shop once a day.
+          </p>
+          <p>
+            Your password is used only to complete that sign-in. It is never
+            stored, never written to our logs, and is discarded as soon as Riot
+            answers.
+          </p>
+          <p>
+            The session we keep can permit access to your Riot account. It is
+            encrypted at rest, and you can disconnect and delete it at any
+            time.
+          </p>
+          <p>
+            VAL Checker is not affiliated with Riot Games. To invalidate
+            existing sessions outside VAL Checker, use Riot&apos;s
+            <strong> Sign out everywhere</strong> option in your account
+            security settings.
+          </p>
+        </div>
+      </details>
 
       {connectionState === "disconnected" ? (
         mfaChallenge ? (
@@ -280,8 +363,34 @@ export function RiotConnectionPanel({
           </div>
         ) : (
           <>
+            {desktopConnectAvailable ? (
+              <div className="riot-desktop-connect">
+                <button
+                  className="riot-desktop-connect-button"
+                  disabled={!consentGranted || isPending}
+                  onClick={connectViaDesktop}
+                  type="button"
+                >
+                  {isPending
+                    ? "Opening Riot sign-in..."
+                    : "Sign in to Riot (desktop)"}
+                </button>
+                <p role="note">
+                  Signing in through Riot&apos;s own window is now the reliable
+                  path: Riot requires a captcha for direct username and password
+                  sign-in, so the form below may fail.
+                </p>
+              </div>
+            ) : null}
+
             {connectAllowed && connectCredentials ? (
-              <div className="riot-signin-fields">
+              <div
+                className={
+                  desktopConnectAvailable
+                    ? "riot-signin-fields riot-signin-fields-deemphasized"
+                    : "riot-signin-fields"
+                }
+              >
                 <label>
                   <span>Riot username</span>
                   <input
