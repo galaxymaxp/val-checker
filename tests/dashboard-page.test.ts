@@ -2,10 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
 const canRiotConnect = vi.fn();
-const loadCatalogForBrowse = vi.fn();
+const loadWishlistInventory = vi.fn();
 const loadRiotConnectionStateWithClient = vi.fn();
-const loadWatchedSkinUuids = vi.fn();
-const loadDailyShop = vi.fn();
+const loadDailyShops = vi.fn();
 const redirect = vi.fn();
 const disconnectRiotSession = vi.fn();
 const setSkinWatched = vi.fn();
@@ -15,7 +14,7 @@ vi.mock("@/src/lib/supabase/server", () => ({
   createServerSupabaseClient: async () => ({ auth: { getClaims }, from: vi.fn() }),
 }));
 
-vi.mock("@/src/lib/catalog/browse", () => ({ loadCatalogForBrowse }));
+vi.mock("@/src/lib/catalog/inventory", () => ({ loadWishlistInventory }));
 vi.mock("@/src/lib/riot/connect-allowlist", () => ({ canRiotConnect }));
 vi.mock("@/src/lib/riot/connection-state", () => ({
   loadRiotConnectionStateWithClient,
@@ -23,28 +22,25 @@ vi.mock("@/src/lib/riot/connection-state", () => ({
 vi.mock("@/src/lib/supabase/server-admin", () => ({
   createAdminSupabaseClient: () => admin,
 }));
-vi.mock("@/src/lib/watchlist/load", () => ({ loadWatchedSkinUuids }));
-vi.mock("@/src/lib/storefront/daily-shop", () => ({ loadDailyShop }));
+vi.mock("@/src/lib/storefront/daily-shop", () => ({ loadDailyShops }));
 const signOut = vi.fn();
 
 vi.mock("@/app/dashboard/actions", () => ({ setSkinWatched, signOut }));
-vi.mock("@/app/dashboard/riot-actions", () => ({ disconnectRiotSession }));
+vi.mock("@/app/dashboard/riot-actions", () => ({ checkDailyShopNow: vi.fn(), disconnectRiotSession }));
 vi.mock("next/navigation", () => ({ redirect }));
 
 describe("dashboard page", () => {
   beforeEach(() => {
     getClaims.mockReset();
     canRiotConnect.mockReset();
-    loadCatalogForBrowse.mockReset();
+    loadWishlistInventory.mockReset();
     loadRiotConnectionStateWithClient.mockReset();
-    loadWatchedSkinUuids.mockReset();
-    loadDailyShop.mockReset();
-    loadDailyShop.mockResolvedValue(null);
+    loadDailyShops.mockReset();
+    loadDailyShops.mockResolvedValue([]);
     redirect.mockReset();
-    loadCatalogForBrowse.mockResolvedValue([]);
+    loadWishlistInventory.mockResolvedValue([]);
     canRiotConnect.mockReturnValue(false);
     loadRiotConnectionStateWithClient.mockResolvedValue("disconnected");
-    loadWatchedSkinUuids.mockResolvedValue([]);
   });
 
   it("renders after an authenticated magic-link session", async () => {
@@ -56,6 +52,7 @@ describe("dashboard page", () => {
 
     expect(redirect).not.toHaveBeenCalled();
     expect(content.type).toBe("main");
+    expect(loadWishlistInventory).toHaveBeenCalled();
     expect(loadRiotConnectionStateWithClient).toHaveBeenCalledWith(
       admin,
       "user-id",
@@ -75,8 +72,8 @@ describe("dashboard page", () => {
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(redirect).toHaveBeenCalledWith("/sign-in?next=/dashboard");
-    expect(loadCatalogForBrowse).not.toHaveBeenCalled();
+    expect(loadWishlistInventory).not.toHaveBeenCalled();
     expect(loadRiotConnectionStateWithClient).not.toHaveBeenCalled();
-    expect(loadWatchedSkinUuids).not.toHaveBeenCalled();
+    expect(loadDailyShops).not.toHaveBeenCalled();
   });
 });

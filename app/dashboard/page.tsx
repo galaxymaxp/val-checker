@@ -1,23 +1,14 @@
 import { redirect } from "next/navigation";
 
-import { setSkinWatched, signOut } from "@/app/dashboard/actions";
-import { CollectionBrowser } from "@/app/dashboard/collection-browser";
-import { DailyShopPanel } from "@/app/dashboard/daily-shop-panel";
-import {
-  checkDailyShopNow,
-  connectRiotCredentials,
-  connectRiotSession,
-  disconnectRiotSession,
-  submitRiotMfaCode,
-} from "@/app/dashboard/riot-actions";
-import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
-import { loadCatalogForBrowse } from "@/src/lib/catalog/browse";
-import { loadDailyShop } from "@/src/lib/storefront/daily-shop";
-import { canRiotConnect, isRiotAdmin } from "@/src/lib/riot/connect-allowlist";
+import { DailyShopStage } from "@/app/dashboard/_components/daily-shop-stage";
+import { InventoryGrid } from "@/app/dashboard/_components/inventory-grid";
+import { checkDailyShopNow } from "@/app/dashboard/riot-actions";
+import { loadWishlistInventory } from "@/src/lib/catalog/inventory";
+import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotConnectionStateWithClient } from "@/src/lib/riot/connection-state";
+import { loadDailyShops } from "@/src/lib/storefront/daily-shop";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
-import { loadWatchedSkinUuids } from "@/src/lib/watchlist/load";
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
@@ -27,69 +18,33 @@ export default async function DashboardPage() {
     redirect("/sign-in?next=/dashboard");
   }
 
-  const riotIdentity = {
+  const riotConnectAllowed = canRiotConnect({
     email:
       typeof data.claims.email === "string" ? data.claims.email : undefined,
     userId: data.claims.sub,
-  };
-  const riotConnectAllowed = canRiotConnect(riotIdentity);
-  // The raw cookie-jar paste is an admin-only fallback (Version 2.4).
-  const riotJarPasteAllowed = riotConnectAllowed && isRiotAdmin(riotIdentity);
+  });
 
   const adminSupabase = createAdminSupabaseClient();
-  const [weapons, watchedSkinUuids, riotConnectionState, dailyShop] =
-    await Promise.all([
-      loadCatalogForBrowse(supabase),
-      loadWatchedSkinUuids(supabase),
-      loadRiotConnectionStateWithClient(adminSupabase, data.claims.sub),
-      loadDailyShop(adminSupabase, data.claims.sub),
-    ]);
+  const [dailyShops, tiles, riotConnectionState] = await Promise.all([
+    loadDailyShops(adminSupabase, data.claims.sub),
+    loadWishlistInventory(supabase, data.claims.sub),
+    loadRiotConnectionStateWithClient(adminSupabase, data.claims.sub),
+  ]);
 
   return (
-    <main className="catalog-shell">
-      <header className="catalog-hero">
-        <div>
-          <p className="eyebrow">YOUR COLLECTION</p>
-          <h1>Find your next favorite.</h1>
-          <p className="lede">
-            Watch any skin and get an email the morning it lands in your store.
-          </p>
-        </div>
-        <div className="session-bar">
-          <span>
-            Signed in as{" "}
-            <strong>
-              {typeof data.claims.email === "string" ? data.claims.email : "your account"}
-            </strong>
-          </span>
-          <form action={signOut}>
-            <button className="sign-out-button" type="submit">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </header>
-      <DailyShopPanel
-        checkNow={riotConnectAllowed ? checkDailyShopNow : undefined}
-        connected={riotConnectionState === "connected"}
-        shop={dailyShop}
-        todaysRotation={new Date().toISOString().slice(0, 10)}
-      />
-      <RiotConnectionPanel
-        connectAllowed={riotConnectAllowed}
-        connectCredentials={
-          riotConnectAllowed ? connectRiotCredentials : undefined
-        }
-        connectSession={riotJarPasteAllowed ? connectRiotSession : undefined}
-        disconnect={disconnectRiotSession}
-        initialState={riotConnectionState}
-        submitMfaCode={riotConnectAllowed ? submitRiotMfaCode : undefined}
-      />
-      <CollectionBrowser
-        initialWatchedSkinUuids={watchedSkinUuids}
-        updateWatch={setSkinWatched}
-        weapons={weapons}
-      />
+    <main>
+      {/* One relative container holds both stages so the sticky shop has
+          scroll travel: the stage pins at top-0 while the inventory grid
+          (relative z-10, opaque background) slides up over it. */}
+      <div className="relative">
+        <DailyShopStage
+          checkNow={riotConnectAllowed ? checkDailyShopNow : undefined}
+          connected={riotConnectionState === "connected"}
+          shops={dailyShops}
+          todaysRotation={new Date().toISOString().slice(0, 10)}
+        />
+        <InventoryGrid tiles={tiles} />
+      </div>
     </main>
   );
 }
