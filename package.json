@@ -10,9 +10,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "desktop": "node desktop/scripts/launch.mjs",
     "auth:verify": "node scripts/verify-magic-link.mjs",
+    "hero:renders": "node --experimental-strip-types scripts/fetch-hero-renders.ts",
     "start": "next start",
-    "sync:catalog": "node --experimental-strip-types scripts/sync-catalog.ts",
+    "sync:catalog": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/sync-catalog.ts",
     "lint": "eslint .",
     "supabase:start": "node scripts/supabase-start.mjs",
     "supabase:stop": "supabase stop",
@@ -25,6 +27,7 @@
   "dependencies": {
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.3",
+    "motion": "12.43.0",
     "next": "16.2.11",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -33,6 +36,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.4",
@@ -42,7 +46,10 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.11",
     "jsdom": "30.0.1",
+    "postcss": "8.5.26",
+    "sharp": "^0.35.3",
     "supabase": "2.114.0",
+    "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
     "vite": "8.2.1",
     "vitest": "4.1.10"
