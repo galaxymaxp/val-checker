@@ -85,6 +85,7 @@ function RiotConnectionPanelState({
   const [mfaCode, setMfaCode] = useState("");
   const [serializedJar, setSerializedJar] = useState("");
   const [showJarPaste] = useState(true);
+  const [deepLink, setDeepLink] = useState<string>();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -268,9 +269,15 @@ function RiotConnectionPanelState({
         return;
       }
 
-      window.location.href = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
+      // Firefox and Firefox-based browsers silently drop a scripted
+      // navigation to an unregistered-looking scheme. A real link the user
+      // activates gets the "open with" prompt instead, so the automatic
+      // attempt is a convenience and the link is the dependable path.
+      const link = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
+      setDeepLink(link);
+      window.location.href = link;
       setSuccess(
-        "Opening the desktop app. Sign in to Riot there, then refresh this page.",
+        "If the desktop app did not open, use the link below. It works once and expires in five minutes.",
       );
     } catch {
       setError("The desktop sign-in could not be started.");
@@ -481,10 +488,15 @@ function RiotConnectionPanelState({
                     : "Sign in to Riot (desktop)"}
                 </button>
                 <p role="note">
-                  Signing in through Riot&apos;s own window is now the reliable
-                  path: Riot requires a captcha for direct username and password
-                  sign-in, so the form below may fail.
+                  Signs in through Riot&apos;s own window, then hands the
+                  session back. Riot rejects sign-ins made from our server, so
+                  this is the only route that works.
                 </p>
+                {deepLink ? (
+                  <p>
+                    <a href={deepLink}>Open the desktop app</a>
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -584,10 +596,6 @@ function RiotConnectionPanelState({
                 Riot connection access is limited to explicitly allowlisted
                 accounts. Public VAL Checker signup and Riot-independent features
                 remain available.
-              </p>
-            ) : !connectCredentials && !connectFixture ? (
-              <p className="ship-gate-note" role="note">
-                Riot connection is not currently available for this account.
               </p>
             ) : null}
 
