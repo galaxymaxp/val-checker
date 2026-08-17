@@ -279,6 +279,7 @@ describe("credential connect flow", () => {
     const identityResolver: RiotSessionIdentityResolver = {
       resolve: vi.fn(async () => ({
         puuid: "33333333-3333-4333-8333-333333333333",
+        riotId: null,
         session: rotated,
       })),
     };
@@ -319,6 +320,7 @@ describe("credential connect flow", () => {
     const identityResolver: RiotSessionIdentityResolver = {
       resolve: vi.fn(async () => ({
         puuid: "33333333-3333-4333-8333-333333333333",
+        riotId: null,
         session: rotated,
       })),
     };

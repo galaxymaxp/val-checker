@@ -144,6 +144,18 @@ function toCredentialResult(
     : { ok: true, status: "connected" };
 }
 
+/**
+ * Pulls a store as soon as an account is live so the dashboard is not empty
+ * until the next cron. Deliberately awaited: the redirect that follows would
+ * otherwise race the fetch and revalidate an empty dashboard. Never throws.
+ */
+async function fetchStorefrontAfterConnect(userId: string): Promise<void> {
+  const { runConnectStorefrontFetch } = await import(
+    "@/src/lib/worker/on-demand-check"
+  );
+  await runConnectStorefrontFetch(userId);
+}
+
 function refreshWarning(reason: string | null): string | undefined {
   switch (reason) {
     case "CATALOG_FAILED":
@@ -203,6 +215,12 @@ export async function connectRiotCredentials(
     return { error: credentialFailureMessage(error), ok: false };
   }
 
+  // Only a completed connect has a session to read a store with; an outstanding
+  // multifactor challenge has not produced one yet.
+  if (outcome.kind !== "multifactor") {
+    await fetchStorefrontAfterConnect(resolved.identity.userId);
+  }
+
   revalidatePath("/dashboard", "layout");
   return toCredentialResult(outcome);
 }
@@ -230,6 +248,12 @@ export async function submitRiotMfaCode(
     });
   } catch (error) {
     return { error: credentialFailureMessage(error), ok: false };
+  }
+
+  // Only a completed connect has a session to read a store with; an outstanding
+  // multifactor challenge has not produced one yet.
+  if (outcome.kind !== "multifactor") {
+    await fetchStorefrontAfterConnect(resolved.identity.userId);
   }
 
   revalidatePath("/dashboard", "layout");
@@ -324,6 +348,8 @@ export async function connectRiotSession(
 
     return { error: CONNECT_FAILED_MESSAGE, ok: false };
   }
+
+  await fetchStorefrontAfterConnect(userId);
 
   revalidatePath("/dashboard", "layout");
   return { ok: true };

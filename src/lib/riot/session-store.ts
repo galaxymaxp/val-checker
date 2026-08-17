@@ -22,6 +22,8 @@ export interface SessionSaveOptions {
   readonly connectionId?: string | null;
   readonly label?: string | null;
   readonly puuid?: string | null;
+  /** Display-only Riot ID; stored as a pair or not at all. */
+  readonly riotId?: { readonly gameName: string; readonly tagLine: string } | null;
   readonly region: RiotRegion;
 }
 
@@ -145,6 +147,12 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
       rotation_lease_storefront_attempted_at: null,
       rotation_lease_token: null,
       ...(account?.puuid ? { puuid: account.puuid } : {}),
+      ...(account?.riotId
+        ? {
+            game_name: account.riotId.gameName,
+            tag_line: account.riotId.tagLine,
+          }
+        : {}),
       ...(account ? { region: account.region } : {}),
       session_key_version: encrypted.keyVersion,
     };

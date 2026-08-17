@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { RiotRegion } from "@/src/lib/riot/account-config";
-import { RiotClient } from "@/src/lib/riot/client";
+import { RiotClient, type RiotId } from "@/src/lib/riot/client";
 import type { RiotSessionIdentityResolver } from "@/src/lib/riot/connection-service";
 import type { CapturedSession } from "@/src/lib/riot/session-provider";
 
@@ -14,7 +14,11 @@ export class LiveRiotSessionIdentityResolver
   async resolve(
     session: CapturedSession,
     region: RiotRegion,
-  ): Promise<{ readonly puuid: string; readonly session: CapturedSession }> {
+  ): Promise<{
+    readonly puuid: string;
+    readonly riotId: RiotId | null;
+    readonly session: CapturedSession;
+  }> {
     const client = new RiotClient({
       account: { region },
       fetchImplementation: this.fetchImplementation,
@@ -22,6 +26,14 @@ export class LiveRiotSessionIdentityResolver
     });
     const rotated = await client.refreshSession(session);
     const puuid = await client.getPUUID(rotated);
-    return { puuid, session: rotated };
+    // Shares the /userinfo response already fetched for the PUUID. A missing
+    // Riot ID must never fail a connection that is otherwise valid.
+    let riotId: RiotId | null = null;
+    try {
+      riotId = await client.getRiotId(rotated);
+    } catch {
+      riotId = null;
+    }
+    return { puuid, riotId, session: rotated };
   }
 }

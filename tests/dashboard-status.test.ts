@@ -83,10 +83,12 @@ function fixtureClient(input: {
 const connected: RiotAccountView = {
   authStatus: "CONNECTED",
   connectedAt: "2026-08-15T00:00:00.000Z",
+  gameName: null,
   id: "22222222-2222-4222-8222-222222222222",
   label: "Main",
   lastRefreshAt: null,
   region: "ap",
+  tagLine: null,
 };
 
 describe("storefront dashboard status", () => {

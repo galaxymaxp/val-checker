@@ -15,10 +15,13 @@ export class RiotConnectionStateError extends Error {
 export interface RiotAccountView {
   readonly authStatus: Database["public"]["Enums"]["auth_status"];
   readonly connectedAt: string;
+  /** Resolved Riot ID such as "PlayerOne#NA1"; null until Riot supplies one. */
+  readonly gameName: string | null;
   readonly id: string;
   readonly label: string | null;
   readonly lastRefreshAt: string | null;
   readonly region: string | null;
+  readonly tagLine: string | null;
 }
 
 /** Every Riot account this login has connected, oldest first. */
@@ -28,7 +31,9 @@ export async function loadRiotAccountsWithClient(
 ): Promise<readonly RiotAccountView[]> {
   const { data, error } = await supabase
     .from("riot_connections")
-    .select("auth_status, created_at, id, label, last_refresh_at, region")
+    .select(
+      "auth_status, created_at, game_name, id, label, last_refresh_at, region, tag_line",
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
 
@@ -39,10 +44,12 @@ export async function loadRiotAccountsWithClient(
   return (data ?? []).map((row) => ({
     authStatus: row.auth_status,
     connectedAt: row.created_at,
+    gameName: row.game_name,
     id: row.id,
     label: row.label,
     lastRefreshAt: row.last_refresh_at,
     region: row.region,
+    tagLine: row.tag_line,
   }));
 }
 

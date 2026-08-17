@@ -52,3 +52,38 @@ export async function runDailyCheckForUser(
 
   return { ran: summary.refreshed > 0, summary };
 }
+
+/**
+ * Fetches a store immediately after an account is connected or reconnected, so
+ * a new account shows offers straight away instead of waiting for the next
+ * 00:05 UTC cron.
+ *
+ * Runs as `operator`, which shares the automatic daily claim. A freshly
+ * connected account has not spent that claim, so this fetches; cron later finds
+ * it taken and correctly skips. The separate manual allowance is never touched,
+ * so connecting does not cost the user their manual refresh.
+ *
+ * Scoped to the signed-in user and never throws: connecting has already
+ * succeeded by this point, and a storefront failure must not undo it.
+ */
+export async function runConnectStorefrontFetch(
+  userId: string,
+): Promise<OnDemandCheckOutcome> {
+  if (!DATABASE_UUID_PATTERN.test(userId)) {
+    return { ran: false, summary: null };
+  }
+
+  try {
+    const { buildConfiguredDailyStorefrontWorker } = await import(
+      "@/src/lib/worker/storefront-runtime"
+    );
+    const worker = await buildConfiguredDailyStorefrontWorker({
+      trigger: "operator",
+      userId,
+    });
+    const summary = await worker.run();
+    return { ran: summary.refreshed > 0, summary };
+  } catch {
+    return { ran: false, summary: null };
+  }
+}

@@ -119,6 +119,8 @@ type RiotConnectionRow = {
   connection_epoch: string;
   label: string | null;
   puuid: string | null;
+  game_name: string | null;
+  tag_line: string | null;
   region: string | null;
   shard: string | null;
   encrypted_jar: string;
@@ -305,6 +307,8 @@ export interface Database {
           id?: string;
           created_at?: string;
           puuid?: string | null;
+          game_name?: string | null;
+          tag_line?: string | null;
           region?: string | null;
           shard?: string | null;
           label?: string | null;

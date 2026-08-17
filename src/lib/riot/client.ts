@@ -54,16 +54,38 @@ const riotUuidSchema = z.string().regex(
 const entitlementSchema = z.object({
   entitlements_token: z.string().min(1),
 });
-const userInfoSchema = z.object({ sub: riotUuidSchema });
+/**
+ * `/userinfo` returns the Riot ID alongside the PUUID. `acct` is optional and
+ * bounded: these are external, player-controlled strings rendered in the
+ * dashboard, so an oversized or malformed value is dropped rather than stored.
+ */
+const userInfoSchema = z.object({
+  acct: z
+    .object({
+      game_name: z.string().min(1).max(32),
+      tag_line: z.string().min(1).max(8),
+    })
+    .optional()
+    .catch(undefined),
+  sub: riotUuidSchema,
+});
 const versionSchema = z.object({
   data: z.object({ riotClientVersion: z.string().min(1) }),
   status: z.literal(200),
 });
 
+/** A resolved Riot ID. Display only — the PUUID stays the identity key. */
+export interface RiotId {
+  readonly gameName: string;
+  readonly tagLine: string;
+}
+
 type AuthorizationContext = {
   readonly accessToken: string;
   entitlementsToken?: string;
   puuid?: string;
+  /** undefined means "not fetched yet"; null means "fetched, none present". */
+  riotId?: RiotId | null;
   readonly sessionFingerprint: Uint8Array;
 };
 
@@ -358,36 +380,64 @@ export class RiotClient implements RiotAdapter {
     return { token: authorization.entitlementsToken };
   }
 
-  async getPUUID(session: Session): Promise<string> {
+  /**
+   * One `/userinfo` round trip populates both the PUUID and the Riot ID, so
+   * resolving the display name never costs an extra request. Cached on the
+   * authorization context for the life of this session.
+   */
+  private async loadUserInfo(session: Session): Promise<AuthorizationContext> {
     const authorization = this.requireAuthorization(session);
-    if (!authorization.puuid) {
-      let response: Response;
-      try {
-        // https://valapidocs.techchrism.me/endpoint/player-info
-        response = await this.fetchImplementation(USERINFO_URL, {
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${authorization.accessToken}`,
-            "User-Agent": RIOT_USER_AGENT,
-          },
-          method: "GET",
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        });
-      } catch {
-        throw new RiotClientError("ERROR");
-      }
-
-      if (!response.ok) {
-        throw new RiotClientError("UNKNOWN", response.status);
-      }
-
-      authorization.puuid = safeParse(
-        userInfoSchema,
-        await safeJson(response),
-      ).sub;
+    if (authorization.puuid && authorization.riotId !== undefined) {
+      return authorization;
     }
 
-    return authorization.puuid;
+    let response: Response;
+    try {
+      // https://valapidocs.techchrism.me/endpoint/player-info
+      response = await this.fetchImplementation(USERINFO_URL, {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${authorization.accessToken}`,
+          "User-Agent": RIOT_USER_AGENT,
+        },
+        method: "GET",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new RiotClientError("ERROR");
+    }
+
+    if (!response.ok) {
+      throw new RiotClientError("UNKNOWN", response.status);
+    }
+
+    const userInfo = safeParse(userInfoSchema, await safeJson(response));
+    authorization.puuid = userInfo.sub;
+    authorization.riotId = userInfo.acct
+      ? { gameName: userInfo.acct.game_name, tagLine: userInfo.acct.tag_line }
+      : null;
+
+    return authorization;
+  }
+
+  async getPUUID(session: Session): Promise<string> {
+    const authorization = this.requireAuthorization(session);
+    if (authorization.puuid) {
+      return authorization.puuid;
+    }
+
+    const loaded = await this.loadUserInfo(session);
+    // loadUserInfo always assigns puuid on success.
+    return loaded.puuid!;
+  }
+
+  /**
+   * The player's Riot ID, or null when Riot omits it. Never throws on a
+   * missing name: a connection is perfectly usable without a display label.
+   */
+  async getRiotId(session: Session): Promise<RiotId | null> {
+    const loaded = await this.loadUserInfo(session);
+    return loaded.riotId ?? null;
   }
 
   async getRegion(session: Session): Promise<string> {

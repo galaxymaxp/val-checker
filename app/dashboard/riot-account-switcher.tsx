@@ -1,14 +1,11 @@
 import Link from "next/link";
 
+import { riotAccountDisplayName } from "@/src/lib/riot/account-display";
 import type { RiotAccountView } from "@/src/lib/riot/connection-state";
 
 interface RiotAccountSwitcherProps {
   readonly accounts: readonly RiotAccountView[];
   readonly selectedConnectionId: string | null;
-}
-
-function accountName(account: RiotAccountView, index: number): string {
-  return account.label?.trim() || `Riot account ${index + 1}`;
 }
 
 function connectionHealth(account: RiotAccountView): string {
@@ -74,7 +71,7 @@ export function RiotAccountSwitcher({
         <ul className="flex min-w-max gap-2" role="list">
           {accounts.map((account, index) => {
             const selected = account.id === selectedConnectionId;
-            const name = accountName(account, index);
+            const name = riotAccountDisplayName(account, index);
             const health = connectionHealth(account);
             const connected = account.authStatus === "CONNECTED";
 

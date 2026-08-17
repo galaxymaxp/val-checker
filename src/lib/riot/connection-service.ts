@@ -13,6 +13,7 @@ import {
   parseRiotRegion,
   type RiotRegion,
 } from "@/src/lib/riot/account-config";
+import type { RiotId } from "@/src/lib/riot/client";
 import type { SessionStore } from "@/src/lib/riot/session-store";
 import type { PendingAuthStore } from "@/src/lib/riot/pending-auth-store";
 import {
@@ -109,6 +110,7 @@ export interface RiotSessionIdentityResolver {
     region: RiotRegion,
   ): Promise<{
     readonly puuid: string;
+    readonly riotId: RiotId | null;
     readonly session: CapturedSession;
   }>;
 }
@@ -258,7 +260,7 @@ export class RiotConnectionService {
     region: RiotRegion,
   ) {
     if (!this.identityResolver) {
-      return { puuid: null, session };
+      return { puuid: null, riotId: null, session };
     }
     return this.identityResolver.resolve(session, region);
   }
@@ -283,6 +285,7 @@ export class RiotConnectionService {
       ...(resolvedIdentity.puuid
         ? { puuid: resolvedIdentity.puuid }
         : {}),
+      ...(resolvedIdentity.riotId ? { riotId: resolvedIdentity.riotId } : {}),
       region,
     });
     return "connected";
