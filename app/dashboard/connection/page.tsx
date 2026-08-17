@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
 
 import {
-  connectRiotCredentials,
   connectRiotSession,
   disconnectRiotSession,
-  submitRiotMfaCode,
   createDesktopCaptureToken,
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
@@ -64,9 +62,11 @@ export default async function RiotConnectionPage({
       />
       <RiotConnectionPanel
         connectAllowed={riotConnectAllowed}
-        connectCredentials={
-          riotConnectAllowed ? connectRiotCredentials : undefined
-        }
+        // Deliberately not wired: Riot rejects credential sign-ins posted
+        // from Vercel's datacenter IPs, so offering the form only produced a
+        // dead end. Connecting goes through Riot's own login page in the
+        // desktop app instead.
+        connectCredentials={undefined}
         connectSession={riotJarPasteAllowed ? connectRiotSession : undefined}
         createCaptureToken={
           riotJarPasteAllowed ? createDesktopCaptureToken : undefined
@@ -75,7 +75,7 @@ export default async function RiotConnectionPage({
         initialRegion={reconnectAccount?.region ?? "ap"}
         initialState="disconnected"
         keepConnectFormOpen={!reconnectAccount}
-        submitMfaCode={riotConnectAllowed ? submitRiotMfaCode : undefined}
+        submitMfaCode={undefined}
         targetConnectionId={reconnectAccount?.id}
       />
     </main>

@@ -23,7 +23,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:watch": "vitest",
-    "desktop:capture": "node desktop/scripts/launch.mjs --capture"
+    "desktop:capture": "node desktop/scripts/launch.mjs --capture",
+    "desktop:register": "node desktop/scripts/launch.mjs --register"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

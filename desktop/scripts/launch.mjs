@@ -130,14 +130,24 @@ try {
   // --capture runs the capture-only entry point: it skips the web app and goes
   // straight to Riot's login, putting the resulting jar on the clipboard. That
   // avoids signing into Supabase inside Electron, which Google blocks for OAuth.
-  const captureOnly = process.argv.includes("--capture");
+  const captureOnly =
+    process.argv.includes("--capture") || process.argv.includes("--register");
   const entry = captureOnly
     ? path.join(desktopDir, "dist", "capture-main.js")
     : ".";
 
+  // Everything after the launcher's own flags is forwarded to the app, so
+  // --register and --token=... reach it. The bare "--" separator keeps
+  // Electron from interpreting them as its own options.
+  const forwarded = process.argv.slice(2).filter((arg) => arg !== "--capture");
+
   await run(
     process.execPath,
-    [path.join(desktopDir, "node_modules", "electron", "cli.js"), entry],
+    [
+      path.join(desktopDir, "node_modules", "electron", "cli.js"),
+      entry,
+      ...(forwarded.length > 0 ? ["--", ...forwarded] : []),
+    ],
     { env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: distDir } },
   );
 } catch (error) {

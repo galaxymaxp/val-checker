@@ -192,12 +192,29 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     // In development Electron runs from its own binary, so the protocol has to
     // be registered against the script path for the OS to hand back a URL.
-    if (process.defaultApp && process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
-        path.resolve(process.argv[1]),
-      ]);
-    } else {
-      app.setAsDefaultProtocolClient(PROTOCOL);
+    const registered =
+      process.defaultApp && process.argv.length >= 2
+        ? app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
+            path.resolve(process.argv[1]),
+          ])
+        : app.setAsDefaultProtocolClient(PROTOCOL);
+
+    // One-time setup: claim the protocol and exit without touching Riot, so
+    // the browser button has a handler to launch.
+    if (process.argv.includes("--register")) {
+      await dialog.showMessageBox({
+        buttons: ["Done"],
+        detail: registered
+          ? `This machine will now open ${PROTOCOL}:// links with the desktop app. Use "Connect with the desktop app" in your browser.`
+          : `Windows did not accept the registration. You can still connect by running the capture with --token=... from the browser's fallback instructions.`,
+        message: registered
+          ? "Desktop capture is registered."
+          : "Could not register the desktop capture link.",
+        title: "Desktop capture setup",
+        type: registered ? "info" : "warning",
+      });
+      shutdown();
+      return;
     }
 
     await runCapture(tokenFromArgv(process.argv));
