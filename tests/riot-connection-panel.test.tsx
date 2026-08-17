@@ -21,10 +21,10 @@ const JAR = JSON.stringify([
   },
 ]);
 
-async function revealJarPaste(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(
-    screen.getByRole("button", { name: "Use cookie export instead (admin)" }),
-  );
+async function revealJarPaste() {
+  // The captured-session field is rendered directly now; kept so the tests
+  // still read as "get to the paste step".
+  await screen.findByRole("textbox", { name: "Captured Riot session" });
 }
 
 describe("Riot connection consent UI", () => {
@@ -279,10 +279,7 @@ describe("Riot connection consent UI", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "Use cookie export instead (admin)" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("textbox", { name: "Cookie export JSON" }),
+      screen.queryByRole("textbox", { name: "Captured Riot session" }),
     ).not.toBeInTheDocument();
   });
 
@@ -300,12 +297,12 @@ describe("Riot connection consent UI", () => {
       />,
     );
 
-    await revealJarPaste(user);
+    await revealJarPaste();
     expect(
       screen.getByText(/contacts Riot to verify the account identity/i),
     ).toBeInTheDocument();
     fireEvent.change(
-      screen.getByRole("textbox", { name: "Cookie export JSON" }),
+      screen.getByRole("textbox", { name: "Captured Riot session" }),
       { target: { value: JAR } },
     );
     await user.click(screen.getByRole("checkbox"));
@@ -339,8 +336,8 @@ describe("Riot connection consent UI", () => {
       />,
     );
 
-    await revealJarPaste(user);
-    const input = screen.getByRole("textbox", { name: "Cookie export JSON" });
+    await revealJarPaste();
+    const input = screen.getByRole("textbox", { name: "Captured Riot session" });
 
     fireEvent.change(input, { target: { value: "sensitive-session-material" } });
     await user.click(screen.getByRole("checkbox"));

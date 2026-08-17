@@ -7,7 +7,6 @@ import type { RiotDesktopCaptureResult } from "@/src/types/desktop-bridge";
 import type {
   RiotConnectionMutationResult,
   RiotConnectionState,
-  RiotDesktopCaptureTokenResult,
   RiotCredentialConnectResult,
   RiotCredentialSubmission,
   RiotMfaSubmission,
@@ -16,8 +15,6 @@ import type {
 
 interface RiotConnectionPanelProps {
   readonly connectAllowed: boolean;
-  /** Mints the one-time token behind the valchecker:// deep link. */
-  readonly createCaptureToken?: () => Promise<RiotDesktopCaptureTokenResult>;
   readonly connectCredentials?: (
     submission: RiotCredentialSubmission,
   ) => Promise<RiotCredentialConnectResult>;
@@ -64,7 +61,6 @@ function RiotConnectionPanelState({
   connectCredentials,
   connectFixture,
   connectSession,
-  createCaptureToken,
   disconnect,
   initialLabel = "",
   initialRegion = "ap",
@@ -84,9 +80,7 @@ function RiotConnectionPanelState({
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge>();
   const [mfaCode, setMfaCode] = useState("");
   const [serializedJar, setSerializedJar] = useState("");
-  const [showJarPaste, setShowJarPaste] = useState(false);
-  const [desktopPending, setDesktopPending] = useState(false);
-  const [captureCommand, setCaptureCommand] = useState<string>();
+  const [showJarPaste] = useState(true);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -95,44 +89,7 @@ function RiotConnectionPanelState({
   // the desktop button; after hydration React reconciles to the client snapshot.
   // window is only touched in the client snapshot, which never runs during SSR
   // (and stays undefined in jsdom, so the button does not render under test).
-  /**
-   * Starts the desktop hand-off: mint a one-time token, then hand it to the
-   * Electron app through the protocol link. The jar never touches this page —
-   * the desktop app POSTs it straight to /api/desktop/connect.
-   */
-  async function startDesktopCapture(): Promise<void> {
-    if (!createCaptureToken) {
-      return;
-    }
 
-    setDesktopPending(true);
-    setError(undefined);
-    setSuccess(undefined);
-
-    try {
-      const result = await createCaptureToken();
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-
-      // Always surface the command. Registering a custom protocol is
-      // unreliable on Windows outside a packaged build, and a browser silently
-      // ignores a scheme it has no handler for, so the deep link is treated as
-      // a convenience and never as the only route.
-      setCaptureCommand(
-        `pnpm desktop:capture --token=${result.token}`,
-      );
-      window.location.href = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
-      setSuccess(
-        "If the desktop app did not open, run the command below. The link is single use and expires in five minutes.",
-      );
-    } catch {
-      setError("The capture link could not be created.");
-    } finally {
-      setDesktopPending(false);
-    }
-  }
 
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopBridge,
@@ -595,68 +552,25 @@ function RiotConnectionPanelState({
               </p>
             ) : null}
 
-            {createCaptureToken ? (
-              <div className="riot-desktop-connect">
-                <button
-                  disabled={desktopPending}
-                  onClick={() => {
-                    void startDesktopCapture();
-                  }}
-                  type="button"
-                >
-                  {desktopPending
-                    ? "Opening desktop app…"
-                    : "Connect with the desktop app"}
-                </button>
-                <p className="riot-hint">
-                  Signs in on Riot&apos;s own page in the desktop app, then
-                  hands the session back automatically. Riot rejects sign-ins
-                  made from the server, so this is the reliable route.
-                </p>
-                {captureCommand ? (
-                  <div className="riot-capture-command">
-                    <label>
-                      <span>Run this if the desktop app did not open</span>
-                      <input
-                        onFocus={(event) => event.currentTarget.select()}
-                        readOnly
-                        value={captureCommand}
-                      />
-                    </label>
-                    <button
-                      onClick={() => {
-                        void navigator.clipboard?.writeText(captureCommand);
-                      }}
-                      type="button"
-                    >
-                      Copy command
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
             {connectSession ? (
               <div className="riot-admin-fallback">
-                <button
-                  onClick={() => setShowJarPaste((shown) => !shown)}
-                  type="button"
-                >
-                  {showJarPaste
-                    ? "Hide cookie export fallback"
-                    : "Use cookie export instead (admin)"}
-                </button>
+                <h3>Paste the captured session</h3>
+                <p role="note">
+                  Run <code>pnpm desktop:capture</code>, sign in on Riot&apos;s
+                  own page, and the session is copied to your clipboard. Paste
+                  it here to finish connecting.
+                </p>
                 {showJarPaste ? (
                   <div className="riot-session-fields">
                     <label>
-                      <span>Cookie export JSON</span>
+                      <span>Captured Riot session</span>
                       <textarea
                         autoComplete="off"
                         maxLength={128 * 1024}
                         onChange={(event) =>
                           setSerializedJar(event.target.value)
                         }
-                        placeholder="Paste the exported cookie JSON array"
+                        placeholder="Paste the captured session here"
                         rows={6}
                         spellCheck={false}
                         value={serializedJar}

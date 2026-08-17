@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import {
   connectRiotSession,
   disconnectRiotSession,
-  createDesktopCaptureToken,
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
@@ -68,9 +67,6 @@ export default async function RiotConnectionPage({
         // desktop app instead.
         connectCredentials={undefined}
         connectSession={riotJarPasteAllowed ? connectRiotSession : undefined}
-        createCaptureToken={
-          riotJarPasteAllowed ? createDesktopCaptureToken : undefined
-        }
         initialLabel={reconnectAccount?.label ?? ""}
         initialRegion={reconnectAccount?.region ?? "ap"}
         initialState="disconnected"
