@@ -7,6 +7,7 @@ import type { RiotDesktopCaptureResult } from "@/src/types/desktop-bridge";
 import type {
   RiotConnectionMutationResult,
   RiotConnectionState,
+  RiotDesktopCaptureTokenResult,
   RiotCredentialConnectResult,
   RiotCredentialSubmission,
   RiotMfaSubmission,
@@ -15,6 +16,8 @@ import type {
 
 interface RiotConnectionPanelProps {
   readonly connectAllowed: boolean;
+  /** Mints the one-time token behind the valchecker:// deep link. */
+  readonly createCaptureToken?: () => Promise<RiotDesktopCaptureTokenResult>;
   readonly connectCredentials?: (
     submission: RiotCredentialSubmission,
   ) => Promise<RiotCredentialConnectResult>;
@@ -61,6 +64,7 @@ function RiotConnectionPanelState({
   connectCredentials,
   connectFixture,
   connectSession,
+  createCaptureToken,
   disconnect,
   initialLabel = "",
   initialRegion = "ap",
@@ -97,7 +101,8 @@ function RiotConnectionPanelState({
     getDesktopBridgeServerSnapshot,
   );
 
-  const desktopConnectAvailable = isDesktop && Boolean(connectSession);
+  const desktopConnectAvailable =
+    (isDesktop || Boolean(createCaptureToken)) && Boolean(connectSession);
 
   const credentialsReady =
     username.trim().length > 0 && password.length > 0 && consentGranted;
@@ -239,6 +244,38 @@ function RiotConnectionPanelState({
         return "The Riot sign-in window timed out. Please try again.";
       default:
         return "No Riot session was captured. Please complete the Riot sign-in.";
+    }
+  }
+
+  /**
+   * Hands off to the desktop app through the protocol link. Used when the page
+   * is running in an ordinary browser, where there is no desktop bridge; the
+   * app captures the session and posts it back itself.
+   */
+  async function connectViaDeepLink() {
+    if (!createCaptureToken) {
+      return;
+    }
+
+    setIsPending(true);
+    setError(undefined);
+    setSuccess(undefined);
+
+    try {
+      const result = await createCaptureToken();
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      window.location.href = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
+      setSuccess(
+        "Opening the desktop app. Sign in to Riot there, then refresh this page.",
+      );
+    } catch {
+      setError("The desktop sign-in could not be started.");
+    } finally {
+      setIsPending(false);
     }
   }
 
@@ -434,7 +471,9 @@ function RiotConnectionPanelState({
                 <button
                   className="riot-desktop-connect-button"
                   disabled={!consentGranted || isPending}
-                  onClick={connectViaDesktop}
+                  onClick={() => {
+                    void (isDesktop ? connectViaDesktop() : connectViaDeepLink());
+                  }}
                   type="button"
                 >
                   {isPending
