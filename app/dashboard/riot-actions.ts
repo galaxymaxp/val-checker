@@ -150,10 +150,16 @@ function toCredentialResult(
  * otherwise race the fetch and revalidate an empty dashboard. Never throws.
  */
 async function fetchStorefrontAfterConnect(userId: string): Promise<void> {
-  const { runConnectStorefrontFetch } = await import(
-    "@/src/lib/worker/on-demand-check"
-  );
-  await runConnectStorefrontFetch(userId);
+  try {
+    const { runConnectStorefrontFetch } = await import(
+      "@/src/lib/worker/on-demand-check"
+    );
+    await runConnectStorefrontFetch(userId);
+  } catch {
+    // The connection is already saved by this point. A failure to load or run
+    // the worker must never turn a successful connect into a reported failure;
+    // the store simply stays empty until the next refresh.
+  }
 }
 
 function refreshWarning(reason: string | null): string | undefined {
@@ -346,6 +352,11 @@ export async function connectRiotSession(
       };
     }
 
+    // Only the error's class name. Messages from this path can quote Riot
+    // responses and session material, so they are never logged.
+    console.error("[riot-connect] failed", {
+      kind: error instanceof Error ? error.name : "Unknown",
+    });
     return { error: CONNECT_FAILED_MESSAGE, ok: false };
   }
 

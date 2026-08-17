@@ -267,6 +267,43 @@ describe("credential connect flow", () => {
     expect(submitCredentials).not.toHaveBeenCalled();
   });
 
+  it("still connects when Riot rejects identity resolution", async () => {
+    const sessions = fakeSessionStore();
+    const pending = fakePendingAuthStore();
+    const original = connectedSession();
+    const submitCredentials = vi.fn(async () => ({
+      kind: "connected" as const,
+      session: original,
+    }));
+    // Riot rejects /userinfo far more readily than a storefront request. The
+    // captured session is still usable, so the connection must survive.
+    const identityResolver: RiotSessionIdentityResolver = {
+      resolve: vi.fn(async () => {
+        throw new Error("riot rejected userinfo");
+      }),
+    };
+
+    await buildService(
+      { submitCredentials },
+      sessions.store,
+      pending.store,
+      identityResolver,
+    ).connectWithCredentials({
+      connectionId: CONNECTION_ID,
+      consentGranted: true,
+      identity: IDENTITY,
+      password: PASSWORD,
+      region: "ap",
+      username: "operator",
+    });
+
+    expect(sessions.saved).toHaveLength(1);
+    // Saved without an identity rather than not saved at all.
+    expect(sessions.saved[0].options).not.toHaveProperty("puuid");
+    expect(sessions.saved[0].options).not.toHaveProperty("riotId");
+    expect(sessions.saved[0].session).toEqual(original);
+  });
+
   it("resolves a stable PUUID before replacing one exact connection", async () => {
     const sessions = fakeSessionStore();
     const pending = fakePendingAuthStore();

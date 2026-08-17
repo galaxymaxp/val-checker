@@ -262,7 +262,22 @@ export class RiotConnectionService {
     if (!this.identityResolver) {
       return { puuid: null, riotId: null, session };
     }
-    return this.identityResolver.resolve(session, region);
+
+    try {
+      return await this.identityResolver.resolve(session, region);
+    } catch {
+      // Riot rejects /userinfo far more readily than it rejects a storefront
+      // request: datacenter egress, Cloudflare challenges and rate limits all
+      // surface here. The captured session can still be perfectly usable, and
+      // puuid is nullable precisely so a connection may exist without a
+      // resolved identity, so keep the session rather than failing the whole
+      // connect. A later refresh resolves the identity.
+      //
+      // The consequence is bounded and visible in the UI: manual refresh is
+      // keyed on the PUUID, so it stays unavailable for this account until
+      // identity resolves. Automatic and operator refreshes do not need it.
+      return { puuid: null, riotId: null, session };
+    }
   }
 
   async connect(
