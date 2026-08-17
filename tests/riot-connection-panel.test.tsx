@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 afterEach(cleanup);
 
 const JAR = JSON.stringify([
@@ -69,7 +73,9 @@ describe("Riot connection consent UI", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Connection paused" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Connect a Riot account" }),
+      ).toBeInTheDocument();
     });
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
@@ -150,6 +156,90 @@ describe("Riot connection consent UI", () => {
     expect(submitMfaCode).toHaveBeenCalledWith({ code: "123456" });
   });
 
+  it("resets account-specific form and MFA state when the reconnect target changes", async () => {
+    const user = userEvent.setup();
+    const connectCredentials = vi.fn().mockResolvedValue({
+      maskedTarget: "m•••@example.com",
+      method: "email",
+      ok: true,
+      status: "multifactor-required",
+    });
+    const sharedProps = {
+      connectAllowed: true,
+      connectCredentials,
+      initialState: "disconnected" as const,
+      submitMfaCode: vi.fn(),
+    };
+    const { rerender } = render(
+      <RiotConnectionPanel
+        {...sharedProps}
+        initialLabel="Main"
+        initialRegion="ap"
+        targetConnectionId="11111111-1111-4111-8111-111111111111"
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Riot username"), "operator");
+    await user.type(screen.getByLabelText("Riot password"), "correct horse");
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Sign in to Riot" }));
+    expect(await screen.findByLabelText("Verification code")).toBeInTheDocument();
+
+    rerender(
+      <RiotConnectionPanel
+        {...sharedProps}
+        initialLabel="Alt"
+        initialRegion="na"
+        targetConnectionId="22222222-2222-4222-8222-222222222222"
+      />,
+    );
+
+    expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Riot username")).toHaveValue("");
+    expect(screen.getByLabelText("Riot password")).toHaveValue("");
+    expect(screen.getByLabelText("Account name (optional)")).toHaveValue("Alt");
+    expect(screen.getByLabelText("Account region")).toHaveValue("na");
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+  });
+
+  it("clears an earlier success before reporting a later add-account failure", async () => {
+    const user = userEvent.setup();
+    const connectCredentials = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: "connected" })
+      .mockResolvedValueOnce({ error: "Riot sign-in is unavailable.", ok: false });
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectCredentials={connectCredentials}
+        initialState="disconnected"
+        keepConnectFormOpen
+      />,
+    );
+
+    for (const [label, value] of [
+      ["Riot username", "first"],
+      ["Riot password", "first-password"],
+    ] as const) {
+      await user.type(screen.getByLabelText(label), value);
+    }
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Sign in to Riot" }));
+    expect(
+      await screen.findByText(/Riot account connected/i),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Riot username"), "second");
+    await user.type(screen.getByLabelText("Riot password"), "second-password");
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Sign in to Riot" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Riot sign-in is unavailable.",
+    );
+    expect(screen.queryByText(/Riot account connected/i)).not.toBeInTheDocument();
+  });
+
   it("drops the password from the form on every outcome", async () => {
     const user = userEvent.setup();
     const connectCredentials = vi.fn().mockResolvedValue({
@@ -211,6 +301,9 @@ describe("Riot connection consent UI", () => {
     );
 
     await revealJarPaste(user);
+    expect(
+      screen.getByText(/contacts Riot to verify the account identity/i),
+    ).toBeInTheDocument();
     fireEvent.change(
       screen.getByRole("textbox", { name: "Cookie export JSON" }),
       { target: { value: JAR } },
@@ -280,5 +373,11 @@ describe("Riot connection consent UI", () => {
     expect(screen.getByText(/disconnect and delete it/i)).toBeInTheDocument();
     expect(screen.getByText(/not affiliated with Riot Games/i)).toBeInTheDocument();
     expect(screen.getByText(/Sign out everywhere/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/one automatic storefront check per UTC day/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/one separate manual refresh per UTC day/i),
+    ).toBeInTheDocument();
   });
 });

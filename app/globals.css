@@ -13,12 +13,12 @@
   --bg-raised: rgba(255, 255, 255, 0.032);
   --bg-card: rgba(255, 255, 255, 0.045);
   --bg-inset: rgba(255, 255, 255, 0.022);
-  --line: rgba(255, 255, 255, 0.10);
-  --line-soft: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.36);
+  --line-soft: rgba(255, 255, 255, 0.18);
 
   --text: #f4f5f7;
   --text-muted: rgba(255, 255, 255, 0.60);
-  --text-dim: rgba(255, 255, 255, 0.38);
+  --text-dim: rgba(255, 255, 255, 0.58);
 
   /* "Accent" is now light-on-dark, not a hue. Primary actions invert. */
   --accent: #ffffff;
@@ -33,7 +33,7 @@
   --radius-lg: 22px;
 
   --shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.9);
-  --ring: 0 0 0 3px rgba(255, 255, 255, 0.18);
+  --ring: 0 0 0 3px rgba(255, 255, 255, 0.45);
 
   --measure: 64ch;
   --page: 1440px;
@@ -152,6 +152,14 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+button,
+[role="button"],
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: 44px;
 }
 
 /* --- motion base ----------------------------------------------------------
@@ -277,6 +285,7 @@ a {
 /* --- app header ------------------------------------------------------------ */
 
 .sign-out-button {
+  align-items: center;
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -284,6 +293,7 @@ a {
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 600;
+  min-height: 44px;
   padding: 0.4rem 0.9rem;
 }
 
@@ -291,6 +301,12 @@ a {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.18);
   color: var(--text);
+}
+
+header nav a {
+  align-items: center;
+  display: inline-flex;
+  min-height: 44px;
 }
 
 /* --- surfaces --------------------------------------------------------------
@@ -411,11 +427,14 @@ a {
 }
 
 .consent-details summary {
+  align-items: center;
   border-radius: var(--radius);
   color: var(--text-muted);
   cursor: pointer;
+  display: flex;
   font-size: 0.85rem;
   font-weight: 600;
+  min-height: 44px;
   padding: 0.7rem 0.9rem;
 }
 
@@ -505,9 +524,8 @@ a {
 .riot-mfa-fields input:focus-visible,
 .riot-session-fields input:focus-visible,
 .riot-session-fields textarea:focus-visible {
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.7);
   box-shadow: var(--ring);
-  outline: none;
 }
 
 /* The region select renders as our control, not the OS one: appearance off,

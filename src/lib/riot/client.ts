@@ -47,7 +47,6 @@ export const RIOT_CLIENT_PLATFORM =
 
 const DEFAULT_REGION = "ap";
 const REQUEST_TIMEOUT_MS = 15_000;
-const STOREFRONT_V3_FALLBACK_STATUSES = new Set([404, 405, 410, 501]);
 
 const riotUuidSchema = z.string().regex(
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
@@ -65,6 +64,14 @@ type AuthorizationContext = {
   readonly accessToken: string;
   entitlementsToken?: string;
   puuid?: string;
+  readonly sessionFingerprint: Uint8Array;
+};
+
+type PreparedStorefrontContext = {
+  readonly accessToken: string;
+  readonly clientVersion: string;
+  readonly entitlementsToken: string;
+  readonly puuid: string;
   readonly sessionFingerprint: Uint8Array;
 };
 
@@ -93,6 +100,43 @@ export class RiotClientError extends Error {
     );
     this.name = "RiotClientError";
   }
+}
+
+export type StorefrontRequestDisposition =
+  | "ambiguous"
+  | "completed"
+  | "not-sent";
+
+/**
+ * Adds only non-sensitive dispatch state to a Riot failure. The worker uses
+ * this to decide whether an attempted shared lease may be closed safely: a
+ * transport rejection can arrive after Riot received the request, while a
+ * response or a preflight failure cannot still overlap another storefront.
+ */
+export class RiotStorefrontRequestError extends RiotClientError {
+  constructor(
+    classification: FailureClassification,
+    status: number | null,
+    readonly storefrontRequest: StorefrontRequestDisposition,
+  ) {
+    super(classification, status);
+    this.name = "RiotStorefrontRequestError";
+  }
+}
+
+function storefrontRequestError(
+  error: unknown,
+  disposition: StorefrontRequestDisposition,
+): RiotStorefrontRequestError {
+  if (error instanceof RiotClientError) {
+    return new RiotStorefrontRequestError(
+      error.classification,
+      error.status,
+      disposition,
+    );
+  }
+
+  return new RiotStorefrontRequestError("ERROR", null, disposition);
 }
 
 function fingerprintSession(session: Session): Uint8Array {
@@ -197,6 +241,7 @@ export class RiotClient implements RiotAdapter {
   private activeAuthorization: AuthorizationContext | null = null;
   private clientVersion: string | null = null;
   private initialSession: Session;
+  private preparedStorefront: PreparedStorefrontContext | null = null;
   private readonly fetchImplementation: typeof fetch;
   private readonly now: () => Date;
   private readonly region: string;
@@ -214,6 +259,7 @@ export class RiotClient implements RiotAdapter {
 
   async refreshSession(session: Session): Promise<Session> {
     this.activeAuthorization = null;
+    this.preparedStorefront = null;
     let cookies: CanonicalCookie[];
 
     try {
@@ -349,27 +395,55 @@ export class RiotClient implements RiotAdapter {
     return this.region;
   }
 
+  async prepareStorefront(session: Session): Promise<void> {
+    try {
+      const authorization = this.requireAuthorization(session);
+      const entitlements = await this.getEntitlements(session);
+      const puuid = await this.getPUUID(session);
+      const clientVersion = await this.getClientVersion();
+      this.preparedStorefront = {
+        accessToken: authorization.accessToken,
+        clientVersion,
+        entitlementsToken: entitlements.token,
+        puuid,
+        sessionFingerprint: fingerprintSession(session),
+      };
+    } catch (error) {
+      this.preparedStorefront = null;
+      throw storefrontRequestError(error, "not-sent");
+    }
+  }
+
   async getStore(session: Session): Promise<FetchedStorefront> {
-    const authorization = this.requireAuthorization(session);
-    const entitlements = await this.getEntitlements(session);
-    const puuid = await this.getPUUID(session);
-    const clientVersion = await this.getClientVersion();
+    let prepared = this.preparedStorefront;
+    if (!prepared || !sameSessionValue(prepared.sessionFingerprint, session)) {
+      // Direct adapter callers retain the original one-call API. The worker
+      // always prepares before its database attempt fence, so this branch does
+      // no I/O after that fence in the production worker path.
+      await this.prepareStorefront(session);
+      prepared = this.preparedStorefront;
+    }
+    if (!prepared) {
+      throw new RiotStorefrontRequestError("ERROR", null, "not-sent");
+    }
+
     const requestHeaders = {
       Accept: "application/json",
-      Authorization: `Bearer ${authorization.accessToken}`,
+      Authorization: `Bearer ${prepared.accessToken}`,
       "User-Agent": RIOT_USER_AGENT,
       "X-Riot-ClientPlatform": RIOT_CLIENT_PLATFORM,
-      "X-Riot-ClientVersion": clientVersion,
-      "X-Riot-Entitlements-JWT": entitlements.token,
+      "X-Riot-ClientVersion": prepared.clientVersion,
+      "X-Riot-Entitlements-JWT": prepared.entitlementsToken,
     };
     const baseUrl = `https://pd.${this.region}.a.pvp.net/store`;
     let response: Response;
 
     try {
-      // Current client route. The v2 fallback remains documented at
-      // https://valapidocs.techchrism.me/endpoint/storefront
+      // One fenced worker attempt must issue exactly one storefront request.
+      // Choosing the current client route up front avoids a status-triggered
+      // fallback that could otherwise spend a second request under one fence.
       response = await this.fetchImplementation(
-        `${baseUrl}/v3/storefront/${puuid}`,
+        `${baseUrl}/v3/storefront/${prepared.puuid}`,
         {
           body: "{}",
           cache: "no-store",
@@ -378,34 +452,32 @@ export class RiotClient implements RiotAdapter {
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         },
       );
-
-      if (STOREFRONT_V3_FALLBACK_STATUSES.has(response.status)) {
-        response = await this.fetchImplementation(
-          `${baseUrl}/v2/storefront/${puuid}`,
-          {
-            cache: "no-store",
-            headers: requestHeaders,
-            method: "GET",
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          },
-        );
-      }
     } catch {
-      throw new RiotClientError("ERROR");
+      // A rejected/aborted fetch is ambiguous: Riot may have received it.
+      throw new RiotStorefrontRequestError("ERROR", null, "ambiguous");
     }
 
     if (!response.ok) {
-      throw new RiotClientError("UNKNOWN", response.status);
+      throw new RiotStorefrontRequestError(
+        "UNKNOWN",
+        response.status,
+        "completed",
+      );
     }
 
-    const payload = await safeJson(response);
+    let payload: unknown;
     try {
+      payload = await response.json();
       return {
         levelUuids: extractStorefrontSkinLevelUuids(payload),
         payload,
       };
     } catch {
-      throw new RiotClientError("UNKNOWN", response.status);
+      throw new RiotStorefrontRequestError(
+        "UNKNOWN",
+        response.status,
+        "completed",
+      );
     }
   }
 

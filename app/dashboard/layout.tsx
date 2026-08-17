@@ -23,8 +23,7 @@ export default async function DashboardLayout({
               className="shrink-0 text-sm font-medium tracking-tight text-ink! no-underline"
               href="/dashboard"
             >
-              NIGHT.MARKET
-              <span className="text-ink-dim">/WATCH</span>
+              VAL <span className="text-ink-dim">CHECKER</span>
             </Link>
             <nav
               aria-label="Dashboard sections"
@@ -34,13 +33,19 @@ export default async function DashboardLayout({
                 className="rounded-full px-3 py-1.5 text-sm text-ink-muted! no-underline hocus:bg-white/5 hocus:text-ink!"
                 href="/dashboard"
               >
-                Daily shop
+                Store
+              </Link>
+              <Link
+                className="rounded-full px-3 py-1.5 text-sm text-ink-muted! no-underline hocus:bg-white/5 hocus:text-ink!"
+                href="/dashboard#watchlist"
+              >
+                Watchlist
               </Link>
               <Link
                 className="rounded-full px-3 py-1.5 text-sm text-ink-muted! no-underline hocus:bg-white/5 hocus:text-ink!"
                 href="/dashboard/connection"
               >
-                Riot connection
+                Riot accounts
               </Link>
             </nav>
           </div>

@@ -1,15 +1,12 @@
 import Link from "next/link";
 
 import { DailyShopCard } from "@/app/dashboard/_components/daily-shop-card";
-import { DailyShopRefresh } from "@/app/dashboard/daily-shop-refresh";
 import type { DailyShopView } from "@/src/lib/storefront/daily-shop";
-import type { RiotConnectionMutationResult } from "@/src/types/riot-connection";
 
 interface DailyShopStageProps {
-  readonly checkNow?: () => Promise<RiotConnectionMutationResult>;
+  readonly accountLabel?: string | null;
   readonly connected: boolean;
-  readonly shops: readonly DailyShopView[];
-  readonly todaysRotation: string;
+  readonly shop: DailyShopView | null;
 }
 
 const MILLISECONDS_PER_HOUR = 3_600_000;
@@ -53,18 +50,16 @@ function formatCheckedTime(value: string) {
  * while the grid (relative z-10 bg-bg) scrolls up over it.
  */
 export function DailyShopStage({
-  checkNow,
+  accountLabel,
   connected,
-  shops,
-  todaysRotation,
+  shop,
 }: DailyShopStageProps) {
-  const stale = connected && shops[0]?.rotationDate !== todaysRotation;
-  const hasOffers = shops.some((shop) => shop.offers.length > 0);
+  const hasOffers = Boolean(shop && shop.offers.length > 0);
 
   return (
     <section
-      aria-label="Today's shop"
-      className="sticky top-0 flex min-h-dvh flex-col items-center justify-center gap-10 overflow-hidden px-4 py-16"
+      aria-labelledby="todays-store-heading"
+      className="relative flex flex-col gap-7 overflow-hidden rounded-panel border border-line bg-bg-card px-4 py-7 shadow-panel sm:px-7 sm:py-9"
     >
       {/* Atmosphere: two blurred gradient plates, breathing via shop-glow. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -72,67 +67,47 @@ export function DailyShopStage({
         <div className="absolute -right-24 -bottom-24 h-[28rem] w-[44rem] bg-[radial-gradient(closest-side,rgba(255,255,255,0.06),transparent_70%)] blur-2xl motion-safe:animate-[shop-glow_12s_ease-in-out_infinite_alternate-reverse]" />
       </div>
 
-      <header className="relative flex flex-col items-center gap-3 text-center">
-        <h1 className="text-5xl! font-semibold tracking-[0.3em]! text-ink">
-          DAILY
-        </h1>
-        <p className="text-xs tracking-widest text-ink-dim">
-          {endsInLabel(shops[0]?.expiresAt)}
+      <header className="relative flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <p className="eyebrow">TODAY&apos;S STORE</p>
+          <h2 id="todays-store-heading">
+            {accountLabel ? `${accountLabel}’s daily offers` : "Daily offers"}
+          </h2>
+        </div>
+        <p className="rounded-full border border-line bg-bg-inset px-3 py-1 text-[11px] tracking-wider text-ink-muted">
+          {endsInLabel(shop?.expiresAt)}
         </p>
       </header>
 
       {hasOffers ? (
-        <div className="relative flex w-full flex-col items-center gap-12">
-          {shops.map((shop, index) =>
-            shop.offers.length > 0 ? (
-              <div
-                className="flex w-full flex-col items-center gap-4"
-                key={shop.connectionId}
-              >
-                {shops.length > 1 ? (
-                  <p className="rounded-full border border-line bg-bg-inset px-3 py-1 text-[10px] tracking-widest text-ink-dim uppercase">
-                    {shop.label ?? `Account ${index + 1}`}
-                  </p>
-                ) : null}
-                <ul className="flex flex-wrap justify-center gap-4">
-                  {shop.offers.map((offer) => (
-                    <li key={offer.skinUuid}>
-                      <DailyShopCard offer={offer} />
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-ink-dim">
-                  {formatRotation(shop.rotationDate)} · {shop.offers.length}{" "}
-                  offers · checked {formatCheckedTime(shop.checkedAt)}
-                </p>
-              </div>
-            ) : null,
-          )}
+        <div className="relative space-y-4">
+          <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="list">
+            {shop!.offers.map((offer, index) => (
+              <li className="min-w-0" key={`${offer.skinUuid}-${index}`}>
+                <DailyShopCard offer={offer} />
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-ink-muted">
+            {formatRotation(shop!.rotationDate)} · {shop!.offers.length} offers ·
+            checked {formatCheckedTime(shop!.checkedAt)}
+          </p>
         </div>
       ) : (
-        <p className="relative max-w-md text-center text-ink-muted">
-          {connected
-            ? "Your storefront is checked once a day, just after 00:00 UTC. The first result will appear here after the next run."
-            : "Connect your Riot account to start seeing your daily storefront here."}
-        </p>
+        <div className="relative flex min-h-64 flex-col items-center justify-center gap-3 rounded-card border border-dashed border-line p-8 text-center">
+          <p className="max-w-md text-ink-muted">
+            {connected
+              ? "No store has been recorded for this account yet. Its automatic refresh runs just after 00:00 UTC; check the store status above for today’s manual-refresh availability."
+              : "Reconnect this Riot account to resume automatic and manual storefront refreshes."}
+          </p>
+          <Link
+            className="inline-flex min-h-11 items-center rounded-full border border-line px-4 text-sm text-ink-muted! no-underline hocus:text-ink!"
+            href="/dashboard/connection"
+          >
+            Manage Riot accounts
+          </Link>
+        </div>
       )}
-
-      <div className="relative flex flex-col items-center gap-2">
-        {connected && checkNow ? (
-          <DailyShopRefresh checkNow={checkNow} stale={stale} />
-        ) : null}
-        <Link
-          className="text-sm text-ink-dim! no-underline transition-colors hocus:text-ink!"
-          href="/dashboard/connection"
-        >
-          Manage your Riot connection
-        </Link>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-1 text-ink-dim motion-safe:animate-bounce">
-        <span className="text-xs tracking-widest">YOUR ARSENAL</span>
-        <span aria-hidden="true">↓</span>
-      </div>
     </section>
   );
 }

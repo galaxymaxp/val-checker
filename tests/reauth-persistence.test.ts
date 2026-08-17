@@ -8,6 +8,8 @@ import {
 
 vi.mock("server-only", () => ({}));
 
+const rotationLeaseToken = "77777777-7777-4777-8777-777777777777";
+
 function session(marker: number): Session {
   return {
     capturedAt: `2026-08-14T0${marker}:00:00.000Z`,
@@ -36,6 +38,7 @@ describe("reauthenticated session persistence", () => {
       adapter: { refreshSession },
       connectionId: "33333333-3333-4333-8333-333333333333",
       expectedConnectionEpoch: "epoch-id",
+      rotationLeaseToken,
       session: initial,
       store: { persistRotated },
       userId: "user-id",
@@ -50,6 +53,7 @@ describe("reauthenticated session persistence", () => {
         "33333333-3333-4333-8333-333333333333",
         rotated,
         "epoch-id",
+        rotationLeaseToken,
       );
     });
     expect(completed).not.toHaveBeenCalled();
@@ -69,6 +73,7 @@ describe("reauthenticated session persistence", () => {
       adapter: { refreshSession: vi.fn().mockResolvedValue(rotated) },
       connectionId: "33333333-3333-4333-8333-333333333333",
       expectedConnectionEpoch: "epoch-id",
+      rotationLeaseToken,
       session: session(1),
       store: {
         persistRotated: vi
@@ -97,7 +102,8 @@ describe("reauthenticated session persistence", () => {
       reauthenticateAndPersist({
         adapter: { refreshSession: vi.fn().mockRejectedValue(failure) },
         connectionId: "33333333-3333-4333-8333-333333333333",
-      expectedConnectionEpoch: "epoch-id",
+        expectedConnectionEpoch: "epoch-id",
+        rotationLeaseToken,
         session: session(1),
         store: { persistRotated },
         userId: "user-id",

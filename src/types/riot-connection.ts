@@ -1,13 +1,22 @@
 export type RiotConnectionState = "connected" | "disconnected";
 
+export type ManualRefreshAvailability =
+  | "available"
+  | "in-progress"
+  | "succeeded"
+  | "exhausted"
+  | "unavailable";
+
 export type RiotSessionSubmission = {
+  readonly connectionId?: string;
   readonly consentGranted: boolean;
+  readonly label?: string;
   readonly region?: string;
   readonly serializedJar: string;
 };
 
 export type RiotConnectionMutationResult =
-  | { readonly ok: true }
+  | { readonly ok: true; readonly warning?: string }
   | { readonly error: string; readonly ok: false };
 
 /**
@@ -15,6 +24,7 @@ export type RiotConnectionMutationResult =
  * action under TLS and is never stored, echoed back, or logged.
  */
 export type RiotCredentialSubmission = {
+  readonly connectionId?: string;
   readonly consentGranted: boolean;
   readonly label?: string;
   readonly password: string;

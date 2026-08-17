@@ -30,12 +30,14 @@ export class PendingAuthStorageError extends Error {
 }
 
 export interface PendingAuthRecord {
+  readonly connectionId?: string | null;
   readonly label: string | null;
   readonly pendingJar: Uint8Array;
   readonly region: RiotRegion | null;
 }
 
 export interface PendingAuthSaveOptions {
+  readonly connectionId?: string | null;
   readonly label?: string | null;
   readonly region?: RiotRegion | null;
 }
@@ -104,6 +106,7 @@ export class SupabaseEncryptedPendingAuthStore implements PendingAuthStore {
       .upsert(
         {
           encrypted_jar: encodeBytea(encrypted.ciphertext),
+          connection_id: options.connectionId ?? null,
           expires_at: expiresAt.toISOString(),
           jar_nonce: encodeBytea(encrypted.nonce),
           label: options.label ?? null,
@@ -123,7 +126,7 @@ export class SupabaseEncryptedPendingAuthStore implements PendingAuthStore {
     const { data, error } = await this.supabase
       .from("riot_pending_auth")
       .select(
-        "encrypted_jar, jar_nonce, session_key_version, region, label, expires_at",
+        "encrypted_jar, jar_nonce, session_key_version, connection_id, region, label, expires_at",
       )
       .eq("user_id", userId)
       .maybeSingle();
@@ -144,6 +147,7 @@ export class SupabaseEncryptedPendingAuthStore implements PendingAuthStore {
     }
 
     return {
+      connectionId: data.connection_id,
       label: data.label,
       pendingJar: this.cipher.decrypt(userId, storedValue(data)),
       region: (data.region as RiotRegion | null) ?? null,

@@ -31,7 +31,8 @@ export function InventoryGrid({ tiles }: InventoryGridProps) {
   return (
     <section
       aria-label="Your arsenal"
-      className="relative z-10 min-h-dvh border-t border-line-soft bg-bg px-6 py-16"
+      className="relative min-h-dvh scroll-mt-20 rounded-panel border border-line bg-bg-card px-4 py-12 shadow-panel sm:px-6 sm:py-16"
+      id="watchlist"
     >
       <header className="mx-auto mb-12 flex max-w-3xl flex-col items-center gap-2 text-center">
         <p className="text-xs font-semibold tracking-widest text-ink-dim">

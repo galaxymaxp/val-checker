@@ -2,15 +2,21 @@ import { redirect } from "next/navigation";
 
 import { DailyShopStage } from "@/app/dashboard/_components/daily-shop-stage";
 import { InventoryGrid } from "@/app/dashboard/_components/inventory-grid";
-import { checkDailyShopNow } from "@/app/dashboard/riot-actions";
+import { RiotAccountSwitcher } from "@/app/dashboard/riot-account-switcher";
+import { refreshRiotStorefront } from "@/app/dashboard/riot-actions";
+import { StoreStatusPanel } from "@/app/dashboard/store-status-panel";
 import { loadWishlistInventory } from "@/src/lib/catalog/inventory";
-import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
-import { loadRiotConnectionStateWithClient } from "@/src/lib/riot/connection-state";
+import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
+import { loadStorefrontDashboardStatus } from "@/src/lib/storefront/dashboard-status";
 import { loadDailyShops } from "@/src/lib/storefront/daily-shop";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams = Promise.resolve({}),
+}: {
+  readonly searchParams?: Promise<{ readonly account?: string }>;
+} = {}) {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
 
@@ -18,33 +24,55 @@ export default async function DashboardPage() {
     redirect("/sign-in?next=/dashboard");
   }
 
-  const riotConnectAllowed = canRiotConnect({
-    email:
-      typeof data.claims.email === "string" ? data.claims.email : undefined,
-    userId: data.claims.sub,
-  });
-
   const adminSupabase = createAdminSupabaseClient();
-  const [dailyShops, tiles, riotConnectionState] = await Promise.all([
+  const accountsPromise = loadRiotAccountsWithClient(
+    adminSupabase,
+    data.claims.sub,
+  );
+  const refreshStatusPromise = accountsPromise.then((accounts) =>
+    loadStorefrontDashboardStatus(adminSupabase, data.claims.sub, accounts),
+  );
+  const [accounts, dailyShops, refreshStatus, tiles, params] = await Promise.all([
+    accountsPromise,
     loadDailyShops(adminSupabase, data.claims.sub),
+    refreshStatusPromise,
     loadWishlistInventory(supabase, data.claims.sub),
-    loadRiotConnectionStateWithClient(adminSupabase, data.claims.sub),
+    searchParams,
   ]);
+  const selectedAccount =
+    accounts.find((account) => account.id === params.account) ?? accounts[0];
+  const selectedShop = selectedAccount
+    ? (dailyShops.find(
+        (shop) => shop.connectionId === selectedAccount.id,
+      ) ?? null)
+    : null;
+  const selectedRefreshStatus = selectedAccount
+    ? refreshStatus.accounts.find(
+        (status) => status.connectionId === selectedAccount.id,
+      )
+    : undefined;
 
   return (
-    <main>
-      {/* One relative container holds both stages so the sticky shop has
-          scroll travel: the stage pins at top-0 while the inventory grid
-          (relative z-10, opaque background) slides up over it. */}
-      <div className="relative">
-        <DailyShopStage
-          checkNow={riotConnectAllowed ? checkDailyShopNow : undefined}
-          connected={riotConnectionState === "connected"}
-          shops={dailyShops}
-          todaysRotation={new Date().toISOString().slice(0, 10)}
+    <main className="flex flex-col gap-6">
+      <RiotAccountSwitcher
+        accounts={accounts}
+        selectedConnectionId={selectedAccount?.id ?? null}
+      />
+      {selectedAccount && selectedRefreshStatus ? (
+        <StoreStatusPanel
+          account={selectedAccount}
+          refreshStatus={selectedRefreshStatus}
+          refreshStore={refreshRiotStorefront}
         />
-        <InventoryGrid tiles={tiles} />
-      </div>
+      ) : null}
+      {selectedAccount ? (
+        <DailyShopStage
+          accountLabel={selectedAccount.label}
+          connected={selectedAccount.authStatus === "CONNECTED"}
+          shop={selectedShop}
+        />
+      ) : null}
+      <InventoryGrid tiles={tiles} />
     </main>
   );
 }

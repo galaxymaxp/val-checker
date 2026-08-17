@@ -29,8 +29,25 @@ export async function GET(request: Request): Promise<Response> {
       "@/src/lib/worker/storefront-runtime"
     );
     const summary = await runConfiguredDailyStorefrontCron();
-    return json({ status: "ok", ...summary }, 200);
+    // Keep Vercel logs and the route response aggregate-only. Per-account
+    // sanitized results are persisted in riot_run_logs and remain available to
+    // internal/manual callers without putting connection ids in platform logs.
+    const diagnostic = {
+      checked: summary.checked,
+      failed: summary.failed,
+      notificationFailures: summary.notificationFailures,
+      processed: summary.processed,
+      refreshed: summary.refreshed,
+      skipped: summary.skipped,
+      trigger: summary.trigger,
+    };
+    console.info("[storefront-cron] completed", diagnostic);
+    return json({ status: "ok", ...diagnostic }, 200);
   } catch {
+    // Never log the caught value: dependency errors can originate near session
+    // material. The status and fixed event name are enough to distinguish a
+    // top-level construction/enumeration failure from per-account results.
+    console.error("[storefront-cron] invocation unavailable");
     return json({ status: "unavailable" }, 503);
   }
 }

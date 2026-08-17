@@ -69,6 +69,50 @@ type AuthStatus =
   | "RATE_LIMITED"
   | "NETWORK_BLOCKED";
 
+type ManualRefreshFailureReason =
+  | "LIFECYCLE_STALE"
+  | "REAUTH_FAILED"
+  | "SESSION_UNAVAILABLE"
+  | "STOREFRONT_FAILED"
+  | "UNEXPECTED";
+
+type ManualRefreshStatus =
+  | "claimed"
+  | "requesting"
+  | "retryable_failed"
+  | "succeeded";
+
+type RefreshTrigger = "cron" | "manual" | "operator";
+
+type RiotRunReason =
+  | "ACCOUNT_UNAVAILABLE"
+  | "ATTEMPT_FENCED"
+  | "CATALOG_FAILED"
+  | "DAILY_CLAIM_HELD"
+  | "DELIVERY_FAILED"
+  | "LIFECYCLE_STALE"
+  | "MANUAL_CLAIM_HELD"
+  | "NOT_ALLOWLISTED"
+  | "REAUTH_FAILED"
+  | "REAUTH_REQUIRED_SKIP"
+  | "SESSION_UNAVAILABLE"
+  | "SESSION_LEASE_HELD"
+  | "STOREFRONT_FAILED"
+  | "UNEXPECTED";
+
+type StorefrontOfferDetail = {
+  readonly costs: readonly {
+    readonly amount: number;
+    readonly currencyUuid: string;
+  }[];
+  readonly offerId: string;
+  readonly rewards: readonly {
+    readonly levelUuid: string;
+    readonly quantity: number;
+    readonly skinUuid?: string | null;
+  }[];
+};
+
 type RiotConnectionRow = {
   id: string;
   user_id: string;
@@ -83,6 +127,10 @@ type RiotConnectionRow = {
   auth_status: AuthStatus;
   consecutive_failures: number;
   last_refresh_at: string | null;
+  rotation_lease_claimed_at: string | null;
+  rotation_lease_store_date: string | null;
+  rotation_lease_storefront_attempted_at: string | null;
+  rotation_lease_token: string | null;
   created_at: string;
 };
 
@@ -94,6 +142,24 @@ type RiotDailyRunRow = {
   store_date: string;
   claimed_at: string;
   storefront_attempted_at: string | null;
+  storefront_failed_at: string | null;
+  storefront_failure_reason: "STOREFRONT_FAILED" | null;
+};
+
+type RiotManualRefreshRow = {
+  id: string;
+  riot_puuid: string;
+  user_id: string;
+  connection_id: string;
+  connection_epoch: string;
+  store_date: string;
+  claim_token: string;
+  status: ManualRefreshStatus;
+  claimed_at: string;
+  storefront_attempted_at: string | null;
+  succeeded_at: string | null;
+  failed_at: string | null;
+  failure_reason: ManualRefreshFailureReason | null;
 };
 
 type RiotRunLogRow = {
@@ -104,10 +170,11 @@ type RiotRunLogRow = {
   store_date: string | null;
   ran_at: string;
   outcome: "checked" | "failed" | "skipped";
-  reason: string | null;
+  reason: RiotRunReason | null;
   classification: "OK" | "DEAD" | "UNKNOWN" | "ERROR" | null;
   matches_found: number;
   emails_sent: number;
+  trigger: RefreshTrigger;
 };
 
 /** Short-lived MFA hand-off material. Never holds a credential. */
@@ -117,6 +184,7 @@ type RiotPendingAuthRow = {
   encrypted_jar: string;
   jar_nonce: string;
   session_key_version: number;
+  connection_id: string | null;
   region: string | null;
   label: string | null;
   created_at: string;
@@ -129,6 +197,7 @@ type ShopCheckRow = {
   checked_at: string;
   shop_hash: string;
   offer_skin_uuids: string[];
+  offer_details: readonly StorefrontOfferDetail[];
   total_cost: number | null;
   expires_at: string | null;
   night_market: unknown | null;
@@ -243,6 +312,10 @@ export interface Database {
           connection_epoch?: string;
           consecutive_failures?: number;
           last_refresh_at?: string | null;
+          rotation_lease_claimed_at?: string | null;
+          rotation_lease_store_date?: string | null;
+          rotation_lease_storefront_attempted_at?: string | null;
+          rotation_lease_token?: string | null;
           session_key_version?: number;
         };
         Update: Partial<RiotConnectionRow>;
@@ -261,6 +334,29 @@ export interface Database {
             >
           >;
         Update: Partial<RiotDailyRunRow>;
+        Relationships: [];
+      };
+      riot_manual_refreshes: {
+        Row: RiotManualRefreshRow;
+        Insert: Pick<
+          RiotManualRefreshRow,
+          | "riot_puuid"
+          | "user_id"
+          | "connection_id"
+          | "connection_epoch"
+          | "store_date"
+        > &
+          Partial<
+            Omit<
+              RiotManualRefreshRow,
+              | "riot_puuid"
+              | "user_id"
+              | "connection_id"
+              | "connection_epoch"
+              | "store_date"
+            >
+          >;
+        Update: Partial<RiotManualRefreshRow>;
         Relationships: [];
       };
       riot_pending_auth: {
@@ -332,6 +428,7 @@ export interface Database {
         Args: {
           p_connection_epoch: string;
           p_connection_id: string;
+          p_rotation_lease_token: string;
           p_user_id: string;
         };
         Returns: {
@@ -340,13 +437,127 @@ export interface Database {
           store_date: string;
         }[];
       };
+      get_riot_store_day: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          next_reset_at: string;
+          store_date: string;
+        }[];
+      };
+      claim_riot_manual_refresh: {
+        Args: {
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_rotation_lease_token: string;
+          p_user_id: string;
+        };
+        Returns: {
+          claimed_at: string | null;
+          claim_status: "account_unavailable" | "claimed" | "held";
+          claim_token: string | null;
+          next_reset_at: string;
+          run_id: string | null;
+          store_date: string;
+        }[];
+      };
+      claim_riot_session_rotation: {
+        Args: {
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          claimed_at: string | null;
+          lease_status: "account_unavailable" | "acquired" | "held";
+          lease_token: string | null;
+          store_date: string;
+        }[];
+      };
       mark_riot_storefront_attempt: {
         Args: {
           p_connection_epoch: string;
+          p_connection_id: string;
+          p_rotation_lease_token: string;
           p_run_id: string;
           p_user_id: string;
         };
         Returns: { attempted_at: string }[];
+      };
+      renew_riot_session_rotation: {
+        Args: {
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_lease_token: string;
+          p_user_id: string;
+        };
+        Returns: { renewed_at: string }[];
+      };
+      mark_riot_manual_storefront_attempt: {
+        Args: {
+          p_claim_token: string;
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_rotation_lease_token: string;
+          p_run_id: string;
+          p_user_id: string;
+        };
+        Returns: { attempted_at: string }[];
+      };
+      release_riot_session_rotation: {
+        Args: {
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_lease_token: string;
+          p_user_id: string;
+        };
+        Returns: { released_at: string }[];
+      };
+      fail_riot_manual_refresh: {
+        Args: {
+          p_claim_token: string;
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_failure_reason: ManualRefreshFailureReason;
+          p_retryable: boolean;
+          p_run_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          failed_at: string;
+          status: ManualRefreshStatus;
+        }[];
+      };
+      close_riot_storefront_attempt: {
+        Args: {
+          p_claim_token: string | null;
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_rotation_lease_token: string;
+          p_run_id: string;
+          p_trigger: RefreshTrigger;
+          p_user_id: string;
+        };
+        Returns: { closed_at: string }[];
+      };
+      record_storefront_refresh: {
+        Args: {
+          p_checked_at: string;
+          p_connection_epoch: string;
+          p_connection_id: string;
+          p_expires_at: string | null;
+          p_manual_claim_token?: string | null;
+          p_manual_run_id?: string | null;
+          p_offer_details: readonly StorefrontOfferDetail[];
+          p_offer_skin_uuids: string[];
+          p_rotation_date: string;
+          p_rotation_lease_token?: string | null;
+          p_shop_hash: string;
+          p_user_id: string;
+        };
+        Returns: {
+          manual_succeeded_at: string | null;
+          shop_check_id: string;
+        }[];
       };
       reserve_storefront_notification: {
         Args: {

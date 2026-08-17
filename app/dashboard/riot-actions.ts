@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import {
   isRiotAdmin,
@@ -24,7 +25,9 @@ import {
   SessionEncryptionConfigurationError,
   loadSessionKeyring,
 } from "@/src/lib/riot/session-crypto";
+import { LiveRiotSessionIdentityResolver } from "@/src/lib/riot/session-identity";
 import { SupabaseEncryptedSessionStore } from "@/src/lib/riot/session-store";
+import { createTlsTunedFetch } from "@/src/lib/riot/tls-fetch";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import type {
@@ -33,6 +36,9 @@ import type {
 } from "@/src/types/riot-connection";
 
 const CONNECT_FAILED_MESSAGE = "The Riot session could not be connected.";
+const databaseUuidSchema = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -79,6 +85,7 @@ function buildCredentialService(allowlist: ReturnType<typeof loadRiotConnectAllo
     new SubmittedCookieProvider(),
     new RiotLoginProvider(),
     new SupabaseEncryptedPendingAuthStore(admin, cipher),
+    new LiveRiotSessionIdentityResolver(createTlsTunedFetch()),
   );
 }
 
@@ -137,6 +144,20 @@ function toCredentialResult(
     : { ok: true, status: "connected" };
 }
 
+function refreshWarning(reason: string | null): string | undefined {
+  switch (reason) {
+    case "CATALOG_FAILED":
+      return "Skin details and watchlist matching are temporarily unavailable.";
+    case "DELIVERY_FAILED":
+      return "Notification delivery did not complete.";
+    case "LIFECYCLE_STALE":
+    case "UNEXPECTED":
+      return "Account health status could not be finalized.";
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Step one of credential connect. The password is forwarded to the login
  * provider and is never logged, persisted, or returned.
@@ -154,7 +175,9 @@ export async function connectRiotCredentials(
     typeof submission.username !== "string" ||
     typeof submission.password !== "string" ||
     (submission.region !== undefined && typeof submission.region !== "string") ||
-    (submission.label !== undefined && typeof submission.label !== "string")
+    (submission.label !== undefined && typeof submission.label !== "string") ||
+    (submission.connectionId !== undefined &&
+      !databaseUuidSchema.safeParse(submission.connectionId).success)
   ) {
     return { error: CONNECT_FAILED_MESSAGE, ok: false };
   }
@@ -169,6 +192,7 @@ export async function connectRiotCredentials(
       loadRiotConnectAllowlist(),
     ).connectWithCredentials({
       consentGranted: true,
+      connectionId: submission.connectionId,
       identity: resolved.identity,
       label: submission.label,
       password: submission.password,
@@ -258,7 +282,10 @@ export async function connectRiotSession(
 
   if (
     typeof submission.serializedJar !== "string" ||
-    (submission.region !== undefined && typeof submission.region !== "string")
+    (submission.region !== undefined && typeof submission.region !== "string") ||
+    (submission.label !== undefined && typeof submission.label !== "string") ||
+    (submission.connectionId !== undefined &&
+      !databaseUuidSchema.safeParse(submission.connectionId).success)
   ) {
     return { error: CONNECT_FAILED_MESSAGE, ok: false };
   }
@@ -274,11 +301,16 @@ export async function connectRiotSession(
       store,
       allowlist,
       new SubmittedCookieProvider(),
+      undefined,
+      undefined,
+      new LiveRiotSessionIdentityResolver(createTlsTunedFetch()),
     );
 
     await service.connect({
       consentGranted: submission.consentGranted,
+      connectionId: submission.connectionId,
       identity,
+      label: submission.label,
       region: submission.region,
       session: { serializedJar: submission.serializedJar },
     });
@@ -298,7 +330,7 @@ export async function connectRiotSession(
 }
 
 export async function disconnectRiotSession(
-  connectionId?: unknown,
+  connectionId: unknown,
 ): Promise<RiotConnectionMutationResult> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
@@ -308,15 +340,17 @@ export async function disconnectRiotSession(
     return { error: "Please sign in again.", ok: false };
   }
 
-  const admin = createAdminSupabaseClient();
-  let deletion = admin.from("riot_connections").delete().eq("user_id", userId);
-
-  // Disconnecting one account must not remove the others on this login.
-  if (typeof connectionId === "string" && connectionId.length > 0) {
-    deletion = deletion.eq("id", connectionId);
+  const parsedConnectionId = databaseUuidSchema.safeParse(connectionId);
+  if (!parsedConnectionId.success) {
+    return { error: "Choose a valid Riot account to disconnect.", ok: false };
   }
 
-  const { error } = await deletion;
+  const admin = createAdminSupabaseClient();
+  const { error } = await admin
+    .from("riot_connections")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", parsedConnectionId.data);
 
   if (error) {
     return { error: "The Riot session could not be disconnected.", ok: false };
@@ -326,13 +360,10 @@ export async function disconnectRiotSession(
   return { ok: true };
 }
 
-/**
- * Runs today's check for the signed-in user when the scheduled run has not
- * recorded a storefront yet. The per-connection database claim still admits at
- * most one Riot request per UTC rotation, so this spends that single allowance
- * rather than adding a second one.
- */
-export async function checkDailyShopNow(): Promise<RiotConnectionMutationResult> {
+/** Runs the separate once-per-store-day manual allowance for one owned account. */
+export async function refreshRiotStorefront(
+  connectionId: unknown,
+): Promise<RiotConnectionMutationResult> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
@@ -340,6 +371,11 @@ export async function checkDailyShopNow(): Promise<RiotConnectionMutationResult>
 
   if (typeof userId !== "string") {
     return { error: "Please sign in again.", ok: false };
+  }
+
+  const parsedConnectionId = databaseUuidSchema.safeParse(connectionId);
+  if (!parsedConnectionId.success) {
+    return { error: "Choose a valid Riot account to refresh.", ok: false };
   }
 
   try {
@@ -352,15 +388,72 @@ export async function checkDailyShopNow(): Promise<RiotConnectionMutationResult>
     return { error: "Riot connection access is not enabled.", ok: false };
   }
 
+  let warning: string | undefined;
   try {
+    // Verify ownership before building the worker or making any Riot request.
+    const admin = createAdminSupabaseClient();
+    const { data: ownedConnection, error: ownershipError } = await admin
+      .from("riot_connections")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("id", parsedConnectionId.data)
+      .maybeSingle();
+    if (ownershipError || !ownedConnection) {
+      return { error: "That Riot account is not connected.", ok: false };
+    }
+
     const { runDailyCheckForUser } = await import(
       "@/src/lib/worker/on-demand-check"
     );
-    await runDailyCheckForUser(userId);
+    const { summary } = await runDailyCheckForUser(
+      userId,
+      parsedConnectionId.data,
+    );
+    const account = summary?.accounts.find(
+      (result) => result.connectionId === parsedConnectionId.data,
+    );
+
+    if (!account || account.outcome !== "checked") {
+      if (account?.reason === "MANUAL_CLAIM_HELD") {
+        return {
+          error: "This account’s manual refresh is already used or in progress today.",
+          ok: false,
+        };
+      }
+      if (account?.reason === "SESSION_LEASE_HELD") {
+        return {
+          error:
+            "This Riot account is already refreshing, or a previous request has an uncertain outcome. Refresh the dashboard to see when manual refresh is available.",
+          ok: false,
+        };
+      }
+      if (account?.reason === "ACCOUNT_UNAVAILABLE") {
+        return {
+          error:
+            "This Riot account is not ready for manual refresh. Reconnect it or wait for its identity to be verified.",
+          ok: false,
+        };
+      }
+      if (account?.classification === "DEAD") {
+        return {
+          error: "Reconnect this Riot account before refreshing its store.",
+          ok: false,
+        };
+      }
+      return { error: "The shop could not be refreshed right now.", ok: false };
+    }
+    warning = refreshWarning(account.reason);
   } catch {
-    return { error: "The shop could not be checked right now.", ok: false };
+    return { error: "The shop could not be refreshed right now.", ok: false };
   }
 
   revalidatePath("/dashboard", "layout");
-  return { ok: true };
+  return warning ? { ok: true, warning } : { ok: true };
+}
+
+/** Backward-compatible alias; callers must still provide an exact account. */
+export async function checkDailyShopNow(
+  connectionId: unknown,
+): Promise<RiotConnectionMutationResult> {
+  return refreshRiotStorefront(connectionId);
 }

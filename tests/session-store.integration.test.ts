@@ -189,11 +189,24 @@ describe("encrypted Supabase session storage", () => {
         now: () => new Date("2026-08-14T11:00:00.000Z"),
       }).capture({ serializedJar: rotatedJar });
 
+      const rotationLease = await admin.rpc("claim_riot_session_rotation", {
+        p_connection_epoch: submittedRow!.connection_epoch,
+        p_connection_id: secondConnectionId,
+        p_user_id: userId,
+      });
+      expect(rotationLease.error).toBeNull();
+      expect(rotationLease.data?.[0]?.lease_status).toBe("acquired");
+      const rotationLeaseToken = rotationLease.data?.[0]?.lease_token;
+      if (!rotationLeaseToken) {
+        throw new Error("Unable to acquire the session-rotation test lease.");
+      }
+
       await store.persistRotated(
         userId,
         secondConnectionId,
         rotatedSession,
         submittedRow!.connection_epoch,
+        rotationLeaseToken,
       );
 
       const { data: rotatedRow, error: rotatedReadError } = await admin
@@ -233,6 +246,7 @@ describe("encrypted Supabase session storage", () => {
           secondConnectionId,
           rotatedSession,
           randomUUID(),
+          rotationLeaseToken,
         ),
       ).rejects.toThrow("Encrypted session storage operation failed.");
 
@@ -242,6 +256,7 @@ describe("encrypted Supabase session storage", () => {
           secondConnectionId,
           rotatedSession,
           randomUUID(),
+          rotationLeaseToken,
         ),
       ).rejects.toThrow("Encrypted session storage operation failed.");
 

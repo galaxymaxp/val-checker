@@ -19,7 +19,9 @@ export class SessionStorageError extends Error {
 }
 
 export interface SessionSaveOptions {
+  readonly connectionId?: string | null;
   readonly label?: string | null;
+  readonly puuid?: string | null;
   readonly region: RiotRegion;
 }
 
@@ -40,6 +42,7 @@ export interface SessionStore {
     connectionId: string,
     session: CapturedSession,
     expectedConnectionEpoch: string,
+    rotationLeaseToken: string,
   ): Promise<void>;
   save(
     userId: string,
@@ -83,6 +86,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     connectionId: string,
     session: CapturedSession,
     expectedConnectionEpoch: string,
+    rotationLeaseToken: string,
   ): Promise<void> {
     if (
       session.kind !== "captured-session" ||
@@ -104,6 +108,9 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
       .eq("user_id", userId)
       .eq("id", connectionId);
     query = query.eq("connection_epoch", expectedConnectionEpoch);
+    query = query
+      .eq("rotation_lease_token", rotationLeaseToken)
+      .is("rotation_lease_storefront_attempted_at", null);
     const { data, error } = await query.select("id").maybeSingle();
 
     if (error || !data) {
@@ -125,18 +132,45 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
     }
 
     const encrypted = this.cipher.encrypt(userId, session.material);
+    const storedSession = {
+      auth_status: "CONNECTED" as const,
+      connection_epoch: randomUUID(),
+      consecutive_failures: 0,
+      encrypted_jar: encodeBytea(encrypted.ciphertext),
+      jar_nonce: encodeBytea(encrypted.nonce),
+      label: account?.label ?? null,
+      last_refresh_at: session.capturedAt,
+      rotation_lease_claimed_at: null,
+      rotation_lease_store_date: null,
+      rotation_lease_storefront_attempted_at: null,
+      rotation_lease_token: null,
+      ...(account?.puuid ? { puuid: account.puuid } : {}),
+      ...(account ? { region: account.region } : {}),
+      session_key_version: encrypted.keyVersion,
+    };
+
+    if (account?.connectionId) {
+      let query = this.supabase
+        .from("riot_connections")
+        .update(storedSession)
+        .eq("user_id", userId)
+        .eq("id", account.connectionId);
+      // Reconnect may hydrate a legacy null identity, but it may not silently
+      // replace an existing row with a different Riot account.
+      if (account.puuid) {
+        query = query.or(`puuid.is.null,puuid.eq.${account.puuid}`);
+      }
+      const { data, error } = await query.select("id").maybeSingle();
+      if (error || !data) {
+        throw new SessionStorageError();
+      }
+      return data.id;
+    }
+
     const { data, error } = await this.supabase
       .from("riot_connections")
       .insert({
-        auth_status: "CONNECTED",
-        connection_epoch: randomUUID(),
-        consecutive_failures: 0,
-        encrypted_jar: encodeBytea(encrypted.ciphertext),
-        jar_nonce: encodeBytea(encrypted.nonce),
-        label: account?.label ?? null,
-        last_refresh_at: session.capturedAt,
-        ...(account ? { region: account.region } : {}),
-        session_key_version: encrypted.keyVersion,
+        ...storedSession,
         user_id: userId,
       })
       .select("id")

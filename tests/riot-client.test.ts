@@ -78,6 +78,7 @@ function successfulReauthResponse(
 }
 
 function fullFlowFetch(options?: {
+  storefrontReject?: boolean;
   storefrontV3Status?: number;
 }): ReturnType<typeof vi.fn<typeof fetch>> {
   return vi.fn<typeof fetch>(async (input) => {
@@ -98,6 +99,9 @@ function fullFlowFetch(options?: {
       });
     }
     if (url.includes("/store/v3/storefront/")) {
+      if (options?.storefrontReject) {
+        throw new Error("offline transport failure");
+      }
       return options?.storefrontV3Status
         ? new Response(null, { status: options.storefrontV3Status })
         : jsonResponse(storefrontFixture);
@@ -221,6 +225,7 @@ describe("RiotClient", () => {
     });
 
     const refreshed = await client.authenticate();
+    await client.prepareStorefront(refreshed);
     const storefront = await client.getStore(refreshed);
 
     expect(storefront.levelUuids).toHaveLength(4);
@@ -255,7 +260,7 @@ describe("RiotClient", () => {
     );
   });
 
-  it("uses the stored account region and falls back to the v2 GET route", async () => {
+  it("uses the stored account region without issuing a second fallback request", async () => {
     const fetchMock = fullFlowFetch({ storefrontV3Status: 404 });
     const client = new RiotClient({
       account: { region: "eu" },
@@ -265,19 +270,39 @@ describe("RiotClient", () => {
 
     const refreshed = await client.authenticate();
     await expect(client.getRegion(refreshed)).resolves.toBe("eu");
-    await expect(client.getStore(refreshed)).resolves.toMatchObject({
-      levelUuids: expect.any(Array),
+    await expect(client.getStore(refreshed)).rejects.toMatchObject({
+      status: 404,
+      storefrontRequest: "completed",
     });
 
     const calls = fetchMock.mock.calls;
-    expect(calls.at(-2)?.[0]).toBe(
+    expect(calls.at(-1)?.[0]).toBe(
       `https://pd.eu.a.pvp.net/store/v3/storefront/${PUUID}`,
     );
-    expect(calls.at(-2)?.[1]?.method).toBe("POST");
-    expect(calls.at(-1)?.[0]).toBe(
-      `https://pd.eu.a.pvp.net/store/v2/storefront/${PUUID}`,
-    );
-    expect(calls.at(-1)?.[1]?.method).toBe("GET");
+    expect(calls.at(-1)?.[1]?.method).toBe("POST");
+    expect(
+      calls.filter(([url]) => String(url).includes("/store/")),
+    ).toHaveLength(1);
+  });
+
+  it("marks a rejected sole storefront fetch as ambiguous", async () => {
+    const fetchMock = fullFlowFetch({ storefrontReject: true });
+    const client = new RiotClient({
+      fetchImplementation: fetchMock,
+      session: sessionWithCookies(),
+    });
+
+    const refreshed = await client.authenticate();
+    await client.prepareStorefront(refreshed);
+
+    await expect(client.getStore(refreshed)).rejects.toMatchObject({
+      classification: "ERROR",
+      status: null,
+      storefrontRequest: "ambiguous",
+    });
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).includes("/store/")),
+    ).toHaveLength(1);
   });
 
   it("requires successful reauth before protected calls", async () => {

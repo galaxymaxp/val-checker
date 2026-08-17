@@ -11,15 +11,35 @@ describe("daily storefront cron route", () => {
     vi.stubEnv("CRON_SECRET", "exact-cron-secret");
     runConfiguredDailyStorefrontCron.mockReset();
     runConfiguredDailyStorefrontCron.mockResolvedValue({
+      accounts: [
+        {
+          classification: "OK",
+          connectionId: "22222222-2222-4222-8222-222222222222",
+          emailsSent: 0,
+          matchesFound: 0,
+          notificationStatus: "not-needed",
+          outcome: "checked",
+          reason: null,
+          refreshPersisted: true,
+          storeDate: "2026-08-17",
+          trigger: "cron",
+        },
+      ],
       checked: 1,
       failed: 0,
+      notificationFailures: 0,
       processed: 1,
+      refreshed: 1,
       skipped: 0,
+      trigger: "cron",
     });
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it("fails closed before creating worker dependencies when the secret is missing or wrong", async () => {
@@ -64,14 +84,32 @@ describe("daily storefront cron route", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    const body = await response.json();
+    expect(body).toEqual({
       checked: 1,
       failed: 0,
+      notificationFailures: 0,
       processed: 1,
+      refreshed: 1,
       skipped: 0,
       status: "ok",
+      trigger: "cron",
     });
     expect(runConfiguredDailyStorefrontCron).toHaveBeenCalledTimes(1);
+    expect(console.info).toHaveBeenCalledWith(
+      "[storefront-cron] completed",
+      expect.objectContaining({
+        checked: 1,
+        refreshed: 1,
+      }),
+    );
+    expect(console.info).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ accounts: expect.anything() }),
+    );
+    expect(JSON.stringify(body)).not.toContain(
+      "22222222-2222-4222-8222-222222222222",
+    );
   });
 
   it("redacts worker failures and exports no mutation route", async () => {
@@ -87,6 +125,9 @@ describe("daily storefront cron route", () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ status: "unavailable" });
+    expect(console.error).toHaveBeenCalledWith(
+      "[storefront-cron] invocation unavailable",
+    );
     expect("POST" in route).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ type ReauthPersistenceDependencies = {
   readonly adapter: Pick<RiotAdapter, "refreshSession">;
   readonly connectionId: string;
   readonly expectedConnectionEpoch: string;
+  readonly rotationLeaseToken: string;
   readonly session: Session;
   readonly store: Pick<SessionStore, "persistRotated">;
   readonly userId: string;
@@ -29,6 +30,7 @@ export async function reauthenticateAndPersist({
   adapter,
   connectionId,
   expectedConnectionEpoch,
+  rotationLeaseToken,
   session,
   store,
   userId,
@@ -41,6 +43,7 @@ export async function reauthenticateAndPersist({
       connectionId,
       rotatedSession,
       expectedConnectionEpoch,
+      rotationLeaseToken,
     );
   } catch {
     throw new ReauthPersistenceRunError();

@@ -69,10 +69,26 @@ describe("service-only Riot daily run gate", () => {
       if (!connection) {
         throw new Error("Unable to create daily-run test connection.");
       }
-      const args = {
+      const connectionArgs = {
         p_connection_epoch: connection.connection_epoch,
         p_connection_id: connection.id,
         p_user_id: userId,
+      };
+
+      const rotationLease = await admin.rpc(
+        "claim_riot_session_rotation",
+        connectionArgs,
+      );
+      expect(rotationLease.error).toBeNull();
+      expect(rotationLease.data).toHaveLength(1);
+      expect(rotationLease.data?.[0]?.lease_status).toBe("acquired");
+      const rotationLeaseToken = rotationLease.data?.[0]?.lease_token;
+      if (!rotationLeaseToken) {
+        throw new Error("Unable to acquire the session-rotation test lease.");
+      }
+      const args = {
+        ...connectionArgs,
+        p_rotation_lease_token: rotationLeaseToken,
       };
 
       const claims = await Promise.all(
@@ -97,6 +113,8 @@ describe("service-only Riot daily run gate", () => {
       ).toBeNull();
       const staleMark = await admin.rpc("mark_riot_storefront_attempt", {
         p_connection_epoch: connection.connection_epoch,
+        p_connection_id: connection.id,
+        p_rotation_lease_token: rotationLeaseToken,
         p_run_id: claimed.run_id,
         p_user_id: userId,
       });
@@ -115,6 +133,8 @@ describe("service-only Riot daily run gate", () => {
         Array.from({ length: 8 }, () =>
           admin.rpc("mark_riot_storefront_attempt", {
             p_connection_epoch: connection.connection_epoch,
+            p_connection_id: connection.id,
+            p_rotation_lease_token: rotationLeaseToken,
             p_run_id: claimed.run_id,
             p_user_id: userId,
           }),
@@ -138,10 +158,21 @@ describe("service-only Riot daily run gate", () => {
         .select("connection_epoch, id")
         .single();
       expect(replacement).not.toBeNull();
-      const duplicate = await admin.rpc("claim_riot_daily_run", {
+      const replacementArgs = {
         p_connection_epoch: replacement!.connection_epoch,
         p_connection_id: replacement!.id,
         p_user_id: userId,
+      };
+      const replacementLease = await admin.rpc(
+        "claim_riot_session_rotation",
+        replacementArgs,
+      );
+      const replacementLeaseToken = replacementLease.data?.[0]?.lease_token;
+      expect(replacementLease.error).toBeNull();
+      expect(replacementLeaseToken).toBeTruthy();
+      const duplicate = await admin.rpc("claim_riot_daily_run", {
+        ...replacementArgs,
+        p_rotation_lease_token: replacementLeaseToken!,
       });
       expect(duplicate.error).toBeNull();
       // Reconnecting must not mint a fresh allowance: the run already spent
@@ -161,19 +192,29 @@ describe("service-only Riot daily run gate", () => {
         .single();
       expect(secondError).toBeNull();
       expect(second).not.toBeNull();
-      const secondClaim = await admin.rpc("claim_riot_daily_run", {
+      const secondArgs = {
         p_connection_epoch: second!.connection_epoch,
         p_connection_id: second!.id,
         p_user_id: userId,
+      };
+      const secondLease = await admin.rpc(
+        "claim_riot_session_rotation",
+        secondArgs,
+      );
+      const secondLeaseToken = secondLease.data?.[0]?.lease_token;
+      expect(secondLease.error).toBeNull();
+      expect(secondLeaseToken).toBeTruthy();
+      const secondClaim = await admin.rpc("claim_riot_daily_run", {
+        ...secondArgs,
+        p_rotation_lease_token: secondLeaseToken!,
       });
       expect(secondClaim.error).toBeNull();
       expect(secondClaim.data).toHaveLength(1);
 
       // But only one, even across repeated attempts.
       const thirdClaim = await admin.rpc("claim_riot_daily_run", {
-        p_connection_epoch: second!.connection_epoch,
-        p_connection_id: second!.id,
-        p_user_id: userId,
+        ...secondArgs,
+        p_rotation_lease_token: secondLeaseToken!,
       });
       expect(thirdClaim.error).toBeNull();
       expect(thirdClaim.data).toEqual([]);

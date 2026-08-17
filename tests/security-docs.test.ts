@@ -23,7 +23,10 @@ describe("security documentation", () => {
     expect(security).toMatch(
       /Public signup and Riot-independent features are not\s+allowlisted/i,
     );
-    expect(security).toMatch(/one storefront attempt per user/i);
+    expect(security).toMatch(/one automatic attempt per connection/i);
+    expect(security).toMatch(
+      /one\s+separate manual storefront attempt per stable Riot PUUID/is,
+    );
     expect(security).toMatch(/deterministic idempotency key/i);
     expect(security).toMatch(/residual risk and limitations/i);
   });
@@ -36,9 +39,17 @@ describe("security documentation", () => {
     expect(readme).toMatch(/operator's own account only for approximately three\s+weeks/i);
     expect(readme).toMatch(/Public magic-link signup remains open/i);
     expect(readme).toMatch(/session submission is a separate,\s+fail-closed capability/is);
-    expect(readme).toMatch(/exactly one storefront attempt per user and UTC rotation/i);
+    expect(readme).toMatch(
+      /at most one storefront attempt per connected Riot\s+account and UTC store day/is,
+    );
+    expect(readme).toMatch(
+      /manual refresh is available at most once per Riot PUUID and UTC store day/i,
+    );
+    expect(readme).toMatch(/automatic run never spends it/i);
     expect(readme).toMatch(/scheduled for 00:05 UTC/i);
-    expect(readme).toMatch(/no on-demand\s+refresh endpoint/i);
+    expect(readme).toMatch(
+      /Manual refresh uses an\s+authenticated server action with an exact owned connection ID/is,
+    );
     expect(readme).toMatch(/Server-side session encryption is load-bearing/i);
     expect(readme).toMatch(/riot_run_logs/);
     expect(readme).toMatch(/Raw error messages\s+are deliberately never stored/i);
@@ -69,6 +80,8 @@ describe("security documentation", () => {
       "SESSION_ENCRYPTION_KEY_V1",
       "RIOT_CONNECT_ALLOWED_USER_IDS",
       "RIOT_CONNECT_ALLOWED_EMAILS",
+      "RIOT_ADMIN_EMAILS",
+      "RIOT_TLS_CIPHERS",
       "RESEND_API_KEY",
       "RESEND_FROM_EMAIL",
       "CRON_SECRET",
@@ -84,6 +97,7 @@ describe("security documentation", () => {
       .filter((line) => line.length > 0 && !line.startsWith("#"));
     expect(configuredLines.every((line) => line.endsWith("="))).toBe(true);
     expect(readme).toMatch(/supabase migration up --local/i);
-    expect(readme).toMatch(/supabase db push --dry-run/i);
+    expect(readme).toMatch(/known migration-ledger drift/i);
+    expect(readme).toMatch(/Do not rename an applied migration, run `supabase db push`/i);
   });
 });

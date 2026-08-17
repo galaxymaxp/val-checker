@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
-const canRiotConnect = vi.fn();
 const loadWishlistInventory = vi.fn();
-const loadRiotConnectionStateWithClient = vi.fn();
+const loadRiotAccountsWithClient = vi.fn();
+const loadStorefrontDashboardStatus = vi.fn();
 const loadDailyShops = vi.fn();
 const redirect = vi.fn();
 const disconnectRiotSession = vi.fn();
@@ -15,9 +15,11 @@ vi.mock("@/src/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/src/lib/catalog/inventory", () => ({ loadWishlistInventory }));
-vi.mock("@/src/lib/riot/connect-allowlist", () => ({ canRiotConnect }));
 vi.mock("@/src/lib/riot/connection-state", () => ({
-  loadRiotConnectionStateWithClient,
+  loadRiotAccountsWithClient,
+}));
+vi.mock("@/src/lib/storefront/dashboard-status", () => ({
+  loadStorefrontDashboardStatus,
 }));
 vi.mock("@/src/lib/supabase/server-admin", () => ({
   createAdminSupabaseClient: () => admin,
@@ -32,15 +34,19 @@ vi.mock("next/navigation", () => ({ redirect }));
 describe("dashboard page", () => {
   beforeEach(() => {
     getClaims.mockReset();
-    canRiotConnect.mockReset();
     loadWishlistInventory.mockReset();
-    loadRiotConnectionStateWithClient.mockReset();
+    loadRiotAccountsWithClient.mockReset();
+    loadStorefrontDashboardStatus.mockReset();
     loadDailyShops.mockReset();
     loadDailyShops.mockResolvedValue([]);
     redirect.mockReset();
     loadWishlistInventory.mockResolvedValue([]);
-    canRiotConnect.mockReturnValue(false);
-    loadRiotConnectionStateWithClient.mockResolvedValue("disconnected");
+    loadRiotAccountsWithClient.mockResolvedValue([]);
+    loadStorefrontDashboardStatus.mockResolvedValue({
+      accounts: [],
+      nextResetAt: "2026-08-18T00:00:00.000Z",
+      storeDate: "2026-08-17",
+    });
   });
 
   it("renders after an authenticated magic-link session", async () => {
@@ -53,14 +59,15 @@ describe("dashboard page", () => {
     expect(redirect).not.toHaveBeenCalled();
     expect(content.type).toBe("main");
     expect(loadWishlistInventory).toHaveBeenCalled();
-    expect(loadRiotConnectionStateWithClient).toHaveBeenCalledWith(
+    expect(loadRiotAccountsWithClient).toHaveBeenCalledWith(
       admin,
       "user-id",
     );
-    expect(canRiotConnect).toHaveBeenCalledWith({
-      email: "user@example.com",
-      userId: "user-id",
-    });
+    expect(loadStorefrontDashboardStatus).toHaveBeenCalledWith(
+      admin,
+      "user-id",
+      [],
+    );
   });
 
   it("keeps a server-side redirect as a second protection layer", async () => {
@@ -73,7 +80,8 @@ describe("dashboard page", () => {
 
     expect(redirect).toHaveBeenCalledWith("/sign-in?next=/dashboard");
     expect(loadWishlistInventory).not.toHaveBeenCalled();
-    expect(loadRiotConnectionStateWithClient).not.toHaveBeenCalled();
+    expect(loadRiotAccountsWithClient).not.toHaveBeenCalled();
+    expect(loadStorefrontDashboardStatus).not.toHaveBeenCalled();
     expect(loadDailyShops).not.toHaveBeenCalled();
   });
 });

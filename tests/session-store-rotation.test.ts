@@ -15,6 +15,8 @@ import type { Database } from "@/src/types/database";
 
 vi.mock("server-only", () => ({}));
 
+const rotationLeaseToken = "77777777-7777-4777-8777-777777777777";
+
 function cipher(): AesGcmSessionCipher {
   return new AesGcmSessionCipher(
     loadSessionKeyring({
@@ -37,8 +39,10 @@ function rotatedSession(): CapturedSession {
 function updateClient(result: { data: { id: string } | null; error: unknown }) {
   const maybeSingle = vi.fn().mockResolvedValue(result);
   const select = vi.fn(() => ({ maybeSingle }));
-  const query = { eq: vi.fn(), select };
+  const query = { eq: vi.fn(), is: vi.fn(), or: vi.fn(), select };
   query.eq.mockReturnValue(query);
+  query.is.mockReturnValue(query);
+  query.or.mockReturnValue(query);
   const eq = query.eq;
   const update = vi.fn(
     (value: Database["public"]["Tables"]["riot_connections"]["Update"]) => {
@@ -51,6 +55,8 @@ function updateClient(result: { data: { id: string } | null; error: unknown }) {
   return {
     eq,
     from,
+    is: query.is,
+    or: query.or,
     select,
     supabase: { from } as unknown as SupabaseClient<Database>,
     update,
@@ -62,11 +68,29 @@ describe("rotated session storage", () => {
     const client = updateClient({ data: { id: "connection-id" }, error: null });
     const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
 
-    await store.persistRotated("user-id", "33333333-3333-4333-8333-333333333333", rotatedSession(), "epoch-id");
+    await store.persistRotated(
+      "user-id",
+      "33333333-3333-4333-8333-333333333333",
+      rotatedSession(),
+      "epoch-id",
+      rotationLeaseToken,
+    );
 
     expect(client.from).toHaveBeenCalledWith("riot_connections");
     expect(client.eq).toHaveBeenCalledWith("user_id", "user-id");
+    expect(client.eq).toHaveBeenCalledWith(
+      "id",
+      "33333333-3333-4333-8333-333333333333",
+    );
     expect(client.eq).toHaveBeenCalledWith("connection_epoch", "epoch-id");
+    expect(client.eq).toHaveBeenCalledWith(
+      "rotation_lease_token",
+      rotationLeaseToken,
+    );
+    expect(client.is).toHaveBeenCalledWith(
+      "rotation_lease_storefront_attempted_at",
+      null,
+    );
     expect(client.select).toHaveBeenCalledWith("id");
     expect(client.update).toHaveBeenCalledTimes(1);
     const update = client.update.mock.calls[0]?.[0];
@@ -92,11 +116,47 @@ describe("rotated session storage", () => {
     const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
 
     try {
-      await store.persistRotated("user-id", "33333333-3333-4333-8333-333333333333", rotatedSession(), "epoch-id");
+      await store.persistRotated(
+        "user-id",
+        "33333333-3333-4333-8333-333333333333",
+        rotatedSession(),
+        "epoch-id",
+        rotationLeaseToken,
+      );
       expect.unreachable("A failed rotation must fail the run.");
     } catch (error) {
       expect(error).toBeInstanceOf(SessionStorageError);
       expect((error as Error).message).not.toContain(sensitiveMarker);
     }
+  });
+
+  it("reconnects by replacing only the exact owned connection row", async () => {
+    const connectionId = "33333333-3333-4333-8333-333333333333";
+    const client = updateClient({ data: { id: connectionId }, error: null });
+    const store = new SupabaseEncryptedSessionStore(client.supabase, cipher());
+
+    await expect(
+      store.save("user-id", rotatedSession(), {
+        connectionId,
+        label: "Main",
+        puuid: "44444444-4444-4444-8444-444444444444",
+        region: "ap",
+      }),
+    ).resolves.toBe(connectionId);
+
+    expect(client.eq).toHaveBeenCalledWith("user_id", "user-id");
+    expect(client.eq).toHaveBeenCalledWith("id", connectionId);
+    expect(client.or).toHaveBeenCalledWith(
+      "puuid.is.null,puuid.eq.44444444-4444-4444-8444-444444444444",
+    );
+    const update = client.update.mock.calls[0]?.[0];
+    expect(update).toMatchObject({
+      auth_status: "CONNECTED",
+      label: "Main",
+      puuid: "44444444-4444-4444-8444-444444444444",
+      region: "ap",
+    });
+    expect(update).not.toHaveProperty("user_id");
+    expect(JSON.stringify(update)).not.toContain("sensitive-rotated-cookie-jar");
   });
 });

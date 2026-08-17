@@ -7,29 +7,40 @@ import {
   type DailyStorefrontRepository,
   type DailyStorefrontWorkerDependencies,
   type RunLogEntry,
+  type SessionRotationLease,
   type WorkerConnection,
 } from "@/src/lib/worker/storefront-worker";
 
 vi.mock("server-only", () => ({}));
 
 const claim: DailyRunClaim = {
+  claimToken: null,
   claimedAt: new Date("2026-08-14T00:05:00.000Z"),
   id: "99999999-9999-4999-8999-999999999999",
   storeDate: "2026-08-14",
 };
 const checkedAt = new Date("2026-08-14T00:05:01.000Z");
+const rotationLease: SessionRotationLease = {
+  claimedAt: new Date("2026-08-14T00:04:59.000Z"),
+  storeDate: "2026-08-14",
+  token: "88888888-8888-4888-8888-888888888888",
+};
 
 // Every value the worker may ever write to the reason column. The migration
 // pins the same list, so a raw error string cannot reach the log.
 const ALLOWED_REASONS = new Set([
+  "ACCOUNT_UNAVAILABLE",
   "ATTEMPT_FENCED",
+  "CATALOG_FAILED",
   "DAILY_CLAIM_HELD",
   "DELIVERY_FAILED",
   "LIFECYCLE_STALE",
+  "MANUAL_CLAIM_HELD",
   "NOT_ALLOWLISTED",
   "REAUTH_FAILED",
   "REAUTH_REQUIRED_SKIP",
   "SESSION_UNAVAILABLE",
+  "SESSION_LEASE_HELD",
   "STOREFRONT_FAILED",
   "UNEXPECTED",
 ]);
@@ -69,21 +80,34 @@ function setup(
   } = {},
 ) {
   const repository: DailyStorefrontRepository = {
+    acquireSessionRotationLease: vi.fn().mockResolvedValue({
+      lease: rotationLease,
+      reason: null,
+    }),
     applyLifecycle: vi.fn().mockResolvedValue({
       applied: true,
       terminalTransition: false,
     }),
-    claim: vi.fn().mockResolvedValue(claim),
+    claim: vi.fn().mockResolvedValue({ claim, reason: null }),
+    failRefresh: vi.fn().mockResolvedValue(undefined),
     listConnections: vi
       .fn()
       .mockResolvedValue(options.connections ?? [connection()]),
     loadSentNotifications: vi.fn().mockResolvedValue([]),
     loadVerifiedEmail: vi.fn().mockResolvedValue("verified@example.com"),
     markStorefrontAttempt: vi.fn().mockResolvedValue(checkedAt),
+    persistPuuid: vi.fn().mockResolvedValue(undefined),
+    recordStorefrontRefresh: vi.fn().mockResolvedValue(undefined),
     recordRun: vi.fn().mockResolvedValue(undefined),
+    releaseSessionRotationLease: vi.fn().mockResolvedValue(undefined),
+    renewSessionRotationLease: vi.fn().mockResolvedValue(rotationLease),
   };
   const refreshSession = vi.fn().mockResolvedValue(session(2));
+  const prepareRiotStorefront = vi.fn().mockResolvedValue(undefined);
   const getStore = vi.fn().mockResolvedValue({ levelUuids: [], payload: {} });
+  const getPUUID = vi
+    .fn()
+    .mockResolvedValue("77777777-7777-4777-8777-777777777777");
   const sessionStore = {
     load: vi.fn().mockResolvedValue(session(1).material),
     persistRotated: vi.fn().mockResolvedValue(undefined),
@@ -102,8 +126,20 @@ function setup(
   });
   const dependencies: DailyStorefrontWorkerDependencies = {
     allowlist: { allows: vi.fn(() => options.allowed !== false) },
-    createRiotClient: vi.fn(() => ({ getStore, refreshSession })),
+    createRiotClient: vi.fn(() => ({
+      getPUUID,
+      getStore,
+      prepareStorefront: prepareRiotStorefront,
+      refreshSession,
+    })),
     pipeline,
+    prepareStorefront: vi.fn().mockResolvedValue({
+      expiresAt: "2026-08-15T00:00:00.000Z",
+      offers: [],
+      shopHash: "b".repeat(64),
+      skinUuids: [],
+      storeDate: claim.storeDate,
+    }),
     repository,
     sendExpiry: vi.fn().mockResolvedValue(undefined),
     sendStorefront: vi
@@ -141,6 +177,7 @@ describe("daily worker run logging", () => {
         reason: null,
         runId: claim.id,
         storeDate: claim.storeDate,
+        trigger: "cron",
         userId: connection().userId,
       },
     ]);
@@ -162,7 +199,10 @@ describe("daily worker run logging", () => {
     ]);
 
     const duplicate = setup();
-    vi.mocked(duplicate.repository.claim).mockResolvedValue(null);
+    vi.mocked(duplicate.repository.claim).mockResolvedValue({
+      claim: null,
+      reason: "CLAIM_HELD",
+    });
     await new DailyStorefrontWorker(duplicate.dependencies).run();
     expect(loggedEntries(duplicate.repository)).toMatchObject([
       { outcome: "skipped", reason: "DAILY_CLAIM_HELD" },
@@ -202,7 +242,7 @@ describe("daily worker run logging", () => {
     ]);
   });
 
-  it("keeps a healthy classification and match count when delivery fails", async () => {
+  it("keeps a checked refresh and healthy classification when delivery fails", async () => {
     const fixture = setup({ matches: [{}, {}] });
     vi.mocked(fixture.dependencies.sendStorefront).mockRejectedValue(
       new Error("resend unavailable"),
@@ -215,7 +255,7 @@ describe("daily worker run logging", () => {
         classification: "OK",
         emailsSent: 0,
         matchesFound: 2,
-        outcome: "failed",
+        outcome: "checked",
         reason: "DELIVERY_FAILED",
       },
     ]);
@@ -264,7 +304,13 @@ describe("daily worker run logging", () => {
 
     await expect(
       new DailyStorefrontWorker(fixture.dependencies).run(),
-    ).resolves.toEqual({ checked: 2, failed: 0, processed: 2, skipped: 0 });
+    ).resolves.toMatchObject({
+      checked: 2,
+      failed: 0,
+      processed: 2,
+      refreshed: 2,
+      skipped: 0,
+    });
     expect(fixture.repository.recordRun).toHaveBeenCalledTimes(2);
   });
 });

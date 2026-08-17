@@ -1,4 +1,5 @@
 import {
+  type CapturedSession,
   type ManualCookieFixtureInput,
   ManualCookieProvider,
   type SubmittedCookieJarInput,
@@ -48,6 +49,7 @@ type ConnectFixtureRequest = {
 };
 
 export type ConnectSubmittedSessionRequest = {
+  readonly connectionId?: unknown;
   readonly consentGranted: boolean;
   readonly identity: RiotConnectIdentity;
   readonly label?: unknown;
@@ -56,6 +58,7 @@ export type ConnectSubmittedSessionRequest = {
 };
 
 export type ConnectCredentialsRequest = {
+  readonly connectionId?: unknown;
   readonly consentGranted: boolean;
   readonly identity: RiotConnectIdentity;
   readonly label?: unknown;
@@ -84,10 +87,36 @@ function normalizeLabel(label: unknown): string | null {
     : null;
 }
 
+const CONNECTION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeConnectionId(connectionId: unknown): string | null {
+  if (connectionId === undefined || connectionId === null) {
+    return null;
+  }
+  if (
+    typeof connectionId !== "string" ||
+    !CONNECTION_ID_PATTERN.test(connectionId)
+  ) {
+    throw new Error("The Riot connection target is invalid.");
+  }
+  return connectionId;
+}
+
+export interface RiotSessionIdentityResolver {
+  resolve(
+    session: CapturedSession,
+    region: RiotRegion,
+  ): Promise<{
+    readonly puuid: string;
+    readonly session: CapturedSession;
+  }>;
+}
+
 /**
- * Connection flow. The daily worker remains the only path that reads a
- * storefront; the credential exchange added in Version 2.4 talks to Riot's auth
- * host only, and never fetches a shop.
+ * Connection flow. Connecting or reconnecting may contact Riot's auth and
+ * user-info hosts to bind the encrypted session to a stable PUUID, but it never
+ * fetches a storefront. Storefront reads remain in the shared refresh worker.
  */
 export class RiotConnectionService {
   constructor(
@@ -97,6 +126,7 @@ export class RiotConnectionService {
     private readonly submittedProvider = new SubmittedCookieProvider(),
     private readonly loginProvider?: RiotLoginProvider,
     private readonly pendingAuth?: PendingAuthStore,
+    private readonly identityResolver?: RiotSessionIdentityResolver,
   ) {}
 
   /**
@@ -115,6 +145,7 @@ export class RiotConnectionService {
     const { loginProvider, pendingAuth } = this.requireCredentialSupport();
     const region: RiotRegion = parseRiotRegion(request.region);
     const label = normalizeLabel(request.label);
+    const connectionId = normalizeConnectionId(request.connectionId);
 
     const outcome = await loginProvider.submitCredentials({
       password: request.password,
@@ -125,6 +156,7 @@ export class RiotConnectionService {
       // Carry region and label forward so the code step saves what was chosen
       // on the first screen.
       await pendingAuth.save(request.identity.userId, outcome.pendingJar, {
+        ...(connectionId ? { connectionId } : {}),
         label,
         region,
       });
@@ -136,8 +168,11 @@ export class RiotConnectionService {
       };
     }
 
-    await this.store.save(request.identity.userId, outcome.session, {
+    const identity = await this.resolveIdentity(outcome.session, region);
+    await this.store.save(request.identity.userId, identity.session, {
+      ...(connectionId ? { connectionId } : {}),
       label,
+      ...(identity.puuid ? { puuid: identity.puuid } : {}),
       region,
     });
     await pendingAuth.clear(request.identity.userId);
@@ -179,6 +214,9 @@ export class RiotConnectionService {
 
     if (outcome.kind === "multifactor") {
       await pendingAuth.save(request.identity.userId, outcome.pendingJar, {
+        ...(pending.connectionId
+          ? { connectionId: pending.connectionId }
+          : {}),
         label: pending.label,
         region: pending.region,
       });
@@ -190,9 +228,15 @@ export class RiotConnectionService {
       };
     }
 
-    await this.store.save(request.identity.userId, outcome.session, {
+    const region = pending.region ?? parseRiotRegion(undefined);
+    const identity = await this.resolveIdentity(outcome.session, region);
+    await this.store.save(request.identity.userId, identity.session, {
+      ...(pending.connectionId
+        ? { connectionId: pending.connectionId }
+        : {}),
       label: pending.label,
-      region: pending.region ?? parseRiotRegion(undefined),
+      ...(identity.puuid ? { puuid: identity.puuid } : {}),
+      region,
     });
     await pendingAuth.clear(request.identity.userId);
     return { kind: "connected", state: "connected" };
@@ -209,6 +253,16 @@ export class RiotConnectionService {
     return { loginProvider: this.loginProvider, pendingAuth: this.pendingAuth };
   }
 
+  private async resolveIdentity(
+    session: CapturedSession,
+    region: RiotRegion,
+  ) {
+    if (!this.identityResolver) {
+      return { puuid: null, session };
+    }
+    return this.identityResolver.resolve(session, region);
+  }
+
   async connect(
     request: ConnectSubmittedSessionRequest,
   ): Promise<RiotConnectionState> {
@@ -221,7 +275,16 @@ export class RiotConnectionService {
     const region: RiotRegion = parseRiotRegion(request.region);
     const session = await this.submittedProvider.capture(request.session);
     const label = normalizeLabel(request.label);
-    await this.store.save(request.identity.userId, session, { label, region });
+    const connectionId = normalizeConnectionId(request.connectionId);
+    const resolvedIdentity = await this.resolveIdentity(session, region);
+    await this.store.save(request.identity.userId, resolvedIdentity.session, {
+      ...(connectionId ? { connectionId } : {}),
+      label,
+      ...(resolvedIdentity.puuid
+        ? { puuid: resolvedIdentity.puuid }
+        : {}),
+      region,
+    });
     return "connected";
   }
 

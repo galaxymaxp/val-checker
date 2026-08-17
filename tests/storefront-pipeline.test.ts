@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedSkinLevel } from "@/src/lib/catalog/resolve-skin-uuids";
 import { renderStorefrontMatchEmail } from "@/src/lib/notifications/storefront-match";
 import type { FetchedStorefront } from "@/src/lib/riot/adapter";
-import { canonicalizeStorefront } from "@/src/lib/storefront/canonicalize";
+import {
+  canonicalizeStorefront,
+  createStorefrontRefreshSnapshot,
+} from "@/src/lib/storefront/canonicalize";
 import { planStorefrontNotificationsWithClient } from "@/src/lib/storefront/pipeline";
 import {
   extractStorefrontSkinLevelUuids,
@@ -118,6 +121,34 @@ afterEach(() => {
 });
 
 describe("storefront canonicalization", () => {
+  it("creates a catalog-independent priced snapshot with the final shop hash", () => {
+    const parsed = parseStorefrontPayload(fixture);
+    const checkedAt = new Date("2026-08-14T00:05:00.000Z");
+    const resolvedLevels: ResolvedSkinLevel[] =
+      extractStorefrontSkinLevelUuids(parsed).map((levelUuid, ordinal) => ({
+        levelUuid,
+        skinUuid: fixtureSkinUuid(ordinal + 1),
+      }));
+
+    const snapshot = createStorefrontRefreshSnapshot(parsed, checkedAt);
+    const enriched = canonicalizeStorefront(
+      parsed,
+      resolvedLevels,
+      checkedAt,
+    );
+
+    expect(snapshot.shopHash).toBe(enriched.shopHash);
+    expect(snapshot.skinUuids).toEqual([]);
+    expect(snapshot.offers).toHaveLength(4);
+    expect(snapshot.offers.every((offer) => offer.costs.length > 0)).toBe(true);
+    expect(
+      snapshot.offers.every((offer) =>
+        offer.rewards.every((reward) => reward.skinUuid === null),
+      ),
+    ).toBe(true);
+    expect(enriched.skinUuids).toHaveLength(resolvedLevels.length);
+  });
+
   it("hashes stable offer data independently of source order and check time", () => {
     const firstRaw = structuredClone(fixture) as MutableFixture;
     firstRaw.SkinsPanelLayout.SingleItemStoreOffers[0].Cost[

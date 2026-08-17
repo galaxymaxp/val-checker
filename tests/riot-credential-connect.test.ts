@@ -7,6 +7,7 @@ import {
   RiotConnectionService,
   RiotConsentRequiredError,
   RiotPendingAuthExpiredError,
+  type RiotSessionIdentityResolver,
 } from "@/src/lib/riot/connection-service";
 import type {
   PendingAuthRecord,
@@ -20,6 +21,7 @@ import type { SessionStore } from "@/src/lib/riot/session-store";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const PASSWORD = "correct-horse-battery-staple";
 const IDENTITY = { email: "operator@example.com", userId: USER_ID };
+const CONNECTION_ID = "22222222-2222-4222-8222-222222222222";
 
 const PENDING_JAR = new TextEncoder().encode(
   JSON.stringify([
@@ -70,6 +72,7 @@ function fakePendingAuthStore(initial: PendingAuthRecord | null = null) {
     load: vi.fn(async () => record),
     save: vi.fn(async (_userId, pendingJar, options) => {
       record = {
+        connectionId: options?.connectionId ?? null,
         label: options?.label ?? null,
         pendingJar,
         region: options?.region ?? null,
@@ -84,6 +87,7 @@ function buildService(
   login: Partial<RiotLoginProvider>,
   sessionStore: SessionStore,
   pendingAuth: PendingAuthStore,
+  identityResolver?: RiotSessionIdentityResolver,
 ) {
   return new RiotConnectionService(
     new ManualCookieProvider(),
@@ -92,6 +96,7 @@ function buildService(
     undefined,
     login as RiotLoginProvider,
     pendingAuth,
+    identityResolver,
   );
 }
 
@@ -151,6 +156,7 @@ describe("credential connect flow", () => {
       sessions.store,
       pending.store,
     ).connectWithCredentials({
+      connectionId: CONNECTION_ID,
       consentGranted: true,
       identity: IDENTITY,
       password: PASSWORD,
@@ -167,6 +173,7 @@ describe("credential connect flow", () => {
     expect(sessions.store.save).not.toHaveBeenCalled();
 
     const held = pending.peek();
+    expect(held?.connectionId).toBe(CONNECTION_ID);
     expect(held?.region).toBe("ap");
     expect(new TextDecoder().decode(held?.pendingJar)).not.toContain(PASSWORD);
     expect(
@@ -177,6 +184,7 @@ describe("credential connect flow", () => {
   it("completes the connection from the held jar and clears it", async () => {
     const sessions = fakeSessionStore();
     const pending = fakePendingAuthStore({
+      connectionId: CONNECTION_ID,
       label: "alt account",
       pendingJar: PENDING_JAR,
       region: "kr",
@@ -199,6 +207,7 @@ describe("credential connect flow", () => {
     });
     // Region and label chosen on the first screen survive the second step.
     expect(sessions.saved[0].options).toEqual({
+      connectionId: CONNECTION_ID,
       label: "alt account",
       region: "kr",
     });
@@ -256,5 +265,99 @@ describe("credential connect flow", () => {
     ).rejects.toThrow();
 
     expect(submitCredentials).not.toHaveBeenCalled();
+  });
+
+  it("resolves a stable PUUID before replacing one exact connection", async () => {
+    const sessions = fakeSessionStore();
+    const pending = fakePendingAuthStore();
+    const original = connectedSession();
+    const rotated = { ...connectedSession(), capturedAt: "2026-08-15T00:01:00Z" };
+    const submitCredentials = vi.fn(async () => ({
+      kind: "connected" as const,
+      session: original,
+    }));
+    const identityResolver: RiotSessionIdentityResolver = {
+      resolve: vi.fn(async () => ({
+        puuid: "33333333-3333-4333-8333-333333333333",
+        session: rotated,
+      })),
+    };
+
+    await buildService(
+      { submitCredentials },
+      sessions.store,
+      pending.store,
+      identityResolver,
+    ).connectWithCredentials({
+      connectionId: CONNECTION_ID,
+      consentGranted: true,
+      identity: IDENTITY,
+      password: PASSWORD,
+      region: "ap",
+      username: "operator",
+    });
+
+    expect(identityResolver.resolve).toHaveBeenCalledWith(original, "ap");
+    expect(sessions.saved[0]).toEqual({
+      options: {
+        connectionId: CONNECTION_ID,
+        label: null,
+        puuid: "33333333-3333-4333-8333-333333333333",
+        region: "ap",
+      },
+      session: rotated,
+    });
+  });
+
+  it("resolves a submitted session before replacing one exact connection", async () => {
+    const sessions = fakeSessionStore();
+    const pending = fakePendingAuthStore();
+    const rotated = {
+      ...connectedSession(),
+      capturedAt: "2026-08-15T00:02:00Z",
+    };
+    const identityResolver: RiotSessionIdentityResolver = {
+      resolve: vi.fn(async () => ({
+        puuid: "33333333-3333-4333-8333-333333333333",
+        session: rotated,
+      })),
+    };
+    const service = buildService(
+      {},
+      sessions.store,
+      pending.store,
+      identityResolver,
+    );
+
+    await service.connect({
+      connectionId: CONNECTION_ID,
+      consentGranted: true,
+      identity: IDENTITY,
+      region: "eu",
+      session: {
+        serializedJar: JSON.stringify([
+          {
+            domain: ".riotgames.com",
+            name: "ssid",
+            path: "/",
+            value: "submitted-session",
+          },
+        ]),
+      },
+    });
+
+    expect(identityResolver.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "manual-cookie" }),
+      "eu",
+    );
+    expect(sessions.saved[0]).toEqual({
+      options: {
+        connectionId: CONNECTION_ID,
+        label: null,
+        puuid: "33333333-3333-4333-8333-333333333333",
+        region: "eu",
+      },
+      session: rotated,
+    });
   });
 });

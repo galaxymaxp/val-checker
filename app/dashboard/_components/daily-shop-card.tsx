@@ -1,10 +1,4 @@
-"use client";
-
 import Image from "next/image";
-import type { PointerEvent } from "react";
-import { useState } from "react";
-
-import { prefersReducedMotion } from "@/src/lib/motion/reduced-motion";
 
 /**
  * Local shape for a daily offer. The canonical DailyShopOffer lives in a
@@ -13,53 +7,29 @@ import { prefersReducedMotion } from "@/src/lib/motion/reduced-motion";
 interface DailyShopCardOffer {
   readonly displayIcon: string | null;
   readonly displayName: string;
+  readonly price?: number | null;
   readonly skinUuid: string;
+  readonly tierName?: string | null;
   readonly watched: boolean;
+  readonly weaponName?: string | null;
 }
 
 interface DailyShopCardProps {
   readonly offer: DailyShopCardOffer;
 }
 
-const MAX_TILT_DEGREES = 7;
-
 export function DailyShopCard({ offer }: DailyShopCardProps) {
-  const [tilt, setTilt] = useState<string>();
-
-  function handlePointerMove(event: PointerEvent<HTMLElement>) {
-    if (prefersReducedMotion()) {
-      return;
-    }
-
-    const bounds = event.currentTarget.getBoundingClientRect();
-
-    if (bounds.width === 0 || bounds.height === 0) {
-      return;
-    }
-
-    // Pointer offset from the card centre, each axis in [-0.5, 0.5].
-    const offsetX = (event.clientX - bounds.left) / bounds.width - 0.5;
-    const offsetY = (event.clientY - bounds.top) / bounds.height - 0.5;
-    const rotateX = (-offsetY * MAX_TILT_DEGREES * 2).toFixed(2);
-    const rotateY = (offsetX * MAX_TILT_DEGREES * 2).toFixed(2);
-
-    setTilt(`perspective(40rem) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`);
-  }
-
   return (
     <article
-      className="group relative flex aspect-[3/4] w-44 flex-col overflow-hidden rounded-card border border-line bg-bg-card shadow-panel md:w-52"
-      onPointerLeave={() => setTilt(undefined)}
-      onPointerMove={handlePointerMove}
-      style={{ transform: tilt, transition: "transform 150ms ease" }}
+      className="group relative flex min-h-72 w-full min-w-0 flex-col overflow-hidden rounded-card border border-line bg-bg-card shadow-panel transition-transform motion-safe:hocus:-translate-y-1"
     >
-      <div className="relative m-3 flex-1">
+      <div className="relative m-3 min-h-44 flex-1 sm:min-h-52">
         {offer.displayIcon ? (
           <Image
             alt=""
             className="object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.55)] transition-transform motion-safe:group-hover:scale-105"
             fill
-            sizes="208px"
+            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
             src={offer.displayIcon}
           />
         ) : (
@@ -72,10 +42,23 @@ export function DailyShopCard({ offer }: DailyShopCardProps) {
         )}
       </div>
 
-      <div className="flex flex-col items-start gap-1.5 px-3 pb-3">
-        <h3 className="w-full truncate text-sm! font-medium" title={offer.displayName}>
+      <div className="flex flex-col items-start gap-2 border-t border-line-soft px-4 py-3">
+        <div className="w-full min-w-0">
+          <p className="truncate text-[11px] tracking-wider text-ink-dim uppercase">
+            {offer.weaponName ?? "Weapon skin"}
+          </p>
+          <h3 className="w-full truncate text-sm! font-semibold" title={offer.displayName}>
           {offer.displayName}
-        </h3>
+          </h3>
+        </div>
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-ink-muted">{offer.tierName ?? "Tier pending"}</span>
+          {typeof offer.price === "number" ? (
+            <span className="font-semibold tabular-nums text-ink">
+              {offer.price.toLocaleString()} VP
+            </span>
+          ) : null}
+        </div>
         {offer.watched ? (
           <p className="rounded-full bg-mint-dim px-2 py-0.5 text-[10px] tracking-wider text-mint uppercase">
             On your watchlist

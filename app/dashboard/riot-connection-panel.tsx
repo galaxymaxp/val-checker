@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 
 import type { RiotDesktopCaptureResult } from "@/src/types/desktop-bridge";
@@ -24,11 +25,16 @@ interface RiotConnectionPanelProps {
   readonly connectSession?: (
     submission: RiotSessionSubmission,
   ) => Promise<RiotConnectionMutationResult>;
-  readonly disconnect: () => Promise<RiotConnectionMutationResult>;
+  readonly disconnect?: () => Promise<RiotConnectionMutationResult>;
+  readonly initialLabel?: string;
+  readonly initialRegion?: string;
   readonly initialState: RiotConnectionState;
+  readonly keepConnectFormOpen?: boolean;
   readonly submitMfaCode?: (
     submission: RiotMfaSubmission,
   ) => Promise<RiotCredentialConnectResult>;
+  /** Existing owned connection to replace during an isolated reconnect. */
+  readonly targetConnectionId?: string;
 }
 
 type MfaChallenge = {
@@ -50,20 +56,25 @@ function getDesktopBridgeServerSnapshot(): boolean {
   return false;
 }
 
-export function RiotConnectionPanel({
+function RiotConnectionPanelState({
   connectAllowed,
   connectCredentials,
   connectFixture,
   connectSession,
   disconnect,
+  initialLabel = "",
+  initialRegion = "ap",
   initialState,
+  keepConnectFormOpen = false,
   submitMfaCode,
+  targetConnectionId,
 }: RiotConnectionPanelProps) {
+  const router = useRouter();
   const [connectionState, setConnectionState] =
     useState<RiotConnectionState>(initialState);
   const [consentGranted, setConsentGranted] = useState(false);
-  const [region, setRegion] = useState("ap");
-  const [label, setLabel] = useState("");
+  const [region, setRegion] = useState(initialRegion);
+  const [label, setLabel] = useState(initialLabel);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge>();
@@ -72,6 +83,7 @@ export function RiotConnectionPanel({
   const [showJarPaste, setShowJarPaste] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
   // Detect the Electron desktop shell without breaking SSR or hydration. The
   // server snapshot is always false, so the server-rendered HTML never contains
   // the desktop button; after hydration React reconciles to the client snapshot.
@@ -90,6 +102,7 @@ export function RiotConnectionPanel({
 
   function applyResult(result: RiotCredentialConnectResult) {
     if (!result.ok) {
+      setSuccess(undefined);
       setError(result.error);
       return;
     }
@@ -104,6 +117,17 @@ export function RiotConnectionPanel({
 
     setMfaChallenge(undefined);
     setConnectionState("connected");
+    setSuccess(
+      targetConnectionId
+        ? "This Riot account was reconnected."
+        : "Riot account connected. You can add another whenever you’re ready.",
+    );
+    if (!targetConnectionId) {
+      setConsentGranted(false);
+      setLabel("");
+      setUsername("");
+    }
+    router.refresh();
   }
 
   async function signIn() {
@@ -113,10 +137,12 @@ export function RiotConnectionPanel({
 
     setIsPending(true);
     setError(undefined);
+    setSuccess(undefined);
 
     try {
       applyResult(
         await connectCredentials({
+          connectionId: targetConnectionId,
           consentGranted,
           label: label.trim() || undefined,
           password,
@@ -141,6 +167,7 @@ export function RiotConnectionPanel({
 
     setIsPending(true);
     setError(undefined);
+    setSuccess(undefined);
 
     try {
       applyResult(await submitMfaCode({ code: mfaCode.trim() }));
@@ -159,16 +186,24 @@ export function RiotConnectionPanel({
   }
 
   async function connectJar() {
-    if (!connectSession || serializedJar.trim().length === 0 || !consentGranted) {
+    if (
+      !connectSession ||
+      serializedJar.trim().length === 0 ||
+      !consentGranted ||
+      isPending
+    ) {
       return;
     }
 
     setIsPending(true);
     setError(undefined);
+    setSuccess(undefined);
 
     try {
       const result = await connectSession({
+        connectionId: targetConnectionId,
         consentGranted,
+        label: label.trim() || undefined,
         region,
         serializedJar,
       });
@@ -178,6 +213,12 @@ export function RiotConnectionPanel({
       }
 
       setConnectionState("connected");
+      setSuccess(
+        targetConnectionId
+          ? "This Riot account was reconnected."
+          : "Riot account connected. You can add another whenever you’re ready.",
+      );
+      router.refresh();
     } catch {
       setError("The Riot session could not be connected.");
     } finally {
@@ -207,6 +248,7 @@ export function RiotConnectionPanel({
 
     setIsPending(true);
     setError(undefined);
+    setSuccess(undefined);
 
     try {
       const capture = await bridge.connectRiot();
@@ -216,7 +258,9 @@ export function RiotConnectionPanel({
       }
 
       const result = await connectSession({
+        connectionId: targetConnectionId,
         consentGranted: true,
+        label: label.trim() || undefined,
         region,
         serializedJar: capture.jar,
       });
@@ -226,6 +270,12 @@ export function RiotConnectionPanel({
       }
 
       setConnectionState("connected");
+      setSuccess(
+        targetConnectionId
+          ? "This Riot account was reconnected."
+          : "Riot account connected. You can add another whenever you’re ready.",
+      );
+      router.refresh();
     } catch {
       setError("The Riot session could not be connected.");
     } finally {
@@ -240,6 +290,7 @@ export function RiotConnectionPanel({
 
     setIsPending(true);
     setError(undefined);
+    setSuccess(undefined);
 
     try {
       const result = await connectFixture(consentGranted);
@@ -257,12 +308,13 @@ export function RiotConnectionPanel({
   }
 
   async function disconnectSession() {
-    if (isPending) {
+    if (!disconnect || isPending) {
       return;
     }
 
     setIsPending(true);
     setError(undefined);
+    setSuccess(undefined);
 
     try {
       const result = await disconnect();
@@ -281,16 +333,26 @@ export function RiotConnectionPanel({
   }
 
   return (
-    <section aria-labelledby="riot-connection-heading" className="riot-connection-panel">
+    <section
+      aria-labelledby="riot-connection-heading"
+      className="riot-connection-panel"
+      id="connect-riot-account"
+    >
       <div className="riot-connection-heading">
         <div>
           <p className="eyebrow">RIOT CONNECTION</p>
           <h2 id="riot-connection-heading">
-            {connectionState === "connected"
-              ? connectCredentials || connectSession
-                ? "Riot connected"
-                : "Fixture connected"
-              : "Connection paused"}
+            {targetConnectionId
+              ? connectionState === "connected"
+                ? "Riot account reconnected"
+                : "Reconnect this Riot account"
+              : keepConnectFormOpen
+                ? "Connect another Riot account"
+                : connectionState === "connected"
+                  ? connectCredentials || connectSession
+                    ? "Riot connected"
+                    : "Fixture connected"
+                  : "Connect a Riot account"}
           </h2>
         </div>
         <span className={`connection-badge connection-badge-${connectionState}`}>
@@ -308,7 +370,9 @@ export function RiotConnectionPanel({
         <div className="consent-copy">
           <p>
             VAL Checker signs in to Riot on your behalf and stores the
-            resulting session so it can check your shop once a day.
+            resulting session so it can run one automatic storefront check per
+            UTC day. You may also request one separate manual refresh per UTC
+            day.
           </p>
           <p>
             Your password is used only to complete that sign-in. It is never
@@ -329,7 +393,7 @@ export function RiotConnectionPanel({
         </div>
       </details>
 
-      {connectionState === "disconnected" ? (
+      {connectionState === "disconnected" || keepConnectFormOpen ? (
         mfaChallenge ? (
           <div className="riot-mfa-fields">
             <p role="status">
@@ -431,8 +495,9 @@ export function RiotConnectionPanel({
                   />
                 </label>
                 <p className="ship-gate-note" role="note">
-                  Signing in does not fetch your shop. Storefront access still
-                  happens once per account per day.
+                  Signing in does not fetch your shop. Each Riot account gets
+                  one automatic check and one separate manual refresh per UTC
+                  day.
                 </p>
               </div>
             ) : null}
@@ -525,9 +590,10 @@ export function RiotConnectionPanel({
                         : "Connect from cookie export"}
                     </button>
                     <p className="ship-gate-note" role="note">
-                      Fallback for when Riot&apos;s sign-in endpoint refuses
-                      requests from the server. Validates and encrypts the export
-                      without contacting Riot.
+                      Admin fallback for an already-authenticated cookie export.
+                      VAL Checker contacts Riot to verify the account identity
+                      and rotate the session before encrypting it. This does not
+                      fetch the store.
                     </p>
                   </div>
                 ) : null}
@@ -535,7 +601,7 @@ export function RiotConnectionPanel({
             ) : null}
           </>
         )
-      ) : (
+      ) : disconnect ? (
         <div className="disconnect-controls">
           <button disabled={isPending} onClick={disconnectSession} type="button">
             {isPending ? "Disconnecting..." : "Disconnect and delete stored session"}
@@ -546,7 +612,16 @@ export function RiotConnectionPanel({
             invalidate existing sessions.
           </p>
         </div>
-      )}
+      ) : null}
+
+      {success ? (
+        <p
+          className="rounded-card border border-white/20 bg-white/5 px-4 py-3 text-sm"
+          role="status"
+        >
+          {success}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="connection-error" role="alert">
@@ -554,5 +629,19 @@ export function RiotConnectionPanel({
         </p>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Re-key the stateful form when navigation selects another reconnect target.
+ * This prevents labels, MFA challenges, consent, and result messages from one
+ * Riot account carrying into another account's reconnect flow.
+ */
+export function RiotConnectionPanel(props: RiotConnectionPanelProps) {
+  return (
+    <RiotConnectionPanelState
+      key={props.targetConnectionId ?? "new-riot-account"}
+      {...props}
+    />
   );
 }

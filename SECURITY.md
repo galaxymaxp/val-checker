@@ -10,17 +10,20 @@ browsing, or watchlists.
 
 The connect path accepts Riot session material only from an identity authorized
 by the explicit server-only allowlist of verified Supabase user IDs and emails.
-It checks authorization before processing the submitted jar, requires consent,
-validates the bounded input, encrypts it, and stores it without contacting Riot.
-Empty or malformed allowlist configuration fails closed. A client-visible
-eligibility flag is presentation only; the server repeats the authorization at
-the trust boundary. Public signup and Riot-independent features are not
-allowlisted.
+It checks authorization before processing credentials or a submitted jar,
+requires consent, validates bounded input, and encrypts the resulting session.
+Credential sign-in and the administrator-only submitted-jar fallback contact
+Riot's authentication and user-info hosts before storage so the session is
+bound to a stable PUUID; neither path fetches a storefront. Empty or malformed
+allowlist configuration fails closed. A client-visible eligibility flag is
+presentation only; the server repeats authorization at the trust boundary.
+Public signup and Riot-independent features are not allowlisted.
 
-Live Riot access is confined to the protected daily cron path for allowlisted,
-connected accounts. The worker makes one storefront attempt per user shortly
-after the 00:00 UTC rotation. There is no on-demand, polled, user-triggered, or
-debug request path to Riot.
+Live storefront access is confined to the protected automatic worker and the
+authenticated manual-refresh server action for allowlisted, connected accounts.
+Database claims permit at most one automatic attempt per connection and one
+separate manual storefront attempt per stable Riot PUUID in each UTC store day.
+There is no polled, query-driven, or public debug request path to Riot.
 
 ## Assets and trust boundaries
 
@@ -74,12 +77,31 @@ longer allowlisted.
 
 ### Riot request surface and cadence
 
-The only live Riot request surface is the authenticated daily cron worker. A
-database uniqueness claim enforces one attempt per user and UTC rotation even if
-the scheduler invokes the route more than once. The cron secret authenticates
-the scheduler but does not replace the per-user database claim or allowlist.
-Request handlers accept no user-selected target, refresh flag, or query-driven
-override. Tests use injected fetch implementations and must remain offline.
+The authenticated daily cron route enumerates eligible connections and invokes
+the shared storefront worker. A database uniqueness claim enforces one
+automatic attempt per connection and UTC store day even if the scheduler invokes
+the route more than once. The cron secret authenticates the scheduler but does
+not replace the per-connection claim or allowlist.
+
+The manual-refresh server action accepts one validated connection UUID, verifies
+that the signed-in user owns it, and then invokes the same worker with the
+`manual` trigger. A service-only, token-fenced database claim keyed by stable
+Riot PUUID serializes concurrent browsers and devices. A pre-storefront failure
+can be reclaimed after its bounded lease; once a Riot storefront request starts,
+the allowance is exhausted for that store day even if a later network or server
+failure prevents success. This conservative exception to consume-on-success
+prevents replaying an ambiguous request. Automatic and manual claims are
+independent. Internal operator runs use the same worker and do not expose a
+public route. Tests use injected fetch implementations and must remain offline.
+
+Automatic, manual, and internal triggers additionally compete for one
+owner/connection/epoch-fenced session-rotation lease before reauthentication.
+Only its holder can persist rotated session material or cross a storefront
+attempt fence. A pre-attempt lease can be reclaimed after five minutes; an
+attempted lease left by a crashed process is not reclaimed until the next UTC
+store day or an exact reconnect changes the epoch. Normal terminal paths release
+the lease. This prevents two triggers from overwriting one another's rotated jar
+or issuing concurrent storefront requests for the same connection.
 
 ### Leaked logs, exceptions, and telemetry
 
@@ -138,7 +160,7 @@ or availability risk.
 - Disconnecting from VAL Checker deletes local storage but does not itself revoke Riot-side sessions.
 - The retired durability reasoning is preserved in the roadmap, but it is not a guarantee against later enforcement or protocol changes.
 - The connect allowlist limits dogfooding scope; it does not make retained session material harmless or authorize public Riot access.
-- One daily attempt reduces the live request surface but cannot guarantee Riot availability or prevent protocol changes.
+- The bounded maximum of one automatic attempt plus one manual attempt per Riot account and store day reduces the live request surface but cannot guarantee Riot availability or prevent protocol changes.
 - The unavailable lifecycle v2.1 detail has been superseded by an explicit project decision: `OK` resets the counter, `DEAD` stops checks immediately and persists `REAUTH_REQUIRED` without incrementing the counter, `UNKNOWN` and `ERROR` increment it, and a count greater than or equal to 3 also requires reauthentication. This reduces ambiguity but does not make ambiguous failures authoritative evidence of session death.
 
 Please report suspected vulnerabilities privately to the repository owner. Do not include real Riot credentials, cookies, tokens, session material, or encryption keys in a report.

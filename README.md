@@ -23,19 +23,38 @@ remains as a fallback but is restricted to `RIOT_ADMIN_EMAILS`. See the
 Version 2.4 addendum in
 [the roadmap](docs/roadmap.md) for the full decision.
 
-Signing in does not read a storefront. The daily cap is unchanged: one
-storefront request per connected account per UTC rotation.
+Signing in does not read a storefront. One application login may connect
+multiple Riot accounts; every account keeps its own encrypted session, store,
+health, and refresh state. The server resolves the stable Riot PUUID before a
+live session row is inserted or replaced so reconnecting cannot mint another
+allowance.
 
 The rollout starts with the operator's own account only for approximately three
 weeks. Additional users may be added explicitly to the allowlist only after that
 dogfood period. Removing someone from the allowlist prevents a new connection;
 disconnect remains available so stored material can always be deleted.
 
-The worker performs exactly one storefront attempt per user and UTC rotation,
-scheduled for 00:05 UTC. Live Riot requests are allowed only through that daily
-cron path and only for an allowlisted connected account. There is no on-demand
-refresh endpoint, polling loop, user-triggered fetch, or debug route that calls
-Riot. This cadence is an architectural constraint.
+The automatic worker performs at most one storefront attempt per connected Riot
+account and UTC store day, scheduled for 00:05 UTC. A separately identified
+manual refresh is available at most once per Riot PUUID and UTC store day; an
+automatic run never spends it. Both entry points use the same worker pipeline.
+The database claims, owner/connection/epoch checks, and attempt fences are the
+authority—browser state is not.
+
+A shared per-connection session-rotation lease also serializes automatic,
+manual, and internal triggers before Riot reauthentication. A pre-storefront
+lease can recover after five minutes; after the storefront fence, only a normal
+terminal release, the next UTC store day, or an exact reconnect can clear it.
+This prevents concurrent triggers from rotating and overwriting the same
+encrypted session.
+
+A failure before the fenced Riot storefront request can be retried, and a stale
+pre-request claim is recoverable after five minutes. Once a request starts, the
+manual allowance stays exhausted even if Riot or the server fails: this is the
+necessary crash-safe policy that prevents a second storefront request when the
+first request's outcome is ambiguous. A valid storefront is persisted before
+catalog matching or email delivery, including when there are no watchlist
+matches.
 
 ## Session security
 
@@ -127,32 +146,30 @@ migrate old rows by itself.
    pnpm dev
    ```
 
-The local and fixture test paths do not make Riot requests or send real email.
+The unit and fixture test paths do not make Riot requests or send real email.
 Never add captured cookies, tokens, PUUIDs, jars, or production secrets to a
 fixture, snapshot, command, or debug route.
 
 ## Database migrations
 
-Schema changes live in `supabase/migrations` and are applied in timestamp order.
-Test pending migrations locally before deployment. For a hosted Supabase
-project, authenticate and link the correct project, preview the pending changes,
-then apply them:
+Schema changes live in `supabase/migrations` and are tested locally in timestamp
+order. The hosted project has known migration-ledger drift: earlier migrations
+were applied directly and later renamed to match remote timestamps. Before any
+hosted change, reconcile the filenames against
+`supabase_migrations.schema_migrations` and verify the actual `pg_catalog`
+schema. Do not rename an applied migration, run `supabase db push`, or apply the
+new storefront-refresh migration until that reconciliation is reviewed.
 
-```shell
-pnpm exec supabase login
-pnpm exec supabase link --project-ref <project-ref>
-pnpm exec supabase db push --dry-run
-pnpm exec supabase db push
-```
-
-Review the linked project before pushing. Do not use a linked database reset on
-production. The pending `skins.weapon_uuid` migration is deliberately excluded
-until the project owner approves it.
+The pending `20260817065234_storefront_refresh_controls.sql` migration is
+forward-only and intentionally unapplied. It adds the manual-refresh ledger,
+claim/RPC fences, refresh trigger metadata, catalog-independent offer details,
+stable PUUID uniqueness, pending reconnect targeting, and supporting indexes.
 
 ## Deployment
 
-1. Apply the reviewed Supabase migrations and sync the public catalog from a
-   trusted server environment.
+1. Reconcile the hosted migration ledger, obtain approval for the reviewed
+   forward migration, apply it through the agreed deployment process, and sync
+   the public catalog from a trusted server environment.
 2. Configure every required environment variable above in the Vercel project.
    Environment changes apply only to subsequent deployments.
 3. Verify the Resend sending domain and set `RESEND_FROM_EMAIL` to an identity on
@@ -161,28 +178,33 @@ until the project owner approves it.
    approximately three-week dogfood period.
 5. Deploy the Next.js application. The committed Vercel cron configuration runs
    the protected worker route daily at 00:05 UTC. Do not add another scheduler or
-   expose that route as a user action.
+   expose that protected cron route as a user action. Manual refresh uses an
+   authenticated server action with an exact owned connection ID.
 
-`CRON_SECRET` protects the scheduled route, while the database's per-user UTC
-rotation claim enforces the one-attempt cadence even if a scheduler invocation
-is duplicated. Neither control replaces the Riot connect allowlist.
+`CRON_SECRET` protects the scheduled route, while per-connection automatic and
+per-PUUID manual claims enforce their independent UTC-day limits even if a
+scheduler or browser invocation is duplicated. Neither control replaces the
+Riot connect allowlist.
 
 ## Operational visibility
 
 Each daily pass writes one `riot_run_logs` row per account it touches, so a
 dogfood day can be reviewed without reading Vercel logs. Every row records the
-timestamp, the outcome (`checked`, `skipped`, or `failed`), the Riot session
-classification, how many watchlist matches were found, and how many emails were
-actually sent.
+timestamp, trigger (`cron`, `manual`, or `operator`), outcome (`checked`,
+`skipped`, or `failed`), Riot session classification, how many watchlist matches
+were found, and how many emails were actually sent.
 
 The `reason` column uses a closed vocabulary such as `NOT_ALLOWLISTED`,
-`DAILY_CLAIM_HELD`, `REAUTH_FAILED`, or `STOREFRONT_FAILED`. Raw error messages
+`ACCOUNT_UNAVAILABLE`, `DAILY_CLAIM_HELD`, `MANUAL_CLAIM_HELD`,
+`SESSION_LEASE_HELD`, `CATALOG_FAILED`, `REAUTH_FAILED`, or
+`STOREFRONT_FAILED`. Raw error messages
 are deliberately never stored, so a log row cannot carry cookies, tokens, or a
 PUUID. The table is service-only and is read with an elevated key, for example
 through the Supabase dashboard:
 
 ```sql
-select ran_at, outcome, reason, classification, matches_found, emails_sent
+select ran_at, connection_id, trigger, outcome, reason, classification,
+       matches_found, emails_sent
 from public.riot_run_logs
 order by ran_at desc
 limit 50;
