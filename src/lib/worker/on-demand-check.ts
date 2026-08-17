@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import type { Database } from "@/src/types/database";
 import type { DailyStorefrontSummary } from "@/src/lib/worker/storefront-worker";
 
 export type OnDemandCheckOutcome = {
@@ -63,27 +66,60 @@ export async function runDailyCheckForUser(
  * it taken and correctly skips. The separate manual allowance is never touched,
  * so connecting does not cost the user their manual refresh.
  *
- * Scoped to the signed-in user and never throws: connecting has already
- * succeeded by this point, and a storefront failure must not undo it.
+ * The worker requires an exact connection, so this resolves the caller's
+ * connections and runs one per account. Existing accounts are cheap: their
+ * daily claim is already spent, so they skip without a Riot call.
+ *
+ * Never throws — connecting has already succeeded by the time this runs — but
+ * failures are logged, because a silent catch here previously hid a
+ * configuration error and no store was ever fetched on connect.
  */
 export async function runConnectStorefrontFetch(
   userId: string,
+  admin?: SupabaseClient<Database>,
 ): Promise<OnDemandCheckOutcome> {
   if (!DATABASE_UUID_PATTERN.test(userId)) {
     return { ran: false, summary: null };
   }
 
   try {
+    // Reuse the caller's admin client when it already has one; connecting
+    // has just used it, and a second client is pure overhead.
+    const client =
+      admin ??
+      (await import("@/src/lib/supabase/server-admin")).createAdminSupabaseClient();
+    const { data, error } = await client
+      .from("riot_connections")
+      .select("id")
+      .eq("user_id", userId);
+
+    if (error || !data || data.length === 0) {
+      return { ran: false, summary: null };
+    }
+
     const { buildConfiguredDailyStorefrontWorker } = await import(
       "@/src/lib/worker/storefront-runtime"
     );
-    const worker = await buildConfiguredDailyStorefrontWorker({
-      trigger: "operator",
-      userId,
+
+    let refreshed = 0;
+    let last: OnDemandCheckOutcome["summary"] = null;
+
+    for (const row of data) {
+      const worker = await buildConfiguredDailyStorefrontWorker({
+        connectionId: row.id,
+        trigger: "operator",
+        userId,
+      });
+      const summary = await worker.run();
+      refreshed += summary.refreshed;
+      last = summary;
+    }
+
+    return { ran: refreshed > 0, summary: last };
+  } catch (error) {
+    console.error("[connect-fetch] storefront fetch failed", {
+      kind: error instanceof Error ? error.name : "Unknown",
     });
-    const summary = await worker.run();
-    return { ran: summary.refreshed > 0, summary };
-  } catch {
     return { ran: false, summary: null };
   }
 }

@@ -86,8 +86,10 @@ export async function connectSubmittedRiotJar(
     return { error: RIOT_CONNECT_FAILED_MESSAGE, ok: false };
   }
 
+  let connectAdmin;
   try {
     const admin = createAdminSupabaseClient();
+    connectAdmin = admin;
     const store = new SupabaseEncryptedSessionStore(
       admin,
       new AesGcmSessionCipher(loadSessionKeyring()),
@@ -132,7 +134,7 @@ export async function connectSubmittedRiotJar(
     const { runConnectStorefrontFetch } = await import(
       "@/src/lib/worker/on-demand-check"
     );
-    await runConnectStorefrontFetch(identity.userId);
+    await runConnectStorefrontFetch(identity.userId, connectAdmin);
   } catch {
     // The store simply stays empty until the next refresh.
   }

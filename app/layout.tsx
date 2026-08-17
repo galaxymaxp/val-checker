@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Night.Market Watch",
-  description: "Build a watchlist from the VALORANT skin catalog.",
+  title: "VAL Checker",
+  description: "Track your VALORANT daily store and watchlist matches.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

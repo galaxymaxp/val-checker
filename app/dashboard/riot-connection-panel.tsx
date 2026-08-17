@@ -386,7 +386,6 @@ function RiotConnectionPanelState({
     >
       <div className="riot-connection-heading">
         <div>
-          <p className="eyebrow">RIOT CONNECTION</p>
           <h2 id="riot-connection-heading">
             {targetConnectionId
               ? connectionState === "connected"
