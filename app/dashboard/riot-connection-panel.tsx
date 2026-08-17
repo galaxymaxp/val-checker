@@ -491,11 +491,7 @@ function RiotConnectionPanelState({
                   session back. Riot rejects sign-ins made from our server, so
                   this is the only route that works.
                 </p>
-                {deepLink ? (
-                  <p>
-                    <a href={deepLink}>Open the desktop app</a>
-                  </p>
-                ) : null}
+
               </div>
             ) : null}
 
@@ -582,13 +578,14 @@ function RiotConnectionPanelState({
               >
                 {isPending ? "Connecting fixture..." : "Connect fixture session"}
               </button>
-            ) : (
+            ) : !connectAllowed ? (
+              // Only a real state gets a control. An allowlisted account with
+              // no wired form used to land on a disabled "not yet available"
+              // button presented as the primary action.
               <button disabled type="button">
-                {connectAllowed
-                  ? "Riot connection not yet available"
-                  : "Riot connection access not enabled"}
+                Riot connection access not enabled
               </button>
-            )}
+            ) : null}
 
             {!connectAllowed ? (
               <p className="ship-gate-note" role="note">
@@ -600,6 +597,11 @@ function RiotConnectionPanelState({
 
             {connectSession ? (
               <div className="riot-admin-fallback">
+                {deepLink ? (
+                  <p>
+                    <a href={deepLink}>Open the desktop app</a>
+                  </p>
+                ) : null}
                 <h3>Paste the captured session</h3>
                 <p role="note">
                   Run <code>pnpm desktop:capture</code>, sign in on Riot&apos;s
