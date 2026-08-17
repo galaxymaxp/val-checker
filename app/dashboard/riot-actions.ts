@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { mintCaptureToken } from "@/src/lib/desktop/capture-token";
 import {
   isRiotAdmin,
   loadRiotConnectAllowlist,
   type RiotConnectIdentity,
 } from "@/src/lib/riot/connect-allowlist";
+import { connectSubmittedRiotJar } from "@/src/lib/riot/connect-submitted-jar";
 import {
   type CredentialConnectResult,
   RiotConnectionService,
@@ -33,6 +35,7 @@ import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import type {
   RiotConnectionMutationResult,
   RiotCredentialConnectResult,
+  RiotDesktopCaptureTokenResult,
 } from "@/src/types/riot-connection";
 
 const CONNECT_FAILED_MESSAGE = "The Riot session could not be connected.";
@@ -279,91 +282,56 @@ export async function connectRiotSession(
   }
 
   const identity: RiotConnectIdentity = {
-    email:
-      typeof claims?.email === "string" ? claims.email : undefined,
+    email: typeof claims?.email === "string" ? claims.email : undefined,
     userId,
   };
-  let allowlist;
+
+  // The allowlist, the admin-only gate on the raw jar path, the shape checks,
+  // the connect itself and the follow-up storefront fetch all live in the
+  // shared helper, so /api/desktop/connect cannot become a way around any of
+  // them.
+  const result = await connectSubmittedRiotJar(identity, submission);
+  if (!result.ok) {
+    return result;
+  }
+
+  revalidatePath("/dashboard", "layout");
+  return result;
+}
+
+/**
+ * Mints the one-time token that starts the desktop deep-link handshake
+ * (valchecker://capture?token=...). The token proves which signed-in user a
+ * captured jar belongs to, so it is minted behind the exact gates that guard
+ * the jar submission itself: the connect allowlist plus the admin-only gate on
+ * the raw jar path. The raw token is returned once and only its hash is
+ * stored; it is never logged.
+ */
+export async function createDesktopCaptureToken(): Promise<RiotDesktopCaptureTokenResult> {
+  const resolved = await resolveConnectIdentity();
+  if (!resolved.ok) {
+    return { error: resolved.error, ok: false };
+  }
 
   try {
-    allowlist = loadRiotConnectAllowlist();
-    // Authorization happens before the submitted jar is read or transformed.
-    allowlist.assertAllowed(identity);
+    loadRiotConnectAllowlist().assertAllowed(resolved.identity);
   } catch {
     return { error: "Riot connection access is not enabled.", ok: false };
   }
 
-  // The raw jar paste is an admin-only fallback (roadmap Version 2.4). Ordinary
-  // allowlisted users connect through the sign-in form instead.
-  if (!isRiotAdmin(identity)) {
+  if (!isRiotAdmin(resolved.identity)) {
     return { error: "Riot connection access is not enabled.", ok: false };
   }
 
-  if (!isRecord(submission)) {
-    return { error: CONNECT_FAILED_MESSAGE, ok: false };
-  }
-
-  if (submission.consentGranted !== true) {
-    return {
-      error: "Please confirm consent before connecting.",
-      ok: false,
-    };
-  }
-
-  if (
-    typeof submission.serializedJar !== "string" ||
-    (submission.region !== undefined && typeof submission.region !== "string") ||
-    (submission.label !== undefined && typeof submission.label !== "string") ||
-    (submission.connectionId !== undefined &&
-      !databaseUuidSchema.safeParse(submission.connectionId).success)
-  ) {
-    return { error: CONNECT_FAILED_MESSAGE, ok: false };
-  }
-
   try {
-    const admin = createAdminSupabaseClient();
-    const store = new SupabaseEncryptedSessionStore(
-      admin,
-      new AesGcmSessionCipher(loadSessionKeyring()),
+    const token = await mintCaptureToken(
+      createAdminSupabaseClient(),
+      resolved.identity.userId,
     );
-    const service = new RiotConnectionService(
-      new ManualCookieProvider(),
-      store,
-      allowlist,
-      new SubmittedCookieProvider(),
-      undefined,
-      undefined,
-      new LiveRiotSessionIdentityResolver(createTlsTunedFetch()),
-    );
-
-    await service.connect({
-      consentGranted: submission.consentGranted,
-      connectionId: submission.connectionId,
-      identity,
-      label: submission.label,
-      region: submission.region,
-      session: { serializedJar: submission.serializedJar },
-    });
-  } catch (error) {
-    if (error instanceof RiotConsentRequiredError) {
-      return {
-        error: "Please confirm consent before connecting.",
-        ok: false,
-      };
-    }
-
-    // Only the error's class name. Messages from this path can quote Riot
-    // responses and session material, so they are never logged.
-    console.error("[riot-connect] failed", {
-      kind: error instanceof Error ? error.name : "Unknown",
-    });
-    return { error: CONNECT_FAILED_MESSAGE, ok: false };
+    return { ok: true, token };
+  } catch {
+    return { error: "The capture link could not be created.", ok: false };
   }
-
-  await fetchStorefrontAfterConnect(userId);
-
-  revalidatePath("/dashboard", "layout");
-  return { ok: true };
 }
 
 export async function disconnectRiotSession(

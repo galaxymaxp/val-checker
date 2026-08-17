@@ -5,6 +5,7 @@ import {
   connectRiotSession,
   disconnectRiotSession,
   submitRiotMfaCode,
+  createDesktopCaptureToken,
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
@@ -67,6 +68,9 @@ export default async function RiotConnectionPage({
           riotConnectAllowed ? connectRiotCredentials : undefined
         }
         connectSession={riotJarPasteAllowed ? connectRiotSession : undefined}
+        createCaptureToken={
+          riotJarPasteAllowed ? createDesktopCaptureToken : undefined
+        }
         initialLabel={reconnectAccount?.label ?? ""}
         initialRegion={reconnectAccount?.region ?? "ap"}
         initialState="disconnected"

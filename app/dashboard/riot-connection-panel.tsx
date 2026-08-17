@@ -7,6 +7,7 @@ import type { RiotDesktopCaptureResult } from "@/src/types/desktop-bridge";
 import type {
   RiotConnectionMutationResult,
   RiotConnectionState,
+  RiotDesktopCaptureTokenResult,
   RiotCredentialConnectResult,
   RiotCredentialSubmission,
   RiotMfaSubmission,
@@ -15,6 +16,8 @@ import type {
 
 interface RiotConnectionPanelProps {
   readonly connectAllowed: boolean;
+  /** Mints the one-time token behind the valchecker:// deep link. */
+  readonly createCaptureToken?: () => Promise<RiotDesktopCaptureTokenResult>;
   readonly connectCredentials?: (
     submission: RiotCredentialSubmission,
   ) => Promise<RiotCredentialConnectResult>;
@@ -61,6 +64,7 @@ function RiotConnectionPanelState({
   connectCredentials,
   connectFixture,
   connectSession,
+  createCaptureToken,
   disconnect,
   initialLabel = "",
   initialRegion = "ap",
@@ -81,6 +85,7 @@ function RiotConnectionPanelState({
   const [mfaCode, setMfaCode] = useState("");
   const [serializedJar, setSerializedJar] = useState("");
   const [showJarPaste, setShowJarPaste] = useState(false);
+  const [desktopPending, setDesktopPending] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -89,6 +94,40 @@ function RiotConnectionPanelState({
   // the desktop button; after hydration React reconciles to the client snapshot.
   // window is only touched in the client snapshot, which never runs during SSR
   // (and stays undefined in jsdom, so the button does not render under test).
+  /**
+   * Starts the desktop hand-off: mint a one-time token, then hand it to the
+   * Electron app through the protocol link. The jar never touches this page —
+   * the desktop app POSTs it straight to /api/desktop/connect.
+   */
+  async function startDesktopCapture(): Promise<void> {
+    if (!createCaptureToken) {
+      return;
+    }
+
+    setDesktopPending(true);
+    setError(undefined);
+    setSuccess(undefined);
+
+    try {
+      const result = await createCaptureToken();
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      // Navigating to the protocol URL is what launches the desktop app. The
+      // token is single use and expires in five minutes.
+      window.location.href = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
+      setSuccess(
+        "Opening the desktop app. Sign in to Riot there, then return here and refresh.",
+      );
+    } catch {
+      setError("The capture link could not be created.");
+    } finally {
+      setDesktopPending(false);
+    }
+  }
+
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopBridge,
     getDesktopBridgeSnapshot,
@@ -548,6 +587,27 @@ function RiotConnectionPanelState({
               <p className="ship-gate-note" role="note">
                 Riot connection is not currently available for this account.
               </p>
+            ) : null}
+
+            {createCaptureToken ? (
+              <div className="riot-desktop-connect">
+                <button
+                  disabled={desktopPending}
+                  onClick={() => {
+                    void startDesktopCapture();
+                  }}
+                  type="button"
+                >
+                  {desktopPending
+                    ? "Opening desktop app…"
+                    : "Connect with the desktop app"}
+                </button>
+                <p className="riot-hint">
+                  Signs in on Riot&apos;s own page in the desktop app, then
+                  hands the session back automatically. Riot rejects sign-ins
+                  made from the server, so this is the reliable route.
+                </p>
+              </div>
             ) : null}
 
             {connectSession ? (
