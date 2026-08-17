@@ -75,12 +75,14 @@ export function RiotAccountSwitcher({
           {accounts.map((account, index) => {
             const selected = account.id === selectedConnectionId;
             const name = accountName(account, index);
+            const health = connectionHealth(account);
+            const connected = account.authStatus === "CONNECTED";
 
             return (
               <li key={account.id}>
                 <Link
                   aria-current={selected ? "page" : undefined}
-                  className={`flex min-h-14 min-w-44 items-center justify-between gap-4 rounded-card border px-4 py-2 no-underline ${
+                  className={`relative flex min-h-16 min-w-48 flex-col justify-center gap-1 rounded-card border px-4 py-2.5 no-underline transition-colors duration-1 ease-out ${
                     selected
                       ? "border-white/35 bg-white/[0.09] text-ink!"
                       : "border-line-soft bg-bg-inset text-ink-muted! hocus:border-line hocus:bg-white/5 hocus:text-ink!"
@@ -88,23 +90,30 @@ export function RiotAccountSwitcher({
                   href={`/dashboard?account=${encodeURIComponent(account.id)}`}
                   title={name}
                 >
-                  <span className="min-w-0">
-                    <span className="block max-w-40 truncate text-sm font-semibold">
+                  {/* The shelf label: marks the current account without
+                      relying on the surface tint alone. */}
+                  {selected ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-4 top-0 h-px bg-white/70"
+                    />
+                  ) : null}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="max-w-40 truncate text-sm font-semibold">
                       {name}
                     </span>
-                    <span className="block text-[11px] text-ink-dim">
-                      {account.region?.toUpperCase() ?? "Region pending"}
-                    </span>
+                    {/* Decorative quick-scan cue only; the status is spelled
+                        out in text below, so shape never carries meaning. */}
+                    <span
+                      aria-hidden="true"
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        connected ? "bg-white" : "border border-white/50"
+                      }`}
+                    />
                   </span>
-                  <span
-                    aria-label={connectionHealth(account)}
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      account.authStatus === "CONNECTED"
-                        ? "bg-white"
-                        : "border border-white/50"
-                    }`}
-                    role="img"
-                  />
+                  <span className="block truncate text-[11px] text-ink-dim">
+                    {account.region?.toUpperCase() ?? "Region pending"} · {health}
+                  </span>
                 </Link>
               </li>
             );

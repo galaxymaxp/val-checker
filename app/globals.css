@@ -28,6 +28,18 @@
   --mint-dim: rgba(255, 255, 255, 0.07);
   --amber: rgba(255, 255, 255, 0.72);
 
+  /* Collector tier accents. The only hue in the system, and deliberately
+     rationed: a hairline rail under each offer and a faint wash behind its
+     artwork. Never a fill, never a text colour — contrast still comes from
+     the monochrome ramp above, so colour is never load-bearing. Channels are
+     bare so they compose as rgb(var(--tier) / <alpha>). */
+  --tier-select: 148 163 184;
+  --tier-deluxe: 94 234 212;
+  --tier-premium: 244 114 182;
+  --tier-ultra: 250 204 21;
+  --tier-exclusive: 251 146 60;
+  --tier-unknown: 255 255 255;
+
   --radius-sm: 10px;
   --radius: 14px;
   --radius-lg: 22px;

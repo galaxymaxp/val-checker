@@ -59,7 +59,7 @@ export function DailyShopStage({
   return (
     <section
       aria-labelledby="todays-store-heading"
-      className="relative flex flex-col gap-7 overflow-hidden rounded-panel border border-line bg-bg-card px-4 py-7 shadow-panel sm:px-7 sm:py-9"
+      className="relative flex flex-col gap-8 overflow-hidden rounded-panel border border-line bg-bg-card px-4 py-8 shadow-panel sm:px-8 sm:py-10"
     >
       {/* Atmosphere: two blurred gradient plates, breathing via shop-glow. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -80,15 +80,19 @@ export function DailyShopStage({
       </header>
 
       {hasOffers ? (
-        <div className="relative space-y-4">
-          <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="list">
+        <div className="relative space-y-5">
+          <ul
+            className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5"
+            role="list"
+          >
             {shop!.offers.map((offer, index) => (
               <li className="min-w-0" key={`${offer.skinUuid}-${index}`}>
                 <DailyShopCard offer={offer} />
               </li>
             ))}
           </ul>
-          <p className="text-xs text-ink-muted">
+          {/* Gallery caption: provenance for the row above, deliberately quiet. */}
+          <p className="border-t border-line-soft pt-4 text-xs text-ink-muted">
             {formatRotation(shop!.rotationDate)} · {shop!.offers.length} offers ·
             checked {formatCheckedTime(shop!.checkedAt)}
           </p>
