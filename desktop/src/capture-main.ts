@@ -192,10 +192,11 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     // In development Electron runs from its own binary, so the protocol has to
     // be registered against the script path for the OS to hand back a URL.
+    const scriptPath = process.argv[1];
     const registered =
-      process.defaultApp && process.argv.length >= 2
+      process.defaultApp && scriptPath
         ? app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
-            path.resolve(process.argv[1]),
+            path.resolve(scriptPath),
           ])
         : app.setAsDefaultProtocolClient(PROTOCOL);
 
