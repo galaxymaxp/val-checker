@@ -86,6 +86,7 @@ function RiotConnectionPanelState({
   const [serializedJar, setSerializedJar] = useState("");
   const [showJarPaste, setShowJarPaste] = useState(false);
   const [desktopPending, setDesktopPending] = useState(false);
+  const [captureCommand, setCaptureCommand] = useState<string>();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -115,11 +116,16 @@ function RiotConnectionPanelState({
         return;
       }
 
-      // Navigating to the protocol URL is what launches the desktop app. The
-      // token is single use and expires in five minutes.
+      // Always surface the command. Registering a custom protocol is
+      // unreliable on Windows outside a packaged build, and a browser silently
+      // ignores a scheme it has no handler for, so the deep link is treated as
+      // a convenience and never as the only route.
+      setCaptureCommand(
+        `pnpm desktop:capture --token=${result.token}`,
+      );
       window.location.href = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
       setSuccess(
-        "Opening the desktop app. Sign in to Riot there, then return here and refresh.",
+        "If the desktop app did not open, run the command below. The link is single use and expires in five minutes.",
       );
     } catch {
       setError("The capture link could not be created.");
@@ -607,6 +613,26 @@ function RiotConnectionPanelState({
                   hands the session back automatically. Riot rejects sign-ins
                   made from the server, so this is the reliable route.
                 </p>
+                {captureCommand ? (
+                  <div className="riot-capture-command">
+                    <label>
+                      <span>Run this if the desktop app did not open</span>
+                      <input
+                        onFocus={(event) => event.currentTarget.select()}
+                        readOnly
+                        value={captureCommand}
+                      />
+                    </label>
+                    <button
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(captureCommand);
+                      }}
+                      type="button"
+                    >
+                      Copy command
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
