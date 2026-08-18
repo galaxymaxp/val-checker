@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { DailyShopStage } from "@/app/dashboard/_components/daily-shop-stage";
+import { TestEmailButton } from "@/app/dashboard/test-email-button";
+import { sendTestStorefrontEmail } from "@/app/dashboard/riot-actions";
 import { InventoryGrid } from "@/app/dashboard/_components/inventory-grid";
 import { RiotAccountSwitcher } from "@/app/dashboard/riot-account-switcher";
 import { refreshRiotStorefront } from "@/app/dashboard/riot-actions";
@@ -73,6 +75,7 @@ export default async function DashboardPage({
         />
       ) : null}
       <InventoryGrid tiles={tiles} />
+          <TestEmailButton sendTestEmail={sendTestStorefrontEmail} />
     </main>
   );
 }
