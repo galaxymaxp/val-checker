@@ -24,7 +24,8 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:watch": "vitest",
     "desktop:capture": "node desktop/scripts/launch.mjs --capture",
-    "desktop:register": "node desktop/scripts/launch.mjs --register"
+    "desktop:register": "node desktop/scripts/launch.mjs --register",
+    "desktop:serve": "node desktop/scripts/launch.mjs --serve"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

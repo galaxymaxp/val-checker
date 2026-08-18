@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import path from "node:path";
 
 import { app, BrowserWindow, clipboard, dialog } from "electron";
@@ -29,6 +30,8 @@ import { captureRiotJar } from "./riot-capture.js";
 
 const APP_URL = process.env.VAL_CHECKER_URL ?? "http://localhost:3000";
 const PROTOCOL = "valchecker";
+/** Fixed loopback port the web app calls to start a capture. */
+const SERVE_PORT = 47821;
 
 /** Pulls the capture token out of a valchecker://capture?token=... argv URL. */
 function tokenFromDeepLink(value: string): string | null {
@@ -160,6 +163,103 @@ async function runCapture(token: string | null): Promise<void> {
   });
 }
 
+/**
+ * Loopback listener.
+ *
+ * Browsers refuse to hand a custom protocol URL to the OS — every browser
+ * tested reported "unknown protocol" — but they will happily fetch
+ * http://127.0.0.1, which is how desktop apps and web apps normally talk.
+ *
+ * This cannot launch the app; the page can only reach a listener that is
+ * already running. That is the whole trade: run the app once, and connecting
+ * from the browser works from then on.
+ *
+ * The capture token is still required and is still single use, so a page that
+ * is not the signed-in app cannot obtain a usable session: it would need a
+ * token minted for that exact user. Bound to 127.0.0.1 so nothing off-machine
+ * can reach it.
+ */
+function serveCaptureRequests(): void {
+  const server = createServer((request, response) => {
+    const origin = request.headers.origin ?? "*";
+    const cors = {
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Origin": origin,
+    };
+
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, cors);
+      response.end();
+      return;
+    }
+
+    if (request.method !== "POST" || !request.url?.startsWith("/capture")) {
+      response.writeHead(404, cors);
+      response.end();
+      return;
+    }
+
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+      // A capture request is a short token and JSON framing, nothing more.
+      if (body.length > 4096) {
+        request.destroy();
+      }
+    });
+
+    request.on("end", () => {
+      void (async () => {
+        let token: string | null = null;
+        try {
+          const parsed: unknown = JSON.parse(body);
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            typeof (parsed as { token?: unknown }).token === "string"
+          ) {
+            token = (parsed as { token: string }).token;
+          }
+        } catch {
+          token = null;
+        }
+
+        if (!token) {
+          response.writeHead(400, {
+            ...cors,
+            "Content-Type": "application/json",
+          });
+          response.end(JSON.stringify({ ok: false }));
+          return;
+        }
+
+        const result = await captureRiotJar();
+        if (!result.ok) {
+          response.writeHead(200, {
+            ...cors,
+            "Content-Type": "application/json",
+          });
+          response.end(JSON.stringify({ ok: false, reason: result.reason }));
+          return;
+        }
+
+        const handoff = await postCapture(token, result.jar);
+        response.writeHead(200, {
+          ...cors,
+          "Content-Type": "application/json",
+        });
+        response.end(JSON.stringify({ ok: handoff.ok }));
+      })();
+    });
+  });
+
+  server.listen(SERVE_PORT, "127.0.0.1", () => {
+    console.log(`Riot capture: listening on http://127.0.0.1:${SERVE_PORT}`);
+    console.log("Leave this running, then connect from the web app.");
+  });
+}
+
 function shutdown(): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.destroy();
@@ -215,6 +315,12 @@ if (!app.requestSingleInstanceLock()) {
         type: registered ? "info" : "warning",
       });
       shutdown();
+      return;
+    }
+
+    // Serve mode stays resident so the web app can reach it.
+    if (process.argv.includes("--serve")) {
+      serveCaptureRequests();
       return;
     }
 

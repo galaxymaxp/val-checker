@@ -131,7 +131,9 @@ try {
   // straight to Riot's login, putting the resulting jar on the clipboard. That
   // avoids signing into Supabase inside Electron, which Google blocks for OAuth.
   const captureOnly =
-    process.argv.includes("--capture") || process.argv.includes("--register");
+    process.argv.includes("--capture") ||
+    process.argv.includes("--register") ||
+    process.argv.includes("--serve");
   const entry = captureOnly
     ? path.join(desktopDir, "dist", "capture-main.js")
     : ".";

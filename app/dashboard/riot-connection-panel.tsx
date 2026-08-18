@@ -85,7 +85,6 @@ function RiotConnectionPanelState({
   const [mfaCode, setMfaCode] = useState("");
   const [serializedJar, setSerializedJar] = useState("");
   const [showJarPaste, setShowJarPaste] = useState(false);
-  const [deepLink, setDeepLink] = useState<string>();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -269,15 +268,38 @@ function RiotConnectionPanelState({
         return;
       }
 
-      // Firefox and Firefox-based browsers silently drop a scripted
-      // navigation to an unregistered-looking scheme. A real link the user
-      // activates gets the "open with" prompt instead, so the automatic
-      // attempt is a convenience and the link is the dependable path.
-      const link = `valchecker://capture?token=${encodeURIComponent(result.token)}`;
-      setDeepLink(link);
-      window.location.href = link;
-      setSuccess(
-        "If the desktop app did not open, use the link below. It works once and expires in five minutes.",
+      // Every browser tested refuses to hand a custom protocol URL to the OS
+      // ("unknown protocol"), but plain loopback HTTP is always allowed. The
+      // desktop app must already be running to answer; it cannot be launched
+      // from a page.
+      let handoff: Response;
+      try {
+        handoff = await fetch("http://127.0.0.1:47821/capture", {
+          body: JSON.stringify({ token: result.token }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+      } catch {
+        setError(
+          "The desktop app is not running. Start it with `pnpm desktop:serve`, then try again.",
+        );
+        return;
+      }
+
+      const outcome: unknown = await handoff.json().catch(() => null);
+      const ok =
+        typeof outcome === "object" &&
+        outcome !== null &&
+        (outcome as { ok?: unknown }).ok === true;
+
+      if (ok) {
+        setSuccess("Riot account connected.");
+        router.refresh();
+        return;
+      }
+
+      setError(
+        "Riot sign-in did not complete. Check the desktop window and try again.",
       );
     } catch {
       setError("The desktop sign-in could not be started.");
@@ -487,9 +509,9 @@ function RiotConnectionPanelState({
                     : "Sign in to Riot (desktop)"}
                 </button>
                 <p role="note">
-                  Signs in through Riot&apos;s own window, then hands the
-                  session back. Riot rejects sign-ins made from our server, so
-                  this is the only route that works.
+                  Opens Riot&apos;s own sign-in window and hands the session
+                  back automatically. Requires the desktop app to be running
+                  (<code>pnpm desktop:serve</code>).
                 </p>
 
               </div>
@@ -597,11 +619,6 @@ function RiotConnectionPanelState({
 
             {connectSession ? (
               <div className="riot-admin-fallback">
-                {deepLink ? (
-                  <p>
-                    <a href={deepLink}>Open the desktop app</a>
-                  </p>
-                ) : null}
                 <button
                   aria-expanded={showJarPaste}
                   onClick={() => setShowJarPaste((shown) => !shown)}
