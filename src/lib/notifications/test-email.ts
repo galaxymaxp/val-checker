@@ -17,7 +17,10 @@ interface StoredOffer {
     readonly amount: number;
     readonly currencyUuid: string;
   }[];
-  readonly rewards?: readonly { readonly itemId?: string }[];
+  readonly rewards?: readonly {
+    readonly levelUuid?: string;
+    readonly skinUuid?: string;
+  }[];
   readonly skinUuid?: string | null;
 }
 
@@ -31,6 +34,9 @@ interface StoredOffer {
  * allowance spent. It reads a stored store and sends, so it can be used
  * repeatedly to verify delivery without affecting real notifications.
  */
+/** Valorant Points. Other currencies are promotional. */
+const VP_CURRENCY_UUID = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741";
+
 export async function sendStorefrontTestEmail(
   admin: SupabaseClient<Database>,
   userId: string,
@@ -69,18 +75,22 @@ export async function sendStorefrontTestEmail(
 
   const offer = offers[Math.floor(Math.random() * offers.length)]!;
 
-  // offer_details carries a resolved skin uuid once the catalog has matched
-  // the offer; older rows and unsynced skins fall back to the offer id, which
-  // is what the level uuid is keyed on.
-  const lookupUuid = offer.skinUuid ?? offer.offerId ?? null;
+  // The offer's reward carries the resolved skin uuid directly; the top-level
+  // skinUuid is only filled by later catalog enrichment and is usually null.
+  const skinUuid =
+    offer.skinUuid ??
+    offer.rewards?.find(
+      (reward: { skinUuid?: string }) => reward.skinUuid,
+    )?.skinUuid ??
+    null;
 
   let skinName = "A watched skin";
   let imageUrl: string | null = null;
-  if (lookupUuid) {
+  if (skinUuid) {
     const { data: skin } = await admin
       .from("skins")
       .select("display_name, display_icon, full_render")
-      .eq("skin_uuid", lookupUuid)
+      .eq("skin_uuid", skinUuid)
       .maybeSingle();
     if (skin) {
       skinName = skin.display_name ?? skinName;
@@ -88,9 +98,6 @@ export async function sendStorefrontTestEmail(
     }
   }
 
-  // Valorant Points is the only currency worth showing; anything else is a
-  // promo currency and is left out rather than rendered as a raw uuid.
-  const VP_CURRENCY_UUID = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741";
   const costs = offer.costs ?? [];
   const priceVp =
     costs.find(
@@ -104,7 +111,7 @@ export async function sendStorefrontTestEmail(
     displayName: skinName,
     expiresAt: shop?.expires_at ?? new Date().toISOString(),
     imageUrl,
-    match: { offers: [], skinUuid: lookupUuid ?? "unknown-skin" },
+    match: { offers: [], skinUuid: skinUuid ?? "unknown-skin" },
     priceVp,
   });
 
