@@ -35,6 +35,21 @@ export function renderStorefrontMatchEmail(
   const displayName = escapeHtml(input.displayName);
   const expiresAt = escapeHtml(input.expiresAt);
 
+  // A raw ISO string is machine output. Show a readable UTC time and keep the
+  // exact value in the datetime attribute for clients that use it.
+  const parsedExpiry = new Date(input.expiresAt);
+  const expiresLabel = Number.isNaN(parsedExpiry.getTime())
+    ? expiresAt
+    : escapeHtml(
+        parsedExpiry.toLocaleString("en-US", {
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          month: "short",
+          timeZone: "UTC",
+        }) + " UTC",
+      );
+
   // Only http(s) artwork is embedded; anything else is dropped rather than
   // written into the message, since this value comes from catalog data.
   const artwork =
@@ -56,7 +71,7 @@ export function renderStorefrontMatchEmail(
       `<h1>${displayName} is in your store!</h1>`,
       artwork,
       price,
-      `<p>It is available in today&#39;s rotation, which ends at <time datetime="${expiresAt}">${expiresAt}</time>.</p>`,
+      `<p>It is available in today&#39;s rotation, which ends <time datetime="${expiresAt}">${expiresLabel}</time>.</p>`,
       "<p>VAL Checker is not affiliated with Riot Games.</p>",
       "</body>",
       "</html>",
