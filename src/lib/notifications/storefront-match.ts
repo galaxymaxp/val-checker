@@ -4,7 +4,11 @@ import type { StorefrontSkinMatch } from "@/src/lib/storefront/match";
 export interface StorefrontMatchEmailInput {
   readonly displayName: string;
   readonly expiresAt: string;
+  /** Skin artwork, shown at the top. Omitted when the catalog has none. */
+  readonly imageUrl?: string | null;
   readonly match: StorefrontSkinMatch;
+  /** Price in Valorant Points, when the offer carries one. */
+  readonly priceVp?: number | null;
 }
 
 function escapeHtml(value: string): string {
@@ -28,39 +32,31 @@ function subjectName(displayName: string): string {
 export function renderStorefrontMatchEmail(
   input: StorefrontMatchEmailInput,
 ): RenderedEmail {
-  const offerSections = input.match.offers.map((offer) => {
-    const prices =
-      offer.costs.length === 0
-        ? "<p>No price was supplied for this offer.</p>"
-        : [
-            "<ul>",
-            ...offer.costs.map(
-              ({ amount, currencyUuid }) =>
-                `<li><code>${escapeHtml(currencyUuid)}</code>: ${amount}</li>`,
-            ),
-            "</ul>",
-          ].join("");
-
-    return [
-      "<section>",
-      `<p>Offer <code>${escapeHtml(offer.offerId)}</code></p>`,
-      prices,
-      "</section>",
-    ].join("");
-  });
   const displayName = escapeHtml(input.displayName);
   const expiresAt = escapeHtml(input.expiresAt);
 
+  // Only http(s) artwork is embedded; anything else is dropped rather than
+  // written into the message, since this value comes from catalog data.
+  const artwork =
+    input.imageUrl && /^https?:\/\//.test(input.imageUrl)
+      ? `<p><img alt="" src="${escapeHtml(input.imageUrl)}" width="420" style="max-width:100%;height:auto"></p>`
+      : "";
+
+  const price =
+    typeof input.priceVp === "number"
+      ? `<p><strong>${input.priceVp.toLocaleString("en-US")} VP</strong></p>`
+      : "";
+
   return {
-    subject: `${subjectName(input.displayName)} is in your VALORANT store`,
+    subject: `${subjectName(input.displayName)} is in your store!`,
     html: [
       "<!doctype html>",
       '<html lang="en">',
       "<body>",
-      `<h1>${displayName} is in your store</h1>`,
-      `<p>The watched skin <code>${escapeHtml(input.match.skinUuid)}</code> is available today.</p>`,
-      ...offerSections,
-      `<p>This storefront rotation is expected to end at <time datetime="${expiresAt}">${expiresAt}</time>.</p>`,
+      `<h1>${displayName} is in your store!</h1>`,
+      artwork,
+      price,
+      `<p>It is available in today&#39;s rotation, which ends at <time datetime="${expiresAt}">${expiresAt}</time>.</p>`,
       "<p>VAL Checker is not affiliated with Riot Games.</p>",
       "</body>",
       "</html>",

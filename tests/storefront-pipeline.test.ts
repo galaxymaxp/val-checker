@@ -249,7 +249,7 @@ describe("offline storefront notification pipeline", () => {
     expect(result.emails).toHaveLength(1);
     expect(result.emails[0].skinUuid).toBe(skinUuids[1]);
     expect(result.emails[0].email.subject).toBe(
-      `Mage's <Choice> & "Rare" Edition is in your VALORANT store`,
+      `Mage's <Choice> & "Rare" Edition is in your store!`,
     );
     expect(result.emails[0].email.subject).not.toMatch(/[\r\n]/);
     expect(result.emails[0].email.html).toContain(
@@ -262,8 +262,12 @@ describe("offline storefront notification pipeline", () => {
         offer.Rewards.some((reward) => reward.ItemID === levelUuids[1]),
       )!;
     for (const [currencyUuid, amount] of Object.entries(matchingOffer.Cost)) {
-      expect(result.emails[0].email.html).toContain(currencyUuid);
-      expect(result.emails[0].email.html).toContain(String(amount));
+      // Currency uuids are no longer rendered; the VP amount is.
+      expect(result.emails[0].email.html).not.toContain(currencyUuid);
+      // Rendered with a thousands separator for readability.
+      expect(result.emails[0].email.html).toContain(
+        amount.toLocaleString("en-US"),
+      );
     }
 
     expect(result.canonicalStorefront.shopHash).toMatch(/^[0-9a-f]{64}$/);
@@ -275,7 +279,10 @@ describe("offline storefront notification pipeline", () => {
       renderStorefrontMatchEmail({
         displayName: escapedName,
         expiresAt: result.canonicalStorefront.expiresAt,
+        // The fixture catalog rows carry no artwork.
+        imageUrl: null,
         match: result.decision.toSend[0],
+        priceVp: Object.values(matchingOffer.Cost)[0] ?? null,
       }),
     ).toEqual(result.emails[0].email);
   });

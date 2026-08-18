@@ -43,10 +43,13 @@ export interface StorefrontPipelineResult {
   readonly matches: readonly StorefrontSkinMatch[];
 }
 
+/** Valorant Points. Other currencies are promotional and are not shown. */
+const VP_CURRENCY_UUID = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741";
+
 async function loadSkinDisplayNames(
   supabase: SupabaseClient<Database>,
   skinUuids: readonly string[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, { displayName: string; imageUrl: string | null }>> {
   const uniqueSkinUuids = [...new Set(skinUuids)];
   if (uniqueSkinUuids.length === 0) {
     return new Map();
@@ -54,7 +57,7 @@ async function loadSkinDisplayNames(
 
   const { data, error } = await supabase
     .from("skins")
-    .select("skin_uuid, display_name")
+    .select("skin_uuid, display_name, display_icon, full_render")
     .in("skin_uuid", uniqueSkinUuids);
 
   if (error) {
@@ -62,11 +65,14 @@ async function loadSkinDisplayNames(
   }
 
   const displayNameBySkin = new Map(
-    (data ?? []).map(({ display_name, skin_uuid }) => [skin_uuid, display_name]),
+    (data ?? []).map((row) => [
+      row.skin_uuid,
+      {
+        displayName: row.display_name,
+        imageUrl: row.full_render ?? row.display_icon ?? null,
+      },
+    ]),
   );
-  if (uniqueSkinUuids.some((skinUuid) => !displayNameBySkin.has(skinUuid))) {
-    throw new Error("Storefront email rendering failed while reading the catalog.");
-  }
 
   return displayNameBySkin;
 }
@@ -103,14 +109,27 @@ export async function planStorefrontNotificationsWithClient(
     supabase,
     decision.toSend.map(({ skinUuid }) => skinUuid),
   );
-  const emails = decision.toSend.map((match) => ({
-    email: renderStorefrontMatchEmail({
-      displayName: displayNameBySkin.get(match.skinUuid)!,
-      expiresAt: canonicalStorefront.expiresAt,
-      match,
-    }),
-    skinUuid: match.skinUuid,
-  }));
+  const emails = decision.toSend.map((match) => {
+    const catalog = displayNameBySkin.get(match.skinUuid);
+    // Prefer Valorant Points; fall back to whatever the offer is priced in so
+    // a promo currency still shows an amount rather than nothing.
+    const costs = match.offers.flatMap((offer) => offer.costs);
+    const priceVp =
+      costs.find((cost) => cost.currencyUuid === VP_CURRENCY_UUID)?.amount ??
+      costs[0]?.amount ??
+      null;
+
+    return {
+      email: renderStorefrontMatchEmail({
+        displayName: catalog?.displayName ?? "A watched skin",
+        expiresAt: canonicalStorefront.expiresAt,
+        imageUrl: catalog?.imageUrl ?? null,
+        match,
+        priceVp,
+      }),
+      skinUuid: match.skinUuid,
+    };
+  });
 
   return { canonicalStorefront, decision, emails, matches };
 }
