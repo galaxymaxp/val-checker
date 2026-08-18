@@ -28,7 +28,11 @@ vi.mock("@/src/lib/storefront/daily-shop", () => ({ loadDailyShops }));
 const signOut = vi.fn();
 
 vi.mock("@/app/dashboard/actions", () => ({ setSkinWatched, signOut }));
-vi.mock("@/app/dashboard/riot-actions", () => ({ checkDailyShopNow: vi.fn(), disconnectRiotSession }));
+vi.mock("@/app/dashboard/riot-actions", () => ({
+  checkDailyShopNow: vi.fn(),
+  disconnectRiotSession,
+  sendTestStorefrontEmail: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ redirect }));
 
 describe("dashboard page", () => {
