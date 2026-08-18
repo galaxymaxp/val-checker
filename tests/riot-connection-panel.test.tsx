@@ -21,10 +21,11 @@ const JAR = JSON.stringify([
   },
 ]);
 
-async function revealJarPaste() {
-  // The captured-session field is rendered directly now; kept so the tests
-  // still read as "get to the paste step".
-  await screen.findByRole("textbox", { name: "Captured Riot session" });
+async function revealJarPaste(user: ReturnType<typeof userEvent.setup>) {
+  // Pasting a session is the collapsed fallback, so open it first.
+  await user.click(
+    screen.getByRole("button", { name: "Paste a captured session instead" }),
+  );
 }
 
 describe("Riot connection consent UI", () => {
@@ -297,7 +298,7 @@ describe("Riot connection consent UI", () => {
       />,
     );
 
-    await revealJarPaste();
+    await revealJarPaste(user);
     expect(
       screen.getByText(/contacts Riot to verify the account identity/i),
     ).toBeInTheDocument();
@@ -336,7 +337,7 @@ describe("Riot connection consent UI", () => {
       />,
     );
 
-    await revealJarPaste();
+    await revealJarPaste(user);
     const input = screen.getByRole("textbox", { name: "Captured Riot session" });
 
     fireEvent.change(input, { target: { value: "sensitive-session-material" } });

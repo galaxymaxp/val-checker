@@ -84,7 +84,7 @@ function RiotConnectionPanelState({
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge>();
   const [mfaCode, setMfaCode] = useState("");
   const [serializedJar, setSerializedJar] = useState("");
-  const [showJarPaste] = useState(true);
+  const [showJarPaste, setShowJarPaste] = useState(false);
   const [deepLink, setDeepLink] = useState<string>();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -602,12 +602,22 @@ function RiotConnectionPanelState({
                     <a href={deepLink}>Open the desktop app</a>
                   </p>
                 ) : null}
-                <h3>Paste the captured session</h3>
-                <p role="note">
-                  Run <code>pnpm desktop:capture</code>, sign in on Riot&apos;s
-                  own page, and the session is copied to your clipboard. Paste
-                  it here to finish connecting.
-                </p>
+                <button
+                  aria-expanded={showJarPaste}
+                  onClick={() => setShowJarPaste((shown) => !shown)}
+                  type="button"
+                >
+                  {showJarPaste
+                    ? "Hide manual session paste"
+                    : "Paste a captured session instead"}
+                </button>
+                {showJarPaste ? (
+                  <p role="note">
+                    Run <code>pnpm desktop:capture</code>, sign in on
+                    Riot&apos;s own page, and the session is copied to your
+                    clipboard. Paste it here to finish connecting.
+                  </p>
+                ) : null}
                 {showJarPaste ? (
                   <div className="riot-session-fields">
                     <label>
