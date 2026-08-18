@@ -97,7 +97,7 @@ function ManualStorefrontRefreshState({
     <div className="flex flex-col items-start gap-2">
       <button
         aria-describedby={helperId}
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#08090b] shadow-[0_10px_30px_-16px_rgba(255,255,255,0.55)] enabled:cursor-pointer enabled:hocus:-translate-y-0.5 enabled:hocus:bg-white/85 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-ink-dim"
+        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#08090b]! shadow-[0_10px_30px_-16px_rgba(255,255,255,0.55)] enabled:cursor-pointer enabled:hocus:-translate-y-0.5 enabled:hocus:bg-white/85 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-ink-dim!"
         disabled={!available || isPending}
         onClick={refresh}
         type="button"
