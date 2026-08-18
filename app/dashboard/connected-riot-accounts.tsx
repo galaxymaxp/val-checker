@@ -1,5 +1,6 @@
 "use client";
 
+import { riotAccountDisplayName } from "@/src/lib/riot/account-display";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
@@ -16,10 +17,12 @@ type AccountStatus =
 export interface ConnectedRiotAccount {
   readonly authStatus: AccountStatus;
   readonly connectedAt: string;
+  readonly gameName: string | null;
   readonly id: string;
   readonly label: string | null;
   readonly lastRefreshAt: string | null;
   readonly region: string | null;
+  readonly tagLine: string | null;
 }
 
 interface ConnectedRiotAccountsProps {
@@ -142,7 +145,7 @@ export function ConnectedRiotAccounts({
           role="list"
         >
           {accounts.map((account, index) => {
-            const name = account.label ?? `Riot account ${index + 1}`;
+            const name = riotAccountDisplayName(account, index);
             const reconnectRequired = account.authStatus === "REAUTH_REQUIRED";
             const pending = pendingId === account.id;
 

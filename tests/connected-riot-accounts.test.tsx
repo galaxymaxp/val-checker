@@ -20,18 +20,22 @@ const accounts = [
   {
     authStatus: "CONNECTED" as const,
     connectedAt: "2026-08-15T01:00:00.000Z",
+    gameName: null,
     id: "11111111-1111-4111-8111-111111111111",
     label: "Main",
     lastRefreshAt: "2026-08-17T00:05:00.000Z",
     region: "ap",
+    tagLine: null,
   },
   {
     authStatus: "REAUTH_REQUIRED" as const,
     connectedAt: "2026-08-16T01:00:00.000Z",
+    gameName: null,
     id: "22222222-2222-4222-8222-222222222222",
     label: "Alt",
     lastRefreshAt: null,
     region: "na",
+    tagLine: null,
   },
 ];
 
