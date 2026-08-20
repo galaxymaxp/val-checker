@@ -129,9 +129,10 @@
   box-sizing: border-box;
 }
 
-* {
-  margin: 0;
-}
+/* No unlayered `* { margin: 0 }` here. Tailwind's preflight already zeroes
+   margins in @layer base; repeating it outside a layer would outrank every
+   margin utility (unlayered beats layered), which silently broke `mx-auto`
+   centering and every margin utility on a page. */
 
 html {
   -webkit-text-size-adjust: 100%;

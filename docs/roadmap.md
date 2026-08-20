@@ -699,3 +699,54 @@ export interface RiotAdapter {
 2. Phase 2, with the resolver test (2.3) as a required deliverable.
 3. Phases 3 and 4.
 4. Stop, run `pnpm test` + `pnpm build`, open a PR summarising each phase against its Acceptance criteria, and report. **Do not enter Track C.**
+
+---
+
+## 12. Deferred: browser-based Riot linking (2026-08-20)
+
+Today the only "anyone can use it" connect path is the credential form, and the
+desktop capture path needs the Electron shell — which only the developer runs.
+The alternative worth evaluating is the redirect-URL flow other trackers use
+(for example `valorantools.gg/link-accounts`): send the user to Riot's own
+`authorize` endpoint, let them sign in on Riot's domain, and have them paste
+back the resulting redirect URL, whose fragment carries the token.
+
+What it buys: the user's password never reaches VAL Checker, and it works in any
+browser with no install. Adopt this framing for the connect UI regardless of the
+transport chosen.
+
+Why it does not simply replace the current flow: the fragment yields a
+short-lived access token and no refresh material. Long-lived access is what
+makes the unattended daily check possible, and that comes from the cookie jar
+(§10: ~3 weeks for a full jar, ~1 week for `ssid` alone). A pasted redirect URL
+therefore supports an on-demand check but would make the user re-paste for each
+automatic day. Confirm the exact token lifetime and whether any usable refresh
+material is returned before committing.
+
+Also unresolved: this reuses a first-party Riot client, so it carries the same
+unofficial standing as the current approach — the personalised storefront
+endpoint has no supported public API. Decide deliberately rather than by
+inheriting another tracker's choice.
+
+**Decision (2026-08-20): daily re-linking is not acceptable.** The product's
+value is the unattended check, so any connect flow must yield reusable session
+material — cookies or an exported JSON session — not a token that expires the
+same hour. That rules out redirect-URL paste as the whole answer.
+
+Remaining work is therefore to make a cookie/JSON session path usable by
+someone who is not the developer. Today that path exists but is admin-gated
+(`riotJarPasteAllowed` in `app/dashboard/connection/page.tsx`), and the desktop
+capture needs the Electron shell. Open question before building: whether to
+ungate the paste path for everyone, and what guidance ships beside it, given
+that asking a player to paste session cookies is a real security ask that the
+UI must explain honestly.
+
+## 13. Deferred: featured bundle surface
+
+Replace the notifications block below the watchlist with the store's current
+featured bundle. Two of the three pieces already exist: `shop_checks.bundle`
+(jsonb) is in the foundation migration, and `src/lib/storefront/schema.ts`
+already validates `FeaturedBundle`. What is missing is the write — nothing in
+the worker or the shop upsert populates that column — plus a read model and the
+UI. No migration required; scope is persistence, a `loadDailyShops`-style
+reader, and the surface itself.

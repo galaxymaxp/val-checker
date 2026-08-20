@@ -334,39 +334,6 @@ export async function createDesktopCaptureToken(): Promise<RiotDesktopCaptureTok
   }
 }
 
-/**
- * Sends one sample watchlist email to the signed-in user, built from a random
- * offer in their latest stored store. Writes nothing and spends no allowance,
- * so it can be repeated freely to check delivery and formatting.
- */
-export async function sendTestStorefrontEmail(): Promise<RiotConnectionMutationResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  const userId = claims?.sub;
-  const email = claims?.email;
-
-  if (typeof userId !== "string" || typeof email !== "string") {
-    return { error: "Please sign in again.", ok: false };
-  }
-
-  try {
-    const { sendStorefrontTestEmail } = await import(
-      "@/src/lib/notifications/test-email"
-    );
-    const result = await sendStorefrontTestEmail(
-      createAdminSupabaseClient(),
-      userId,
-      email,
-    );
-    return result.ok
-      ? { ok: true, warning: `Sent a sample for ${result.skinName} to ${email}.` }
-      : { error: result.error, ok: false };
-  } catch {
-    return { error: "The test email could not be sent.", ok: false };
-  }
-}
-
 export async function disconnectRiotSession(
   connectionId: unknown,
 ): Promise<RiotConnectionMutationResult> {

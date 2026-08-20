@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { DailyShopStage } from "@/app/dashboard/_components/daily-shop-stage";
-import { TestEmailButton } from "@/app/dashboard/test-email-button";
-import { sendTestStorefrontEmail } from "@/app/dashboard/riot-actions";
 import { InventoryGrid } from "@/app/dashboard/_components/inventory-grid";
 import { RiotAccountSwitcher } from "@/app/dashboard/riot-account-switcher";
 import { refreshRiotStorefront } from "@/app/dashboard/riot-actions";
-import { StoreStatusPanel } from "@/app/dashboard/store-status-panel";
+import { StoreAttentionPanel } from "@/app/dashboard/store-attention-panel";
 import { loadWishlistInventory } from "@/src/lib/catalog/inventory";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { loadStorefrontDashboardStatus } from "@/src/lib/storefront/dashboard-status";
@@ -61,10 +59,12 @@ export default async function DashboardPage({
         selectedConnectionId={selectedAccount?.id ?? null}
       />
       {selectedAccount && selectedRefreshStatus ? (
-        <StoreStatusPanel
+        <StoreAttentionPanel
           account={selectedAccount}
           refreshStatus={selectedRefreshStatus}
           refreshStore={refreshRiotStorefront}
+          shop={selectedShop}
+          storeDate={refreshStatus.storeDate}
         />
       ) : null}
       {selectedAccount ? (
@@ -75,7 +75,6 @@ export default async function DashboardPage({
         />
       ) : null}
       <InventoryGrid tiles={tiles} />
-          <TestEmailButton sendTestEmail={sendTestStorefrontEmail} />
     </main>
   );
 }
