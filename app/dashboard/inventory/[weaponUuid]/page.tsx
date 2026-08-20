@@ -1,29 +1,24 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { SkinCard } from "@/app/dashboard/_components/skin-card";
+import { SkinSearchGrid } from "@/app/dashboard/_components/skin-search-grid";
 import { TransitionLink } from "@/app/dashboard/_components/transition-link";
 import { setSkinWatched } from "@/app/dashboard/actions";
 import { loadWeaponSkins } from "@/src/lib/catalog/weapon-detail";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import type { WeaponSkinsView } from "@/src/types/catalog-view";
 
-const PAGE_SIZE = 48;
+// No weapon in the catalog comes close to this, so the list is complete in one
+// read and the browser filter always searches every skin, not a page of them.
+const MAX_SKINS = 500;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface WeaponInventoryPageProps {
   readonly params: Promise<{ weaponUuid: string }>;
-  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function firstValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 export default async function WeaponInventoryPage({
   params,
-  searchParams,
 }: WeaponInventoryPageProps) {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
@@ -38,17 +33,13 @@ export default async function WeaponInventoryPage({
     notFound();
   }
 
-  const parameters = await searchParams;
-  const parsedPage = Number.parseInt(firstValue(parameters.page) ?? "", 10);
-  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
-
   let view: WeaponSkinsView;
 
   try {
     view = await loadWeaponSkins(
       supabase,
       weaponUuid,
-      { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
+      { limit: MAX_SKINS, offset: 0 },
       data.claims.sub,
     );
   } catch (error) {
@@ -78,40 +69,17 @@ export default async function WeaponInventoryPage({
       </header>
 
       {view.skins.length === 0 ? (
-        <p className="text-ink-muted">There are no skins on this page.</p>
+        <p className="text-ink-muted">
+          This weapon has no skins in the catalog yet.
+        </p>
       ) : (
-        <ul
-          className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))]"
-          role="list"
-        >
-          {view.skins.map((skin) => (
-            <li
-              className="[contain-intrinsic-size:0_220px] [content-visibility:auto]"
-              key={skin.skinUuid}
-            >
-              <SkinCard
-                skin={skin}
-                updateWatch={setSkinWatched}
-                weaponUuid={view.weaponUuid}
-              />
-            </li>
-          ))}
-        </ul>
+        <SkinSearchGrid
+          skins={view.skins}
+          updateWatch={setSkinWatched}
+          weaponName={view.weaponName}
+          weaponUuid={view.weaponUuid}
+        />
       )}
-
-      <footer className="flex items-center gap-4 text-sm">
-        {page > 1 ? (
-          <Link href={`/dashboard/inventory/${weaponUuid}?page=${page - 1}`}>
-            Previous
-          </Link>
-        ) : null}
-        <span className="text-ink-dim">Page {page}</span>
-        {view.hasMore ? (
-          <Link href={`/dashboard/inventory/${weaponUuid}?page=${page + 1}`}>
-            Next
-          </Link>
-        ) : null}
-      </footer>
     </main>
   );
 }
