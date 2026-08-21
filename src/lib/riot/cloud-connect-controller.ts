@@ -5,6 +5,7 @@ import type {
   CloudBrowserService,
   CloudBrowserViewport,
 } from "@/src/lib/riot/cloud-browser-service";
+import { CloudBrowserSessionNotFoundError } from "@/src/lib/riot/cloud-browser-service";
 import type { CloudConnectionStore } from "@/src/lib/riot/cloud-connection-store";
 import type { RiotConnectIdentity } from "@/src/lib/riot/connect-allowlist";
 import type { RiotConnectionService } from "@/src/lib/riot/connection-service";
@@ -111,7 +112,11 @@ export class CloudConnectController {
     }
   }
 
-  async status(id: string, identity: RiotConnectIdentity): Promise<SafeCloudConnection | null> {
+  async status(
+    id: string,
+    identity: RiotConnectIdentity,
+    includeStream = false,
+  ): Promise<SafeCloudConnection | null> {
     let row = await this.store.loadOwned(id, identity.userId);
     if (!row) {
       return null;
@@ -134,8 +139,10 @@ export class CloudConnectController {
     let providerStatus;
     try {
       providerStatus = await this.browser.getStatus(row.provider_session_id);
-    } catch {
-      await this.destroy(row.provider_session_id);
+    } catch (error) {
+      if (!(error instanceof CloudBrowserSessionNotFoundError)) {
+        throw error;
+      }
       row = await this.store.updateOwned(id, identity.userId, {
         destroyed_at: this.now().toISOString(),
         failure_code: "browser_unavailable",
@@ -175,7 +182,7 @@ export class CloudConnectController {
       mfa_requested: providerStatus.mfaRequested,
       state,
     });
-    const streamUrl = activeStates.includes(state)
+    const streamUrl = includeStream && activeStates.includes(state)
       ? await this.browser.getStream(row.provider_session_id!)
       : undefined;
     return safe(row, streamUrl);

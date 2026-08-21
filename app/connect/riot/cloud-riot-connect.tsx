@@ -41,6 +41,7 @@ export function CloudRiotConnect({
   const started = useRef(false);
   const [session, setSession] = useState<SessionView>();
   const [error, setError] = useState<string>();
+  const [statusDelayed, setStatusDelayed] = useState(false);
 
   useEffect(() => {
     if (started.current) return;
@@ -48,7 +49,7 @@ export function CloudRiotConnect({
     const start = async () => {
       try {
         const response = initialSessionId
-          ? await fetch(`/api/riot/cloud/sessions/${initialSessionId}`, {
+          ? await fetch(`/api/riot/cloud/sessions/${initialSessionId}?stream=1`, {
               cache: "no-store",
             })
           : await fetch("/api/riot/cloud/sessions", {
@@ -91,12 +92,19 @@ export function CloudRiotConnect({
         });
         const value = (await response.json()) as SessionView & { error?: string };
         if (!response.ok) throw new Error(value.error);
-        setSession(value);
+        setStatusDelayed(false);
+        setSession((current) => ({
+          ...current,
+          ...value,
+          streamUrl: value.streamUrl ?? current?.streamUrl,
+        }));
         if (value.state === "connected") router.refresh();
       } catch {
-        setError("Riot connection is temporarily unavailable.");
+        // A busy control plane must not unmount the active Riot viewer. Keep
+        // the browser usable and retry status on the next interval.
+        setStatusDelayed(true);
       }
-    }, 2_000);
+    }, 4_000);
     return () => window.clearInterval(timer);
   }, [router, session]);
 
@@ -152,6 +160,9 @@ export function CloudRiotConnect({
   return (
     <div className="flex w-full flex-col gap-4">
       <p role="status">You’re signing in on Riot Games’ actual login page inside a temporary, isolated browser. VAL Checker does not store your Riot password. The session stays available for up to 15 minutes, including CAPTCHA or MFA.</p>
+      {statusDelayed ? (
+        <p role="status">Connection check delayed. Your Riot window is still active.</p>
+      ) : null}
       {session.streamUrl ? (
         <iframe
           allow="clipboard-read; clipboard-write"

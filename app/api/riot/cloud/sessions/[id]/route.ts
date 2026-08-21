@@ -22,7 +22,7 @@ async function context(params: Promise<{ id: string }>) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { readonly params: Promise<{ id: string }> },
 ): Promise<Response> {
   const resolved = await context(params);
@@ -36,6 +36,7 @@ export async function GET(
     const session = await buildCloudConnectController(resolved.identity).status(
       resolved.id.data,
       resolved.identity,
+      new URL(request.url).searchParams.get("stream") === "1",
     );
     return session
       ? json(session, 200)

@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import type { CloudBrowserService } from "@/src/lib/riot/cloud-browser-service";
+import {
+  CloudBrowserServiceError,
+  CloudBrowserSessionNotFoundError,
+  type CloudBrowserService,
+} from "@/src/lib/riot/cloud-browser-service";
 import { CloudConnectController } from "@/src/lib/riot/cloud-connect-controller";
 import type {
   CloudConnectionStore,
@@ -168,7 +172,7 @@ describe("CloudConnectController", () => {
   it("fails cleanly when the temporary provider session disappears", async () => {
     const test = fixture();
     vi.mocked(test.browser.getStatus).mockRejectedValue(
-      new Error("provider session not found"),
+      new CloudBrowserSessionNotFoundError(),
     );
 
     const result = await test.controller.status(sessionId, { userId: userA });
@@ -177,7 +181,35 @@ describe("CloudConnectController", () => {
       failureCode: "browser_unavailable",
       state: "failed",
     });
-    expect(test.browser.destroySession).toHaveBeenCalledOnce();
+    expect(test.browser.destroySession).not.toHaveBeenCalled();
     expect(test.row.destroyed_at).toBe("2026-08-21T00:04:00.000Z");
+  });
+
+  it("does not destroy an active browser after transient provider overload", async () => {
+    const test = fixture();
+    vi.mocked(test.browser.getStatus).mockRejectedValue(
+      new CloudBrowserServiceError(),
+    );
+
+    await expect(
+      test.controller.status(sessionId, { userId: userA }),
+    ).rejects.toBeInstanceOf(CloudBrowserServiceError);
+    expect(test.browser.destroySession).not.toHaveBeenCalled();
+    expect(test.row.state).toBe("waiting_for_user");
+  });
+
+  it("only requests the sensitive stream URL when the caller needs it", async () => {
+    const test = fixture();
+    vi.mocked(test.browser.getStatus).mockResolvedValue({
+      captchaObserved: false,
+      mfaRequested: false,
+      state: "waiting_for_user",
+    });
+
+    await test.controller.status(sessionId, { userId: userA });
+    expect(test.browser.getStream).not.toHaveBeenCalled();
+
+    await test.controller.status(sessionId, { userId: userA }, true);
+    expect(test.browser.getStream).toHaveBeenCalledOnce();
   });
 });

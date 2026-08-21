@@ -71,6 +71,14 @@ export class CloudBrowserServiceError extends Error {
   }
 }
 
+export class CloudBrowserSessionNotFoundError extends CloudBrowserServiceError {
+  constructor() {
+    super();
+    this.message = "Cloud browser session no longer exists.";
+    this.name = "CloudBrowserSessionNotFoundError";
+  }
+}
+
 export class HttpCloudBrowserService implements CloudBrowserService {
   private readonly baseUrl: URL;
 
@@ -149,6 +157,9 @@ export class HttpCloudBrowserService implements CloudBrowserService {
         method,
         signal: AbortSignal.timeout(15_000),
       });
+      if (response.status === 404) {
+        throw new CloudBrowserSessionNotFoundError();
+      }
       if (!response.ok) {
         throw new CloudBrowserServiceError();
       }
