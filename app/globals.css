@@ -389,6 +389,11 @@ header nav a {
   gap: 0.25rem;
 }
 
+.riot-connection-heading > div > p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 /* Status badge: a small pill whose leading dot carries the state —
    filled when connected, hollow when disconnected. */
 
@@ -614,10 +619,10 @@ header nav a {
   }
 }
 
-/* Ghost variants: MFA "Start over", the admin-fallback toggle, disconnect. */
+/* Ghost variants: MFA "Start over", the JSON-fallback toggle, disconnect. */
 
 .riot-mfa-fields button + button,
-.riot-session-connect > button,
+.riot-connect-method-toggle,
 .disconnect-controls button {
   background: transparent;
   border-color: var(--line);
@@ -625,7 +630,7 @@ header nav a {
 }
 
 .riot-mfa-fields button + button:hover:not(:disabled),
-.riot-session-connect > button:hover:not(:disabled),
+.riot-connect-method-toggle:hover:not(:disabled),
 .disconnect-controls button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.18);
@@ -633,20 +638,77 @@ header nav a {
   transform: none;
 }
 
-/* Session paste: separated by a hairline, since it is a distinct route to the
-   same outcome rather than a step in the form above it. */
+/* Connection methods: one obvious web sign-in path plus a named JSON fallback. */
 
-.riot-session-connect {
-  border-top: 1px solid var(--line-soft);
+.riot-connect-method {
+  background: var(--bg-inset);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 2vw, 1.25rem);
+}
+
+.riot-connect-method-primary {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), transparent 60%),
+    var(--bg-inset);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.riot-connect-method-unavailable {
+  border-style: dashed;
+}
+
+.riot-connect-method-heading {
+  align-items: start;
   display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.riot-connect-method-heading > div {
+  display: grid;
+  gap: 0.3rem;
+  max-width: var(--measure);
+}
+
+.riot-connect-method h3 {
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+}
+
+.riot-connect-method-heading > div > p:last-child,
+.riot-connect-method-unavailable > p:last-child,
+.riot-connect-method > [role="note"] {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.riot-connect-method-kicker {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.riot-connect-method-toggle {
+  flex: none;
+  font-size: 0.82rem;
+  padding: 0.5rem 1rem;
+}
+
+.riot-cookie-json-form {
+  border-top: 1px solid var(--line-soft);
+  display: grid;
+  gap: 1rem;
   padding-top: 1rem;
 }
 
-.riot-session-connect > button {
-  font-size: 0.82rem;
-  padding: 0.45rem 1rem;
+.riot-session-connect {
+  background: transparent;
 }
 
 .consent-check {

@@ -65,7 +65,7 @@ destroys the browser.
 
 ## Database and authorization
 
-`20260821074913_riot_cloud_connection_sessions.sql` adds an acquisition provider
+`20260821100542_riot_cloud_connection_sessions.sql` adds an acquisition provider
 to existing Riot connections and one small temporary-session table. Temporary
 rows contain owner, safe state, timestamps, region/label, non-secret diagnostic
 booleans, and a server-only provider ID. They contain no password, MFA code,

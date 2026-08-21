@@ -47,6 +47,18 @@ type Session = {
   viewport: { height: number; width: number };
 };
 
+type SessionCreationPhase =
+  | "browser_launch"
+  | "browser_context"
+  | "riot_navigation";
+
+class SessionCreationError extends Error {
+  constructor(readonly phase: SessionCreationPhase) {
+    super("Cloud browser session creation failed");
+    this.name = "SessionCreationError";
+  }
+}
+
 const sessions = new Map<string, Session>();
 const createSchema = z.object({
   connectionSessionId: z.uuid(),
@@ -153,43 +165,61 @@ async function createBrowserSession(
   ) {
     throw new Error("invalid expiry");
   }
-  // One process plus one incognito context per connection. No profile path is
-  // supplied, so nothing survives process destruction.
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    acceptDownloads: false,
-    locale: "en-US",
-    serviceWorkers: "block",
-    viewport: input.viewport,
-  });
-  const page = await context.newPage();
-  const cdp = await context.newCDPSession(page);
-  const viewerToken = randomBytes(32).toString("base64url");
-  const session: Session = {
-    browser,
-    captchaObserved: false,
-    cdp,
-    context,
-    expiresAt,
-    id: randomUUID(),
-    mfaRequested: false,
-    page,
-    state: "starting",
-    viewerToken,
-    viewerTokenHash: hash(viewerToken),
-    viewers: 0,
-    viewport: input.viewport,
-  };
-  browser.on("disconnected", () => {
-    if (!session.cookies && session.state !== "expired") session.state = "failed";
-  });
-  page.on("framenavigated", () => void observe(session));
-  await page.goto(REAUTH_URL, {
-    timeout: 30_000,
-    waitUntil: "domcontentloaded",
-  });
-  session.state = "waiting_for_user";
-  return session;
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  let phase: SessionCreationPhase = "browser_launch";
+  try {
+    // One process plus one incognito context per connection. No profile path is
+    // supplied, so nothing survives process destruction.
+    browser = await chromium.launch({ headless: true });
+    phase = "browser_context";
+    context = await browser.newContext({
+      acceptDownloads: false,
+      locale: "en-US",
+      serviceWorkers: "block",
+      viewport: input.viewport,
+    });
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    const viewerToken = randomBytes(32).toString("base64url");
+    const session: Session = {
+      browser,
+      captchaObserved: false,
+      cdp,
+      context,
+      expiresAt,
+      id: randomUUID(),
+      mfaRequested: false,
+      page,
+      state: "starting",
+      viewerToken,
+      viewerTokenHash: hash(viewerToken),
+      viewers: 0,
+      viewport: input.viewport,
+    };
+    browser.on("disconnected", () => {
+      if (!session.cookies && session.state !== "expired") session.state = "failed";
+    });
+    page.on("framenavigated", () => void observe(session));
+    phase = "riot_navigation";
+    await page.goto(REAUTH_URL, {
+      timeout: 30_000,
+      waitUntil: "domcontentloaded",
+    });
+    session.state = "waiting_for_user";
+    return session;
+  } catch (error) {
+    await context?.close().catch(() => undefined);
+    await browser?.close().catch(() => undefined);
+    console.error(
+      JSON.stringify({
+        event: "cloud_browser_session_create_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        phase,
+      }),
+    );
+    throw new SessionCreationError(phase);
+  }
 }
 
 async function destroy(id: string, terminalState?: SessionState): Promise<void> {
@@ -269,8 +299,11 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { cookies: session.cookies });
     }
     return json(response, 409, { error: "not ready" });
-  } catch {
-    return json(response, 503, { error: "unavailable" });
+  } catch (error) {
+    return json(response, 503, {
+      error: "unavailable",
+      ...(error instanceof SessionCreationError ? { phase: error.phase } : {}),
+    });
   }
 });
 

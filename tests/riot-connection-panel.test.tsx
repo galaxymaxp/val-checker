@@ -6,11 +6,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => router,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const JAR = JSON.stringify([
   {
@@ -22,13 +27,60 @@ const JAR = JSON.stringify([
 ]);
 
 async function revealJarPaste(user: ReturnType<typeof userEvent.setup>) {
-  // Manual JSON is nested under the advanced fallback and starts collapsed.
-  await user.click(
-    screen.getByRole("button", { name: "Advanced connection options" }),
-  );
+  if (!screen.queryByRole("textbox", { name: "Riot cookie JSON" })) {
+    await user.click(screen.getByRole("button", { name: "Use cookie JSON" }));
+  }
 }
 
 describe("Riot connection consent UI", () => {
+  it("makes web sign-in primary and cookie JSON an explicit fallback", async () => {
+    const user = userEvent.setup();
+    render(
+      <RiotConnectionPanel
+        cloudConnectAvailable
+        connectAllowed
+        connectSession={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Sign in with Riot", level: 3 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Recommended")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Import cookie JSON" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Riot cookie JSON" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Sign in with Riot" }));
+    expect(router.push).toHaveBeenCalledWith("/connect/riot?region=ap");
+  });
+
+  it("explains fallback-only mode and opens the usable JSON form", () => {
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Sign in with Riot is temporarily unavailable",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Available now")).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Riot cookie JSON" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("New account")).toBeInTheDocument();
+  });
+
   it("keeps production connection closed without accepting credential input", () => {
     render(
       <RiotConnectionPanel
@@ -280,7 +332,7 @@ describe("Riot connection consent UI", () => {
     );
 
     expect(
-      screen.queryByRole("textbox", { name: "Captured Riot session" }),
+      screen.queryByRole("textbox", { name: "Riot cookie JSON" }),
     ).not.toBeInTheDocument();
   });
 
@@ -303,12 +355,12 @@ describe("Riot connection consent UI", () => {
       screen.getByText(/contacts Riot to verify which account the session belongs to/i),
     ).toBeInTheDocument();
     fireEvent.change(
-      screen.getByRole("textbox", { name: "Captured Riot session" }),
+      screen.getByRole("textbox", { name: "Riot cookie JSON" }),
       { target: { value: JAR } },
     );
     await user.click(screen.getByRole("checkbox"));
     await user.click(
-      screen.getByRole("button", { name: "Connect from cookie export" }),
+      screen.getByRole("button", { name: "Connect with cookie JSON" }),
     );
 
     await waitFor(() => {
@@ -338,12 +390,12 @@ describe("Riot connection consent UI", () => {
     );
 
     await revealJarPaste(user);
-    const input = screen.getByRole("textbox", { name: "Captured Riot session" });
+    const input = screen.getByRole("textbox", { name: "Riot cookie JSON" });
 
     fireEvent.change(input, { target: { value: "sensitive-session-material" } });
     await user.click(screen.getByRole("checkbox"));
     await user.click(
-      screen.getByRole("button", { name: "Connect from cookie export" }),
+      screen.getByRole("button", { name: "Connect with cookie JSON" }),
     );
 
     await waitFor(() => expect(input).toHaveValue(""));
