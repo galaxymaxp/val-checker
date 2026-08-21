@@ -124,6 +124,7 @@ function readNightMarket(
 export async function loadDailyShops(
   supabase: SupabaseClient<Database>,
   userId: string,
+  now: Date = new Date(),
 ): Promise<readonly DailyShopView[]> {
   const { data: connections, error: connectionsError } = await supabase
     .from("riot_connections")
@@ -378,11 +379,19 @@ export async function loadDailyShops(
         }
       : null;
 
+    // A night market is only shown while it is actually running. The stored
+    // check outlives it: the panel reads whatever the last successful check
+    // recorded, and that row keeps its BonusStore after Riot has closed the
+    // market, so expiry is checked here rather than trusting the column.
     const storedNightMarket = readNightMarket(check.night_market);
-    const nightMarket: DailyShopNightMarketView | null = storedNightMarket
+    const nightMarketRunning =
+      storedNightMarket !== null &&
+      Date.parse(storedNightMarket.expiresAt) > now.getTime() &&
+      storedNightMarket.offers.length > 0;
+    const nightMarket: DailyShopNightMarketView | null = nightMarketRunning
       ? {
-          expiresAt: storedNightMarket.expiresAt,
-          offers: storedNightMarket.offers.map((offer) => {
+          expiresAt: storedNightMarket!.expiresAt,
+          offers: storedNightMarket!.offers.map((offer) => {
             const skinUuid = offer.levelUuid
               ? (skinByLevelUuid.get(offer.levelUuid) ?? null)
               : null;

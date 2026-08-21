@@ -7,6 +7,8 @@ import {
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
+import { isDevPreview } from "@/src/lib/dev/preview";
+import { previewAccounts } from "@/src/lib/dev/preview-data";
 import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
@@ -17,8 +19,11 @@ export default async function RiotConnectionPage({
 }: {
   readonly searchParams?: Promise<{ readonly reconnect?: string }>;
 } = {}) {
-  const supabase = await createServerSupabaseClient();
-  const { data } = await supabase.auth.getClaims();
+  const preview = isDevPreview();
+  const supabase = preview ? null : await createServerSupabaseClient();
+  const { data } = preview
+    ? { data: { claims: { email: undefined, sub: "preview-user" } } }
+    : await supabase!.auth.getClaims();
 
   if (!data?.claims.sub) {
     redirect("/sign-in?next=/dashboard/connection");
@@ -33,12 +38,14 @@ export default async function RiotConnectionPage({
   // pasting an exported session is the only browser path that actually works.
   // It is therefore offered to everyone the connect allowlist admits, not just
   // administrators.
-  const riotConnectAllowed = canRiotConnect(riotIdentity);
+  const riotConnectAllowed = preview || canRiotConnect(riotIdentity);
 
-  const accounts = await loadRiotAccountsWithClient(
-    createAdminSupabaseClient(),
-    data.claims.sub,
-  );
+  const accounts = preview
+    ? previewAccounts(new Date())
+    : await loadRiotAccountsWithClient(
+        createAdminSupabaseClient(),
+        data.claims.sub,
+      );
   const requestedReconnect = (await searchParams).reconnect;
   const reconnectAccount = accounts.find(
     (account) => account.id === requestedReconnect,
