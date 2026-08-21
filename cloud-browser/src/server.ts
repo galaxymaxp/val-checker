@@ -13,6 +13,11 @@ import {
   cloudBrowserSessionSchema,
   type CloudBrowserSessionInput,
 } from "./session-schema.js";
+import {
+  MAX_SESSION_TTL_MS,
+  VIEWER_DISCONNECT_GRACE_MS,
+  VIEWER_HEARTBEAT_INTERVAL_MS,
+} from "./session-limits.js";
 
 const REAUTH_URL =
   "https://auth.riotgames.com/authorize" +
@@ -156,7 +161,7 @@ async function createBrowserSession(
   if (
     !Number.isFinite(expiresAt) ||
     expiresAt <= Date.now() ||
-    expiresAt - Date.now() > 10 * 60 * 1000
+    expiresAt - Date.now() > MAX_SESSION_TTL_MS
   ) {
     throw new Error("invalid expiry");
   }
@@ -230,7 +235,7 @@ async function destroy(id: string, terminalState?: SessionState): Promise<void> 
 
 const viewer = String.raw`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050505}canvas{width:100%;height:100%;object-fit:contain;touch-action:none;outline:none}textarea{position:fixed;left:50%;bottom:0;width:1px;height:1px;opacity:.01}</style></head><body><canvas tabindex="0" aria-label="Riot login browser"></canvas><textarea aria-label="Keyboard input" autocapitalize="none" autocomplete="off" spellcheck="false"></textarea><script>
 const id=location.pathname.split('/').pop(),token=new URLSearchParams(location.hash.slice(1)).get('token'),canvas=document.querySelector('canvas'),input=document.querySelector('textarea'),ctx=canvas.getContext('2d');let ws;
-function connect(){ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/v1/stream/'+encodeURIComponent(id));ws.onopen=()=>ws.send(JSON.stringify({type:'auth',token}));ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='frame'){const image=new Image();image.onload=()=>{canvas.width=m.width;canvas.height=m.height;ctx.drawImage(image,0,0)};image.src='data:image/jpeg;base64,'+m.data}};ws.onclose=()=>setTimeout(connect,1000)}connect();
+function connect(){ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/v1/stream/'+encodeURIComponent(id));ws.onopen=()=>ws.send(JSON.stringify({type:'auth',token}));ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='frame'){const image=new Image();image.onload=()=>{canvas.width=m.width;canvas.height=m.height;ctx.drawImage(image,0,0)};image.src='data:image/jpeg;base64,'+m.data}};ws.onclose=()=>setTimeout(connect,1000)}connect();setInterval(()=>send({type:'ping'}),${VIEWER_HEARTBEAT_INTERVAL_MS});
 function send(value){if(ws?.readyState===1)ws.send(JSON.stringify(value))}function point(e,kind){const r=canvas.getBoundingClientRect();send({type:'pointer',kind,x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,button:e.button});if(kind==='down'){canvas.setPointerCapture(e.pointerId);input.focus()}}
 canvas.onpointerdown=e=>point(e,'down');canvas.onpointermove=e=>{if(e.buttons)point(e,'move')};canvas.onpointerup=e=>point(e,'up');canvas.onkeydown=e=>{send({type:'key',kind:'down',key:e.key});if(e.key.length!==1)e.preventDefault()};canvas.onkeyup=e=>send({type:'key',kind:'up',key:e.key});input.oninput=()=>{if(input.value){send({type:'text',text:input.value});input.value=''}};
 </script></body></html>`;
@@ -363,6 +368,12 @@ sockets.on("connection", (ws: WebSocket, id: string) => {
         });
         return;
       }
+      if (message.type === "ping") {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "pong" }));
+        }
+        return;
+      }
       if (session.state === "waiting_for_user") session.state = "authenticating";
       if (
         message.type === "pointer" &&
@@ -401,10 +412,11 @@ sockets.on("connection", (ws: WebSocket, id: string) => {
     if (authenticated) {
       session.viewers = Math.max(0, session.viewers - 1);
       if (session.viewers === 0 && sessions.has(session.id)) {
-        // Allow a brief mobile-radio handoff, then remove an abandoned browser.
+        // CAPTCHA and mobile network transitions can briefly interrupt the
+        // viewer. The absolute session TTL still bounds browser lifetime.
         session.disconnectTimer = setTimeout(
           () => void destroy(session.id, "failed"),
-          30_000,
+          VIEWER_DISCONNECT_GRACE_MS,
         );
         session.disconnectTimer.unref();
       }

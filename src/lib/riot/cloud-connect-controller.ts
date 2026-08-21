@@ -131,7 +131,18 @@ export class CloudConnectController {
       return safe(row);
     }
 
-    const providerStatus = await this.browser.getStatus(row.provider_session_id);
+    let providerStatus;
+    try {
+      providerStatus = await this.browser.getStatus(row.provider_session_id);
+    } catch {
+      await this.destroy(row.provider_session_id);
+      row = await this.store.updateOwned(id, identity.userId, {
+        destroyed_at: this.now().toISOString(),
+        failure_code: "browser_unavailable",
+        state: "failed",
+      });
+      return safe(row);
+    }
     if (providerStatus.state === "captured") {
       return this.capture(row.id, identity);
     }

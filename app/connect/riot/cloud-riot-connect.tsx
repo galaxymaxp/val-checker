@@ -137,12 +137,21 @@ export function CloudRiotConnect({
     return <div role="alert"><p>This connection session expired.</p><Link href="/connect/riot">Start again</Link></div>;
   }
   if (session.state === "failed") {
-    return <div role="alert"><p>Riot could not verify this login.</p><Link href="/connect/riot">Retry</Link></div>;
+    return (
+      <div role="alert">
+        <p>
+          {session.failureCode === "browser_unavailable"
+            ? "The temporary Riot browser disconnected before login finished. Start a new session and try again."
+            : "Riot could not verify this login."}
+        </p>
+        <Link href="/connect/riot">Start again</Link>
+      </div>
+    );
   }
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <p role="status">You’re signing in on Riot Games’ actual login page inside a temporary, isolated browser. VAL Checker does not store your Riot password.</p>
+      <p role="status">You’re signing in on Riot Games’ actual login page inside a temporary, isolated browser. VAL Checker does not store your Riot password. The session stays available for up to 15 minutes, including CAPTCHA or MFA.</p>
       {session.streamUrl ? (
         <iframe
           allow="clipboard-read; clipboard-write"

@@ -164,4 +164,20 @@ describe("CloudConnectController", () => {
     expect(result).toMatchObject({ failureCode: "expired", state: "expired" });
     expect(test.browser.destroySession).toHaveBeenCalledOnce();
   });
+
+  it("fails cleanly when the temporary provider session disappears", async () => {
+    const test = fixture();
+    vi.mocked(test.browser.getStatus).mockRejectedValue(
+      new Error("provider session not found"),
+    );
+
+    const result = await test.controller.status(sessionId, { userId: userA });
+
+    expect(result).toMatchObject({
+      failureCode: "browser_unavailable",
+      state: "failed",
+    });
+    expect(test.browser.destroySession).toHaveBeenCalledOnce();
+    expect(test.row.destroyed_at).toBe("2026-08-21T00:04:00.000Z");
+  });
 });

@@ -7,7 +7,7 @@ import type {
   RiotCloudConnectionState,
 } from "@/src/types/database";
 
-export const RIOT_CLOUD_CONNECTION_TTL_MS = 8 * 60 * 1_000;
+export const RIOT_CLOUD_CONNECTION_TTL_MS = 15 * 60 * 1_000;
 
 export type CloudSessionRow =
   Database["public"]["Tables"]["riot_cloud_connection_sessions"]["Row"];

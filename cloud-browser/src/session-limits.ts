@@ -1,0 +1,3 @@
+export const MAX_SESSION_TTL_MS = 20 * 60 * 1_000;
+export const VIEWER_DISCONNECT_GRACE_MS = 3 * 60 * 1_000;
+export const VIEWER_HEARTBEAT_INTERVAL_MS = 10 * 1_000;
