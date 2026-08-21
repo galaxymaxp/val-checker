@@ -20,7 +20,7 @@ export function InventoryTile({ tile }: InventoryTileProps) {
 
   return (
     <TransitionLink
-      className={`group relative flex aspect-[2/1] w-full flex-col justify-between overflow-hidden rounded-chip border p-2 text-ink! no-underline transition-colors ${
+      className={`group relative flex min-h-24 w-full flex-col justify-between overflow-hidden rounded-chip border p-2 text-ink! no-underline transition-colors ${
         watched
           ? "border-white/35 bg-white/[0.07]"
           : "border-line-soft bg-white/[0.025] hocus:border-white/25 hocus:bg-white/[0.05]"

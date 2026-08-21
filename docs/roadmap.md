@@ -780,3 +780,64 @@ columns are therefore written in a second statement immediately after the RPC,
 which never throws: a failure there costs a display panel, not the storefront
 claim that was just spent. Folding them into the function is worth doing the
 next time that migration is opened for another reason.
+
+---
+
+## 14. Planned: accessories and player cards on the watchlist (2026-08-21)
+
+Watchlisting gun buddies, sprays, player cards, and titles the way skins are
+watched today. Deferred behind the migration gate, not behind uncertainty: the
+data already arrives.
+
+### What already works
+
+Every storefront response carries `AccessoryStore`, and
+`src/lib/storefront/schema.ts` already validates it. The captured fixture holds
+four offers:
+
+| Item type UUID | Kind | Count in fixture |
+| --- | --- | --- |
+| `dd3bf334-87f3-40bd-b043-682a57a8dc3a` | Gun buddy | 1 |
+| `d5f120f8-ff8c-4aac-92ea-f2b5acbe9475` | Spray | 2 |
+| `3f296c07-64c3-494c-923b-fe692a4fa1bd` | Player card | 1 |
+
+Titles (`de7caa6b-adf7-4588-bbd1-143831e786c6`) rotate through the same store
+and should be handled even though the fixture happens not to contain one.
+
+So the daily check already receives everything needed. Nothing extra is asked
+of Riot, exactly as with the bundle.
+
+### Two facts the copy must respect
+
+- **The accessory store rotates weekly**, not daily
+  (`AccessoryStoreRemainingDurationInSeconds`). A notification promising a
+  daily check would be a lie for these items.
+- **It is priced in Kingdom Credits** (`85ca954a-41f2-ce94-9b45-8ca3dd39a00d`),
+  which are earned, not bought. Do not reuse the VP wording or the VP glyph.
+
+### Scope
+
+1. **Catalog.** New table for accessory items — uuid, kind, display name,
+   display icon — synced from valorant-api `/v1/buddies`, `/v1/sprays`,
+   `/v1/playercards`, and `/v1/themes` for titles. Mirrors the existing skin
+   sync.
+2. **Watchlist.** `watchlist.skin_uuid` is `not null references public.skins`,
+   a hard FK, so accessories cannot join that table as-is. Prefer a sibling
+   `accessory_watchlist` over making the column polymorphic: it keeps the skins
+   FK honest and leaves every existing query untouched.
+3. **Persistence.** `shop_checks` has no accessory column. Add one and write it
+   the way `bundle` and `night_market` are written — the statement after the
+   refresh RPC — or fold all three into `record_storefront_refresh` when that
+   migration is next opened for another reason.
+4. **Matching and delivery.** Match watched accessory uuids against the stored
+   offers, reusing the storefront dedup shape but keyed to the weekly rotation
+   so one appearance does not email seven times.
+5. **UI.** An accessories band beneath the weapon bands in the arsenal, which
+   is where the buy menu puts its abilities row, plus an accessory row on the
+   store panel.
+
+### Gate
+
+Steps 1–3 are migrations, and the ledger drift in the deployment gate above is
+still unreconciled. Build order should be catalog → persistence → matching →
+UI, so each step is verifiable on its own before the next depends on it.
