@@ -97,8 +97,8 @@ export function previewDailyShops(now: Date): readonly DailyShopView[] {
   return [
     {
       bundle: {
-        displayIcon: `${MEDIA}/bundles/4d368017-4f98-1e89-dbec-31abd2533eb9/displayicon.png`,
-        displayName: "Neo Frontier",
+        displayIcon: `${MEDIA}/bundles/d087f4fd-4942-d782-c76c-5e84dc307a66/displayicon2.png`,
+        displayName: "Aeris",
         expiresAt: nextResetAt,
         items: [
           {
