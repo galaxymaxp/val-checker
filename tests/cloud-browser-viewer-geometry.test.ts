@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeContainedPoint,
   shouldForwardViewerKey,
+  viewerPrintableText,
 } from "@/cloud-browser/src/viewer-geometry";
 
 describe("cloud browser viewer geometry", () => {
@@ -94,5 +95,39 @@ describe("cloud browser viewer keyboard", () => {
         metaKey: false,
       }),
     ).toBe(true);
+  });
+
+  it.each([
+    ["a", "a"],
+    ["A", "A"],
+    ["!", "!"],
+  ])("uses %s as canvas fallback text", (key, expected) => {
+    expect(
+      viewerPrintableText({
+        altKey: false,
+        ctrlKey: false,
+        key,
+        metaKey: false,
+      }),
+    ).toBe(expected);
+  });
+
+  it("does not turn editing keys or shortcuts into text", () => {
+    expect(
+      viewerPrintableText({
+        altKey: false,
+        ctrlKey: false,
+        key: "Backspace",
+        metaKey: false,
+      }),
+    ).toBeNull();
+    expect(
+      viewerPrintableText({
+        altKey: false,
+        ctrlKey: true,
+        key: "a",
+        metaKey: false,
+      }),
+    ).toBeNull();
   });
 });

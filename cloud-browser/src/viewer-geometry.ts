@@ -49,3 +49,11 @@ export function shouldForwardViewerKey(input: ViewerKeyInput): boolean {
     input.key.length !== 1 || input.ctrlKey || input.metaKey || input.altKey
   );
 }
+
+/**
+ * Fallback for browsers that leave focus on the streamed canvas. `KeyboardEvent#key`
+ * already contains the shifted character, so it can be inserted verbatim.
+ */
+export function viewerPrintableText(input: ViewerKeyInput): string | null {
+  return shouldForwardViewerKey(input) ? null : input.key;
+}
