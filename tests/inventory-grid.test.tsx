@@ -66,26 +66,46 @@ describe("InventoryGrid", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(20);
   });
 
-  it("orders category headings like the in-game collection screen", () => {
+  it("groups category headings into the buy menu's columns", () => {
     render(<InventoryGrid tiles={fixture} />);
 
     const headings = screen
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
 
-    expect(headings).toEqual([...INVENTORY_CATEGORIES]);
+    // Column order, not the flat collection-screen order: SMGs sit above
+    // shotguns in one column, snipers above machine guns in another.
+    expect(headings).toEqual([
+      "SIDEARMS",
+      "SMGS",
+      "SHOTGUNS",
+      "RIFLES",
+      "SNIPER RIFLES",
+      "MACHINE GUNS",
+      "MELEE",
+    ]);
   });
 
-  it("shows the newest watched skin on a watched tile", () => {
+  it("keeps every category the catalog produces", () => {
+    render(<InventoryGrid tiles={fixture} />);
+
+    const headings = screen
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent);
+
+    expect([...headings].sort()).toEqual([...INVENTORY_CATEGORIES].sort());
+  });
+
+  it("shows the newest watched skin and the watch count", () => {
     render(<InventoryGrid tiles={fixture} />);
 
     expect(screen.getByText("Prime Vandal")).toBeInTheDocument();
-    expect(screen.getByText("+1 more")).toBeInTheDocument();
+    expect(screen.getByText("2 skins watched")).toBeInTheDocument();
   });
 
   it("marks tiles with nothing watched", () => {
     render(<InventoryGrid tiles={fixture} />);
 
-    expect(screen.getAllByText("No skins watched")).toHaveLength(19);
+    expect(screen.getAllByText("Not watched")).toHaveLength(19);
   });
 });
