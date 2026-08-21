@@ -23,6 +23,38 @@ export interface ResolvedSkinLevel {
   readonly skinUuid: string;
 }
 
+/**
+ * Best-effort variant: returns what the catalog knows and silently omits the
+ * rest. The strict resolver below is right for the daily offers, where an
+ * unresolvable level means the shop cannot be described honestly. It is wrong
+ * for decoration — a bundle item missing from a partially synced catalog must
+ * not take the dashboard down with it.
+ */
+export async function resolveKnownSkinLevelsWithClient(
+  supabase: SupabaseClient<Database>,
+  levelUuids: readonly string[],
+): Promise<ResolvedSkinLevel[]> {
+  const uniqueLevelUuids = [...new Set(levelUuids)];
+
+  if (uniqueLevelUuids.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("skin_levels")
+    .select("level_uuid, skin_uuid")
+    .in("level_uuid", uniqueLevelUuids);
+
+  if (error) {
+    return [];
+  }
+
+  return (data ?? []).map(({ level_uuid, skin_uuid }) => ({
+    levelUuid: level_uuid,
+    skinUuid: skin_uuid,
+  }));
+}
+
 export async function resolveSkinLevelsWithClient(
   supabase: SupabaseClient<Database>,
   levelUuids: readonly string[],

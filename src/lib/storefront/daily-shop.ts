@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadBundleMetadata } from "@/src/lib/catalog/bundle-metadata";
 import {
-  resolveSkinLevelsWithClient,
+  resolveKnownSkinLevelsWithClient,
   SKIN_LEVEL_ITEM_TYPE_ID,
 } from "@/src/lib/catalog/resolve-skin-uuids";
 import type {
@@ -165,8 +165,10 @@ export async function loadDailyShops(
   }
 
   // The night market and bundle store skin LEVEL ids, the same as the daily
-  // offers did before enrichment, so both resolve through the one resolver
-  // that owns that boundary.
+  // offers did before enrichment. Resolution here is BEST EFFORT: these are
+  // decoration, and a bundle item missing from a partially synced catalog must
+  // not fail the dashboard read. Using the strict resolver here took the whole
+  // dashboard down the first time a real bundle was stored.
   const extraLevelUuids = [
     ...new Set(
       [...latestByConnectionId.values()].flatMap((check) => [
@@ -181,7 +183,7 @@ export async function loadDailyShops(
   ];
   const resolvedExtraLevels =
     extraLevelUuids.length > 0
-      ? await resolveSkinLevelsWithClient(supabase, extraLevelUuids)
+      ? await resolveKnownSkinLevelsWithClient(supabase, extraLevelUuids)
       : [];
   const skinByLevelUuid = new Map(
     resolvedExtraLevels.map((level) => [level.levelUuid, level.skinUuid]),
