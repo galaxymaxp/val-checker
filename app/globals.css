@@ -620,7 +620,7 @@ header nav a {
 /* Ghost variants: MFA "Start over", the admin-fallback toggle, disconnect. */
 
 .riot-mfa-fields button + button,
-.riot-admin-fallback > button,
+.riot-session-connect > button,
 .disconnect-controls button {
   background: transparent;
   border-color: var(--line);
@@ -628,7 +628,7 @@ header nav a {
 }
 
 .riot-mfa-fields button + button:hover:not(:disabled),
-.riot-admin-fallback > button:hover:not(:disabled),
+.riot-session-connect > button:hover:not(:disabled),
 .disconnect-controls button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.18);
@@ -636,9 +636,10 @@ header nav a {
   transform: none;
 }
 
-/* Admin cookie-export fallback: tucked behind a hairline, de-emphasised. */
+/* Session paste: separated by a hairline, since it is a distinct route to the
+   same outcome rather than a step in the form above it. */
 
-.riot-admin-fallback {
+.riot-session-connect {
   border-top: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
@@ -646,7 +647,7 @@ header nav a {
   padding-top: 1rem;
 }
 
-.riot-admin-fallback > button {
+.riot-session-connect > button {
   font-size: 0.82rem;
   padding: 0.45rem 1rem;
 }

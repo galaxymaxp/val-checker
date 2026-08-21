@@ -733,13 +733,21 @@ value is the unattended check, so any connect flow must yield reusable session
 material — cookies or an exported JSON session — not a token that expires the
 same hour. That rules out redirect-URL paste as the whole answer.
 
-Remaining work is therefore to make a cookie/JSON session path usable by
-someone who is not the developer. Today that path exists but is admin-gated
-(`riotJarPasteAllowed` in `app/dashboard/connection/page.tsx`), and the desktop
-capture needs the Electron shell. Open question before building: whether to
-ungate the paste path for everyone, and what guidance ships beside it, given
-that asking a player to paste session cookies is a real security ask that the
-UI must explain honestly.
+**Implemented 2026-08-20.** The session paste is no longer admin-gated. The
+connect allowlist is now the only gate on both the paste action
+(`connectSubmittedRiotJar`) and the desktop capture token, and the panel
+explains how to export cookies for `auth.riotgames.com` as JSON without
+cloning the repo. `RIOT_ADMIN_EMAILS` and the `RiotAdminAllowlist` it fed were
+removed rather than left as an inert knob that documentation still described as
+protecting something.
+
+The copy states plainly that a pasted session is live credentials and what VAL
+Checker does with it. That honesty is load-bearing: it is the difference
+between a security ask a player can consent to and one they cannot.
+
+Still open: whether the connect allowlist itself should stay. It currently
+limits Riot connection to explicitly listed accounts, so "anyone can use it"
+holds only for accounts on that list.
 
 ## 13. Deferred: featured bundle surface
 

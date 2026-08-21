@@ -22,9 +22,9 @@ const JAR = JSON.stringify([
 ]);
 
 async function revealJarPaste(user: ReturnType<typeof userEvent.setup>) {
-  // Pasting a session is the collapsed fallback, so open it first.
+  // Pasting a session starts collapsed, so open it first.
   await user.click(
-    screen.getByRole("button", { name: "Paste a captured session instead" }),
+    screen.getByRole("button", { name: "Connect with an exported session" }),
   );
 }
 
@@ -300,7 +300,7 @@ describe("Riot connection consent UI", () => {
 
     await revealJarPaste(user);
     expect(
-      screen.getByText(/contacts Riot to verify the account identity/i),
+      screen.getByText(/contacts Riot to verify which account the session belongs to/i),
     ).toBeInTheDocument();
     fireEvent.change(
       screen.getByRole("textbox", { name: "Captured Riot session" }),

@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import { mintCaptureToken } from "@/src/lib/desktop/capture-token";
 import {
-  isRiotAdmin,
   loadRiotConnectAllowlist,
   type RiotConnectIdentity,
 } from "@/src/lib/riot/connect-allowlist";
@@ -302,10 +301,9 @@ export async function connectRiotSession(
 /**
  * Mints the one-time token that starts the desktop deep-link handshake
  * (valchecker://capture?token=...). The token proves which signed-in user a
- * captured jar belongs to, so it is minted behind the exact gates that guard
- * the jar submission itself: the connect allowlist plus the admin-only gate on
- * the raw jar path. The raw token is returned once and only its hash is
- * stored; it is never logged.
+ * captured jar belongs to, so it is minted behind the exact gate that guards
+ * the jar submission itself: the connect allowlist. The raw token is returned
+ * once and only its hash is stored; it is never logged.
  */
 export async function createDesktopCaptureToken(): Promise<RiotDesktopCaptureTokenResult> {
   const resolved = await resolveConnectIdentity();
@@ -316,10 +314,6 @@ export async function createDesktopCaptureToken(): Promise<RiotDesktopCaptureTok
   try {
     loadRiotConnectAllowlist().assertAllowed(resolved.identity);
   } catch {
-    return { error: "Riot connection access is not enabled.", ok: false };
-  }
-
-  if (!isRiotAdmin(resolved.identity)) {
     return { error: "Riot connection access is not enabled.", ok: false };
   }
 
