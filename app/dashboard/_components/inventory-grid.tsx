@@ -6,11 +6,15 @@ interface InventoryGridProps {
 }
 
 /**
- * The buy menu's own column grouping. VALORANT does not lay its weapons out in
- * one flat run: sidearms take a column, SMGs and shotguns share the next,
- * rifles take their own, and snipers sit above machine guns. Melee joins that
- * last column rather than taking one of its own: the buy menu's fifth column
- * is armour, which a watchlist has nothing to put there.
+ * The buy menu's column grouping: sidearms take a column, SMGs sit above
+ * shotguns, rifles take their own, and snipers, machine guns and melee share
+ * the last.
+ *
+ * The classes are uneven -- six sidearms against one melee -- so the columns
+ * are justified rather than left to end wherever they run out: every column is
+ * the same width, all of them stretch to the tallest, and the slack is spread
+ * between groups instead of pooling as dead space at the bottom of the short
+ * ones.
  */
 const BUY_MENU_COLUMNS: readonly (readonly string[])[] = [
   ["SIDEARMS"],
@@ -32,8 +36,6 @@ export function InventoryGrid({ tiles }: InventoryGridProps) {
     tilesByCategory.set(tile.categoryLabel, group);
   }
 
-  // Any class the catalog gains that the buy menu does not place gets its own
-  // column rather than disappearing from the arsenal.
   const placed = new Set(BUY_MENU_COLUMNS.flat());
   const columns: readonly (readonly string[])[] = [
     ...BUY_MENU_COLUMNS,
@@ -63,13 +65,17 @@ export function InventoryGrid({ tiles }: InventoryGridProps) {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 items-start gap-x-3 gap-y-7 sm:grid-cols-3 md:grid-cols-4">
+      {/* items-stretch: columns share the tallest height so none stops short. */}
+      <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 md:grid-cols-4">
         {visibleColumns.map((column) => (
-          <div className="flex flex-col gap-6" key={column.join("-")}>
+          <div
+            className="flex h-full flex-col justify-between gap-4"
+            key={column.join("-")}
+          >
             {column.map((label) => (
               <section
                 aria-labelledby={categoryId(label)}
-                className="flex flex-col gap-2"
+                className="flex flex-1 flex-col gap-2"
                 key={label}
               >
                 <h3
@@ -78,9 +84,12 @@ export function InventoryGrid({ tiles }: InventoryGridProps) {
                 >
                   {label}
                 </h3>
-                <ul className="flex flex-col gap-2" role="list">
+                {/* Tiles absorb the slack by growing, the way the buy menu's
+                    own columns do -- its sidearm cells are shorter than its
+                    rifle cells, and every column still ends on one line. */}
+                <ul className="flex flex-1 flex-col gap-2" role="list">
                   {(tilesByCategory.get(label) ?? []).map((tile) => (
-                    <li key={tile.weaponUuid}>
+                    <li className="flex flex-1" key={tile.weaponUuid}>
                       <InventoryTile tile={tile} />
                     </li>
                   ))}

@@ -66,15 +66,13 @@ describe("InventoryGrid", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(20);
   });
 
-  it("groups category headings into the buy menu's columns", () => {
+  it("groups the classes into the buy menu's columns", () => {
     render(<InventoryGrid tiles={fixture} />);
 
     const headings = screen
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
 
-    // Column order, not the flat collection-screen order: SMGs sit above
-    // shotguns in one column, snipers above machine guns in another.
     expect(headings).toEqual([
       "SIDEARMS",
       "SMGS",
