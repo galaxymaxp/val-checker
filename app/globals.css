@@ -159,13 +159,10 @@ svg {
   max-width: 100%;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
+/* No unlayered form reset here either. Tailwind's preflight already applies
+   `font: inherit; color: inherit` to these elements in @layer base, and an
+   unlayered copy outranks every layered text-colour utility -- which is why a
+   `text-bg` button rendered white-on-white. See the margin note above. */
 
 button,
 [role="button"],
