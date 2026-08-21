@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   loadRiotConnectAllowlist,
+  type RiotConnectAuthorizer,
   type RiotConnectIdentity,
 } from "@/src/lib/riot/connect-allowlist";
 import {
@@ -49,13 +50,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function connectSubmittedRiotJar(
   identity: RiotConnectIdentity,
   submission: unknown,
+  authorizer: RiotConnectAuthorizer = loadRiotConnectAllowlist(),
 ): Promise<RiotConnectionMutationResult> {
-  let allowlist;
-
   try {
-    allowlist = loadRiotConnectAllowlist();
     // Authorization happens before the submitted jar is read or transformed.
-    allowlist.assertAllowed(identity);
+    authorizer.assertAllowed(identity);
   } catch {
     return { error: RIOT_CONNECT_NOT_ENABLED_MESSAGE, ok: false };
   }
@@ -93,7 +92,7 @@ export async function connectSubmittedRiotJar(
     const service = new RiotConnectionService(
       new ManualCookieProvider(),
       store,
-      allowlist,
+      authorizer,
       new SubmittedCookieProvider(),
       undefined,
       undefined,

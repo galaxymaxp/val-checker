@@ -29,6 +29,10 @@ export class RiotConnectNotAllowedError extends Error {
   }
 }
 
+export interface RiotConnectAuthorizer {
+  assertAllowed(identity: RiotConnectIdentity): void;
+}
+
 function parseConfiguredList(
   value: string | undefined,
   schema: z.ZodType<string>,
@@ -77,7 +81,10 @@ class IdentityAllowlist {
   }
 }
 
-export class RiotConnectAllowlist extends IdentityAllowlist {
+export class RiotConnectAllowlist
+  extends IdentityAllowlist
+  implements RiotConnectAuthorizer
+{
   constructor(environment: RiotConnectAllowlistEnvironment) {
     super(
       environment.RIOT_CONNECT_ALLOWED_USER_IDS,

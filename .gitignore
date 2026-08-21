@@ -19,6 +19,7 @@ test-results/
 
 # Desktop shell build output
 desktop/dist/
+cloud-browser/dist/
 
 # Environment and secret-bearing files
 .env*

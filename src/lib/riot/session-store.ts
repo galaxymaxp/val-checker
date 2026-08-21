@@ -77,6 +77,12 @@ function storedValue(row: {
   };
 }
 
+function acquisitionProvider(
+  provider: CapturedSession["provider"],
+): Database["public"]["Tables"]["riot_connections"]["Row"]["acquisition_provider"] {
+  return provider;
+}
+
 export class SupabaseEncryptedSessionStore implements SessionStore {
   constructor(
     private readonly supabase: SupabaseClient<Database>,
@@ -135,6 +141,7 @@ export class SupabaseEncryptedSessionStore implements SessionStore {
 
     const encrypted = this.cipher.encrypt(userId, session.material);
     const storedSession = {
+      acquisition_provider: acquisitionProvider(session.provider),
       auth_status: "CONNECTED" as const,
       connection_epoch: randomUUID(),
       consecutive_failures: 0,

@@ -7,7 +7,7 @@ import {
 } from "@/src/lib/riot/session-provider";
 import {
   type RiotConnectIdentity,
-  RiotConnectAllowlist,
+  type RiotConnectAuthorizer,
 } from "@/src/lib/riot/connect-allowlist";
 import {
   parseRiotRegion,
@@ -69,6 +69,29 @@ export type ConnectCredentialsRequest = {
   readonly username: string;
 };
 
+export type ConnectCapturedSessionRequest = {
+  readonly connectionId?: unknown;
+  readonly consentGranted: boolean;
+  readonly identity: RiotConnectIdentity;
+  readonly label?: unknown;
+  readonly region?: unknown;
+  readonly session: CapturedSession;
+};
+
+export type ConnectedRiotAccount = {
+  readonly connectionId: string;
+  readonly puuid: string;
+  readonly region: RiotRegion;
+  readonly riotId: RiotId | null;
+};
+
+export class RiotIdentityResolutionRequiredError extends Error {
+  constructor() {
+    super("Riot could not verify the captured session.");
+    this.name = "RiotIdentityResolutionRequiredError";
+  }
+}
+
 export type SubmitMfaCodeRequest = {
   readonly code: string;
   readonly identity: RiotConnectIdentity;
@@ -124,7 +147,7 @@ export class RiotConnectionService {
   constructor(
     private readonly provider: ManualCookieProvider,
     private readonly store: SessionStore,
-    private readonly allowlist: RiotConnectAllowlist,
+    private readonly allowlist: RiotConnectAuthorizer,
     private readonly submittedProvider = new SubmittedCookieProvider(),
     private readonly loginProvider?: RiotLoginProvider,
     private readonly pendingAuth?: PendingAuthStore,
@@ -278,6 +301,48 @@ export class RiotConnectionService {
       // identity resolves. Automatic and operator refreshes do not need it.
       return { puuid: null, riotId: null, session };
     }
+  }
+
+  /**
+   * Strict path used by interactive cloud capture. Unlike the legacy/manual
+   * fallback, it refuses to create a connection until Riot cookie reauth and
+   * /userinfo both prove that the captured jar is usable.
+   */
+  async connectCaptured(
+    request: ConnectCapturedSessionRequest,
+  ): Promise<ConnectedRiotAccount> {
+    this.allowlist.assertAllowed(request.identity);
+    if (!request.consentGranted) {
+      throw new RiotConsentRequiredError();
+    }
+    if (!this.identityResolver) {
+      throw new RiotIdentityResolutionRequiredError();
+    }
+
+    const region = parseRiotRegion(request.region);
+    const resolved = await this.identityResolver.resolve(request.session, region);
+    if (!resolved.puuid) {
+      throw new RiotIdentityResolutionRequiredError();
+    }
+
+    const connectionId = await this.store.save(
+      request.identity.userId,
+      resolved.session,
+      {
+        connectionId: normalizeConnectionId(request.connectionId),
+        label: normalizeLabel(request.label),
+        puuid: resolved.puuid,
+        region,
+        riotId: resolved.riotId,
+      },
+    );
+
+    return {
+      connectionId,
+      puuid: resolved.puuid,
+      region,
+      riotId: resolved.riotId,
+    };
   }
 
   async connect(

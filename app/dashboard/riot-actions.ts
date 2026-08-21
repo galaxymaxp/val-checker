@@ -6,9 +6,11 @@ import { z } from "zod";
 import { mintCaptureToken } from "@/src/lib/desktop/capture-token";
 import {
   loadRiotConnectAllowlist,
+  RiotConnectNotAllowedError,
   type RiotConnectIdentity,
 } from "@/src/lib/riot/connect-allowlist";
 import { connectSubmittedRiotJar } from "@/src/lib/riot/connect-submitted-jar";
+import { canUseRiotCloudConnect } from "@/src/lib/riot/cloud-connect-policy";
 import {
   type CredentialConnectResult,
   RiotConnectionService,
@@ -289,7 +291,17 @@ export async function connectRiotSession(
   // the connect itself and the follow-up storefront fetch all live in the
   // shared helper, so /api/desktop/connect cannot become a way around any of
   // them.
-  const result = await connectSubmittedRiotJar(identity, submission);
+  const result = await connectSubmittedRiotJar(identity, submission, {
+    assertAllowed(candidate) {
+      if (
+        loadRiotConnectAllowlist().allows(candidate) ||
+        canUseRiotCloudConnect(candidate)
+      ) {
+        return;
+      }
+      throw new RiotConnectNotAllowedError();
+    },
+  });
   if (!result.ok) {
     return result;
   }

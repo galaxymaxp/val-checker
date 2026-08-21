@@ -114,6 +114,11 @@ type StorefrontOfferDetail = {
 };
 
 type RiotConnectionRow = {
+  acquisition_provider:
+    | "cloud-browser"
+    | "manual-cookie"
+    | "riot-login"
+    | "legacy";
   id: string;
   user_id: string;
   connection_epoch: string;
@@ -134,6 +139,47 @@ type RiotConnectionRow = {
   rotation_lease_storefront_attempted_at: string | null;
   rotation_lease_token: string | null;
   created_at: string;
+};
+
+export type RiotCloudConnectionState =
+  | "created"
+  | "starting_browser"
+  | "waiting_for_user"
+  | "authenticating"
+  | "capturing_session"
+  | "validating_session"
+  | "connected"
+  | "failed"
+  | "expired"
+  | "cancelled";
+
+type RiotCloudConnectionSessionRow = {
+  id: string;
+  user_id: string;
+  target_connection_id: string | null;
+  provider_session_id: string | null;
+  state: RiotCloudConnectionState;
+  region: string;
+  label: string | null;
+  created_at: string;
+  expires_at: string;
+  consumed_at: string | null;
+  destroyed_at: string | null;
+  last_heartbeat_at: string | null;
+  failure_code:
+    | "browser_unavailable"
+    | "capture_failed"
+    | "expired"
+    | "internal"
+    | "riot_rejected"
+    | "storefront_failed"
+    | "validation_failed"
+    | null;
+  mfa_requested: boolean;
+  captcha_observed: boolean;
+  validation_succeeded: boolean;
+  storefront_succeeded: boolean;
+  reauth_test_succeeded: boolean;
 };
 
 type RiotDailyRunRow = {
@@ -317,6 +363,7 @@ export interface Database {
           "user_id" | "encrypted_jar" | "jar_nonce"
         > & {
           id?: string;
+          acquisition_provider?: RiotConnectionRow["acquisition_provider"];
           created_at?: string;
           puuid?: string | null;
           game_name?: string | null;
@@ -335,6 +382,21 @@ export interface Database {
           session_key_version?: number;
         };
         Update: Partial<RiotConnectionRow>;
+        Relationships: [];
+      };
+      riot_cloud_connection_sessions: {
+        Row: RiotCloudConnectionSessionRow;
+        Insert: Pick<
+          RiotCloudConnectionSessionRow,
+          "user_id" | "region" | "expires_at"
+        > &
+          Partial<
+            Omit<
+              RiotCloudConnectionSessionRow,
+              "user_id" | "region" | "expires_at"
+            >
+          >;
+        Update: Partial<RiotCloudConnectionSessionRow>;
         Relationships: [];
       };
       riot_daily_runs: {

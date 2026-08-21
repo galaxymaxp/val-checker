@@ -33,6 +33,32 @@ There is no polled, query-driven, or public debug request path to Riot.
 - The application server is the only component allowed to decrypt stored session material.
 - Submitted jars, fixtures, and test inputs are untrusted data even when they are checked into the repository.
 - Resend receives the verified destination email and rendered notification content, but never Riot cookies, tokens, authorization headers, or PUUIDs.
+- The separate cloud-browser service temporarily sees pixels, keyboard/touch events, and the resulting Riot cookie jar. It is therefore a password-equivalent trust boundary even though VAL Checker does not store the Riot password.
+
+### Temporary cloud browser
+
+Each connection receives a separate Chromium process and incognito context with
+no persistent profile. The database control record is owner-bound, expires in
+eight minutes, is atomically claimed once, and contains only safe state flags;
+the external provider ID is excluded from authenticated Data API grants. The
+viewer bearer token is random, short lived, carried in the URL fragment, and
+sent as the first WebSocket message rather than in an HTTP query or access log.
+The control API uses an independent server-only bearer key.
+
+Cookies are captured by the server-side browser only after Riot redirects from
+its real login page. They are bounded, normalized, validated by the existing
+Riot identity pipeline, encrypted with the existing AES-256-GCM keyring, and
+never returned by VAL Checker routes. The browser clears cookies and closes its
+context and process on success, failure, cancellation, timeout, or a sustained
+viewer disconnect. Destruction is idempotent. Neither MFA nor CAPTCHA is
+automated or bypassed, and keyboard events, screenshots, URLs, cookies, and
+tokens must never be logged or sent to analytics/error reporting.
+
+The screenshot-over-WebSocket transport is intentionally a canary prototype.
+Cloud Run is held to one instance because browser/session routing is in memory;
+horizontal scaling requires durable routing or one service/container per
+session. A live later reauthentication from the persisted jar is still required
+before the legacy Electron and direct-credential paths can be removed.
 
 ## Threats and controls
 

@@ -22,9 +22,9 @@ const JAR = JSON.stringify([
 ]);
 
 async function revealJarPaste(user: ReturnType<typeof userEvent.setup>) {
-  // Pasting a session starts collapsed, so open it first.
+  // Manual JSON is nested under the advanced fallback and starts collapsed.
   await user.click(
-    screen.getByRole("button", { name: "Connect with an exported session" }),
+    screen.getByRole("button", { name: "Advanced connection options" }),
   );
 }
 
@@ -361,9 +361,8 @@ describe("Riot connection consent UI", () => {
       />,
     );
 
-    expect(
-      screen.getByText(/never stored, never written to our logs/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/does not store your Riot password or MFA code/i)).toBeInTheDocument();
+    expect(screen.getByText(/remote-browser infrastructure carries your input/i)).toBeInTheDocument();
     expect(
       screen.getByText(/can permit access to your Riot account/i),
     ).toBeInTheDocument();
@@ -371,11 +370,7 @@ describe("Riot connection consent UI", () => {
     expect(screen.getByText(/disconnect and delete it/i)).toBeInTheDocument();
     expect(screen.getByText(/not affiliated with Riot Games/i)).toBeInTheDocument();
     expect(screen.getByText(/Sign out everywhere/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/one automatic storefront check per UTC day/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/one separate manual refresh per UTC day/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/complete renewable cookie jar/i)).toBeInTheDocument();
+    expect(screen.getByText(/temporary browser is then destroyed/i)).toBeInTheDocument();
   });
 });

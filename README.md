@@ -7,22 +7,23 @@ closed gates remain in [the roadmap](docs/roadmap.md).
 
 ## Operating policy
 
-Public magic-link signup remains open. Riot session submission is a separate,
-fail-closed capability: only identities listed in
-`RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` may connect an
-account. The server derives the identity from verified Supabase claims and
-checks the allowlist again before accepting session material.
+Public magic-link signup remains open. The primary connection candidate is a
+temporary, isolated Chromium browser controlled through the website. It shows
+Riot Games' real login page, captures the resulting complete cookie jar only on
+the server, feeds that jar into the existing encrypted session pipeline, and is
+then destroyed. Manual cookie JSON remains the advanced fallback.
+Riot session submission is a separate, fail-closed capability from public
+signup and Riot-independent features.
 
-Allowlisted users connect by signing in to Riot with a username and password.
-That credential is transit-only: it is exchanged with Riot for a session cookie
-jar, is never written to the database or the logs, and is discarded as soon as
-Riot answers. Only the resulting jar is stored, encrypted as before. Enabling
-MFA on the connected Riot account is recommended, and the sign-in flow prompts
-for both emailed and authenticator codes. Riot rejects credential
-sign-ins posted from Vercel's datacenter IPs, so pasting an exported session is
-the browser path that actually works, and it is available to every account the
-connect allowlist admits. See the Version 2.4 addendum in
-[the roadmap](docs/roadmap.md) for the full decision.
+Cloud connection is fail-closed behind `RIOT_CLOUD_CONNECT_ENABLED`. While
+`RIOT_CLOUD_CONNECT_PUBLIC=false`, only identities in
+`RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` may start a
+session. The server derives identity from verified Supabase claims and repeats
+authorization at every route boundary. The direct credential and Electron
+implementations remain temporarily only as rollback paths: they must not be
+removed until the real Singapore canary proves login, identity, storefront,
+destruction, and a later cookie reauthentication. See
+[the cloud-browser architecture and canary runbook](docs/cloud-browser-riot-connection.md).
 
 Signing in does not read a storefront. One application login may connect
 multiple Riot accounts; every account keeps its own encrypted session, store,
@@ -104,6 +105,10 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `SESSION_ENCRYPTION_KEY_V<n>` | Server only | Base64 encoding of exactly 32 random bytes for each retained key version, such as the initial `V1`. |
 | `RIOT_CONNECT_ALLOWED_USER_IDS` | Server only | Comma-separated verified Supabase user UUIDs allowed to submit Riot session material. |
 | `RIOT_CONNECT_ALLOWED_EMAILS` | Server only | Comma-separated verified Supabase emails allowed to submit Riot session material. |
+| `RIOT_CLOUD_CONNECT_ENABLED` | Server only | Emergency kill switch for temporary browser connection. Defaults closed unless exactly `true`. |
+| `RIOT_CLOUD_CONNECT_PUBLIC` | Server only | When `false`, cloud connection also requires the existing canary allowlist. |
+| `RIOT_CLOUD_BROWSER_URL` | Server only | HTTPS origin of the separately deployed Singapore browser service. |
+| `RIOT_CLOUD_BROWSER_API_KEY` | Server only | Bearer key for the browser service control API; never expose it to clients. |
 | `RIOT_TLS_CIPHERS` | Server only | Optional TLS cipher order for Riot's auth host. Leave unset unless sign-in begins returning 403. |
 | `RESEND_API_KEY` | Server only | Resend API key used by the daily worker. |
 | `RESEND_FROM_EMAIL` | Server only | Sender identity on a verified Resend domain. |

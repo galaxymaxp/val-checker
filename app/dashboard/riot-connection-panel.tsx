@@ -15,6 +15,7 @@ import type {
 } from "@/src/types/riot-connection";
 
 interface RiotConnectionPanelProps {
+  readonly cloudConnectAvailable?: boolean;
   readonly connectAllowed: boolean;
   /** Mints the one-time token behind the valchecker:// deep link. */
   readonly createCaptureToken?: () => Promise<RiotDesktopCaptureTokenResult>;
@@ -60,6 +61,7 @@ function getDesktopBridgeServerSnapshot(): boolean {
 }
 
 function RiotConnectionPanelState({
+  cloudConnectAvailable = false,
   connectAllowed,
   connectCredentials,
   connectFixture,
@@ -106,6 +108,14 @@ function RiotConnectionPanelState({
 
   const credentialsReady =
     username.trim().length > 0 && password.length > 0 && consentGranted;
+
+  function startCloudConnect() {
+    if (!cloudConnectAvailable || !consentGranted || isPending) return;
+    const query = new URLSearchParams({ region });
+    if (label.trim()) query.set("label", label.trim());
+    if (targetConnectionId) query.set("connection", targetConnectionId);
+    router.push(`/connect/riot?${query.toString()}`);
+  }
 
   function applyResult(result: RiotCredentialConnectResult) {
     if (!result.ok) {
@@ -433,18 +443,18 @@ function RiotConnectionPanelState({
         // collapsed once connected so it stops dominating the screen.
         {...(connectionState === "disconnected" ? { open: true } : {})}
       >
-        <summary>How your Riot credentials are handled</summary>
+        <summary>How your Riot session is handled</summary>
         <div className="consent-copy">
           <p>
-            VAL Checker signs in to Riot on your behalf and stores the
-            resulting session so it can run one automatic storefront check per
-            UTC day. You may also request one separate manual refresh per UTC
-            day.
+            You sign in on Riot Games&apos; actual login page inside a temporary,
+            isolated browser. The remote-browser infrastructure carries your
+            input while you interact with that page, but VAL Checker does not
+            store your Riot password or MFA code.
           </p>
           <p>
-            Your password is used only to complete that sign-in. It is never
-            stored, never written to our logs, and is discarded as soon as Riot
-            answers.
+            After Riot accepts the login, the complete renewable cookie jar is
+            validated, encrypted, and stored. The temporary browser is then
+            destroyed.
           </p>
           <p>
             The session we keep can permit access to your Riot account. It is
@@ -494,6 +504,46 @@ function RiotConnectionPanelState({
           </div>
         ) : (
           <>
+            {cloudConnectAvailable ? (
+              <div className="riot-desktop-connect">
+                <div className="riot-signin-fields">
+                  <label>
+                    <span>Account region</span>
+                    <select
+                      onChange={(event) => setRegion(event.target.value)}
+                      value={region}
+                    >
+                      <option value="ap">Asia Pacific</option>
+                      <option value="na">North America</option>
+                      <option value="eu">Europe</option>
+                      <option value="kr">Korea</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Account name (optional)</span>
+                    <input
+                      maxLength={60}
+                      onChange={(event) => setLabel(event.target.value)}
+                      placeholder="Tells this account apart from your others"
+                      value={label}
+                    />
+                  </label>
+                </div>
+                <button
+                  className="riot-desktop-connect-button"
+                  disabled={!consentGranted || isPending}
+                  onClick={startCloudConnect}
+                  type="button"
+                >
+                  Continue with Riot
+                </button>
+                <p role="note">
+                  Works in mobile and desktop browsers. MFA and CAPTCHA, when
+                  requested by Riot, stay interactive in the temporary browser.
+                </p>
+              </div>
+            ) : null}
+
             {desktopConnectAvailable ? (
               <div className="riot-desktop-connect">
                 <button
@@ -600,7 +650,7 @@ function RiotConnectionPanelState({
               >
                 {isPending ? "Connecting fixture..." : "Connect fixture session"}
               </button>
-            ) : !connectAllowed ? (
+            ) : !connectAllowed && !cloudConnectAvailable ? (
               // Only a real state gets a control. An allowlisted account with
               // no wired form used to land on a disabled "not yet available"
               // button presented as the primary action.
@@ -609,7 +659,7 @@ function RiotConnectionPanelState({
               </button>
             ) : null}
 
-            {!connectAllowed ? (
+            {!connectAllowed && !cloudConnectAvailable ? (
               <p className="ship-gate-note" role="note">
                 Riot connection access is limited to explicitly allowlisted
                 accounts. Public VAL Checker signup and Riot-independent features
@@ -618,15 +668,15 @@ function RiotConnectionPanelState({
             ) : null}
 
             {connectSession ? (
-              <div className="riot-session-connect">
+              <div className="riot-session-connect" id="advanced-riot-connect">
                 <button
                   aria-expanded={showJarPaste}
                   onClick={() => setShowJarPaste((shown) => !shown)}
                   type="button"
                 >
                   {showJarPaste
-                    ? "Hide session paste"
-                    : "Connect with an exported session"}
+                    ? "Hide advanced connection options"
+                    : "Advanced connection options"}
                 </button>
                 {showJarPaste ? (
                   <div className="consent-copy" role="note">
@@ -634,7 +684,8 @@ function RiotConnectionPanelState({
                       Sign in to Riot in your browser, then export your
                       cookies for <code>auth.riotgames.com</code> as JSON with
                       a cookie-export extension and paste the result below. The
-                      <code> ssid</code> cookie is the one that matters.
+                      VAL Checker validates and normalizes the complete useful
+                      Riot cookie jar before encrypting it.
                     </p>
                     <p>
                       <strong>What you are pasting is a live session.</strong>{" "}

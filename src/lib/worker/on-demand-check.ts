@@ -97,25 +97,56 @@ export async function runConnectStorefrontFetch(
       return { ran: false, summary: null };
     }
 
-    const { buildConfiguredDailyStorefrontWorker } = await import(
-      "@/src/lib/worker/storefront-runtime"
-    );
-
     let refreshed = 0;
     let last: OnDemandCheckOutcome["summary"] = null;
 
     for (const row of data) {
-      const worker = await buildConfiguredDailyStorefrontWorker({
-        connectionId: row.id,
-        trigger: "operator",
+      const outcome = await runConnectStorefrontFetchForConnection(
         userId,
-      });
-      const summary = await worker.run();
-      refreshed += summary.refreshed;
-      last = summary;
+        row.id,
+      );
+      refreshed += outcome.summary?.refreshed ?? 0;
+      last = outcome.summary;
     }
 
     return { ran: refreshed > 0, summary: last };
+  } catch (error) {
+    console.error("[connect-fetch] storefront fetch failed", {
+      kind: error instanceof Error ? error.name : "Unknown",
+    });
+    return { ran: false, summary: null };
+  }
+}
+
+/** Exact-account variant used by cloud capture's validation gate. */
+export async function runConnectStorefrontFetchForConnection(
+  userId: string,
+  connectionId: string,
+): Promise<OnDemandCheckOutcome> {
+  if (
+    !DATABASE_UUID_PATTERN.test(userId) ||
+    !DATABASE_UUID_PATTERN.test(connectionId)
+  ) {
+    return { ran: false, summary: null };
+  }
+
+  try {
+    const { buildConfiguredDailyStorefrontWorker } = await import(
+      "@/src/lib/worker/storefront-runtime"
+    );
+    const worker = await buildConfiguredDailyStorefrontWorker({
+      connectionId,
+      trigger: "operator",
+      userId,
+    });
+    const summary = await worker.run();
+    const account = summary.accounts.find(
+      (result) => result.connectionId === connectionId,
+    );
+    return {
+      ran: account?.outcome === "checked" && summary.refreshed > 0,
+      summary,
+    };
   } catch (error) {
     console.error("[connect-fetch] storefront fetch failed", {
       kind: error instanceof Error ? error.name : "Unknown",

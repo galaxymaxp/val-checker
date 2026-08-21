@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+import {
+  domainMatches,
+  normalizeCookie,
+  serializeCookieJar,
+} from "@/src/lib/riot/cookie-jar";
+
+export type RiotConnectionProviderKind =
+  | "cloud-browser"
+  | "manual-cookie"
+  | "riot-login";
+
 export type CapturedSession = {
   readonly capturedAt: string;
   readonly fixtureOnly: boolean;
@@ -9,7 +20,7 @@ export type CapturedSession = {
    * `riot-login` jars are produced by exchanging a credential with Riot at
    * connect time. The credential itself is never part of a CapturedSession.
    */
-  readonly provider: "manual-cookie" | "riot-login";
+  readonly provider: RiotConnectionProviderKind;
 };
 
 export type ManualCookieFixtureInput = {
@@ -19,6 +30,11 @@ export type ManualCookieFixtureInput = {
 
 export type SubmittedCookieJarInput = {
   readonly serializedJar: string;
+};
+
+export type CloudBrowserCookieInput = {
+  /** Raw Playwright BrowserContext cookies. Never sourced from browser JS. */
+  readonly cookies: unknown;
 };
 
 export const MAX_SUBMITTED_COOKIE_JAR_BYTES = 128 * 1024;
@@ -161,6 +177,68 @@ export class SubmittedCookieProvider
       material,
       provider: this.kind,
     };
+  }
+}
+
+const CLOUD_SESSION_PROOF_COOKIE_NAMES = new Set([
+  "ssid",
+  "clid",
+  "csid",
+  "sub",
+  "asid",
+  "did",
+]);
+
+/**
+ * Acquisition boundary for the isolated browser service. The service returns
+ * Playwright cookies only to this server-side provider; this class normalizes
+ * them into the exact jar format consumed by the existing reauth pipeline.
+ */
+export class CloudBrowserSessionProvider
+  implements SessionProvider<CloudBrowserCookieInput>
+{
+  readonly kind = "cloud-browser" as const;
+  private readonly now: () => Date;
+
+  constructor(options: ManualCookieProviderOptions = {}) {
+    this.now = options.now ?? (() => new Date());
+  }
+
+  async capture(input: CloudBrowserCookieInput): Promise<CapturedSession> {
+    if (!Array.isArray(input.cookies) || input.cookies.length === 0 || input.cookies.length > 256) {
+      throw new SubmittedSessionInputError();
+    }
+
+    try {
+      const normalized = input.cookies.map(normalizeCookie);
+      const encoded = serializeCookieJar(normalized);
+      const hasSessionProof = normalized.some(
+        (cookie) =>
+          CLOUD_SESSION_PROOF_COOKIE_NAMES.has(cookie.name) &&
+          domainMatches(cookie.domain, "auth.riotgames.com", cookie.hostOnly),
+      );
+
+      if (
+        !hasSessionProof ||
+        encoded.byteLength === 0 ||
+        encoded.byteLength > MAX_SUBMITTED_COOKIE_JAR_BYTES
+      ) {
+        throw new SubmittedSessionInputError();
+      }
+
+      return {
+        capturedAt: this.now().toISOString(),
+        fixtureOnly: false,
+        kind: "captured-session",
+        material: encoded,
+        provider: this.kind,
+      };
+    } catch (error) {
+      if (error instanceof SubmittedSessionInputError) {
+        throw error;
+      }
+      throw new SubmittedSessionInputError();
+    }
   }
 }
 

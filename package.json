@@ -19,6 +19,7 @@
     "supabase:start": "node scripts/supabase-start.mjs",
     "supabase:stop": "supabase stop",
     "typecheck": "tsc --noEmit",
+    "typecheck:cloud-browser": "pnpm --filter val-checker-cloud-browser typecheck",
     "test": "pnpm run test:unit && pnpm run test:integration",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
