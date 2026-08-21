@@ -749,12 +749,34 @@ Still open: whether the connect allowlist itself should stay. It currently
 limits Riot connection to explicitly listed accounts, so "anyone can use it"
 holds only for accounts on that list.
 
-## 13. Deferred: featured bundle surface
+## 13. Featured bundle and night market (implemented 2026-08-20)
 
-Replace the notifications block below the watchlist with the store's current
-featured bundle. Two of the three pieces already exist: `shop_checks.bundle`
-(jsonb) is in the foundation migration, and `src/lib/storefront/schema.ts`
-already validates `FeaturedBundle`. What is missing is the write — nothing in
-the worker or the shop upsert populates that column — plus a read model and the
-UI. No migration required; scope is persistence, a `loadDailyShops`-style
-reader, and the surface itself.
+Both are read from the storefront response the daily check already makes, so
+neither costs an extra Riot request.
+
+**Bundle.** `createStorefrontRefreshSnapshot` now captures `FeaturedBundle` as
+a catalog-independent snapshot: the DataAssetID, item skin-level ids with base
+and discounted prices, the totals, and an expiry derived from the remaining
+duration. Bundle name and artwork are not in the synced catalog, so they are
+resolved from valorant-api at render time behind a day-long cache and degrade
+to prices-only if that read fails.
+
+**Night market.** Riot only sends `BonusStore` while one is running, and there
+is no way to observe one on demand, so the shape here is written from
+documentation rather than a captured response. It is therefore parsed **out of
+band**, never as part of `storefrontSchema`: a wrong guess degrades to "no
+night market shown" instead of failing the daily check for every account.
+`tests/storefront-extras.test.ts` covers that degradation explicitly, alongside
+a synthetic running market. When a real one appears, verify the shape against
+the live payload before trusting the panel.
+
+Neither may influence `shopHash`. It stays hashed over the daily offers alone,
+so a bundle countdown cannot make one rotation look like a different shop.
+
+**Persistence note.** `shop_checks.bundle` and `shop_checks.night_market`
+already existed, but `record_storefront_refresh` predates them and changing a
+database function's signature means a migration against the gated ledger. Both
+columns are therefore written in a second statement immediately after the RPC,
+which never throws: a failure there costs a display panel, not the storefront
+claim that was just spent. Folding them into the function is worth doing the
+next time that migration is opened for another reason.

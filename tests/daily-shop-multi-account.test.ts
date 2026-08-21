@@ -119,10 +119,12 @@ describe("daily shop with multiple Riot accounts", () => {
 
     expect(views).toHaveLength(2);
     expect(views[0]).toEqual({
+      bundle: null,
       checkedAt: "2026-08-16T00:05:00Z",
       connectionId: "conn-one",
       expiresAt: "2026-08-17T00:00:00Z",
       label: "Main",
+      nightMarket: null,
       offers: [
         {
           displayIcon: "a.png",
@@ -146,10 +148,12 @@ describe("daily shop with multiple Riot accounts", () => {
       rotationDate: "2026-08-16",
     });
     expect(views[1]).toEqual({
+      bundle: null,
       checkedAt: "2026-08-16T00:06:00Z",
       connectionId: "conn-two",
       expiresAt: null,
       label: null,
+      nightMarket: null,
       offers: [
         {
           displayIcon: null,

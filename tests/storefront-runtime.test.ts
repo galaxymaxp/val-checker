@@ -113,7 +113,9 @@ function deliveryInput(withEmail: boolean) {
   const skinUuid = "33333333-3333-4333-8333-333333333333";
   return {
     canonicalStorefront: {
+      bundle: null,
       expiresAt: "2026-08-18T00:00:00.000Z",
+      nightMarket: null,
       offers: [],
       shopHash: "a".repeat(64),
       skinUuids: withEmail ? [skinUuid] : [],

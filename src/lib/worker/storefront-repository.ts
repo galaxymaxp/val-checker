@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { decideSessionLifecycle } from "@/src/lib/riot/session-lifecycle";
+import type { PersistableStorefront } from "@/src/lib/storefront/canonicalize";
 import type { Database } from "@/src/types/database";
 import type {
   DailyRunClaim,
@@ -488,6 +489,40 @@ export class SupabaseDailyStorefrontRepository
         !validDate(recorded.manual_succeeded_at))
     ) {
       throw new StorefrontWorkerRepositoryError();
+    }
+
+    await this.recordStorefrontExtras(
+      recorded.shop_check_id,
+      input.storefront,
+    );
+  }
+
+  /**
+   * Writes the featured bundle and night market onto the row the refresh RPC
+   * just created. They are a second statement rather than RPC arguments
+   * because changing that function's signature means a migration against a
+   * ledger that is deliberately gated, and neither column is load-bearing:
+   * a failure here costs a display panel, not the storefront claim that was
+   * just spent. It therefore never throws.
+   */
+  private async recordStorefrontExtras(
+    shopCheckId: string,
+    storefront: PersistableStorefront,
+  ): Promise<void> {
+    if (!storefront.bundle && !storefront.nightMarket) {
+      return;
+    }
+
+    try {
+      await this.supabase
+        .from("shop_checks")
+        .update({
+          bundle: storefront.bundle,
+          night_market: storefront.nightMarket,
+        })
+        .eq("id", shopCheckId);
+    } catch {
+      // Deliberately swallowed; see the contract above.
     }
   }
 

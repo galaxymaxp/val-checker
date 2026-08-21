@@ -144,3 +144,58 @@ export function extractStorefrontSkinLevelUuids(payload: unknown): string[] {
 
   return [...uniqueLevelUuids];
 }
+
+/**
+ * Night market. Riot only sends `BonusStore` while a night market is running,
+ * and there is no way to observe one on demand, so this shape is written from
+ * the documented payload rather than from a captured response.
+ *
+ * It is therefore parsed OUT OF BAND, never as part of `storefrontSchema`: a
+ * wrong guess here must degrade to "no night market shown", not fail the daily
+ * check for every account. `storefrontSchema` keeps treating `BonusStore` as
+ * unknown-but-present for exactly that reason.
+ */
+const bonusStoreOfferSchema = z.object({
+  BonusOfferID: riotUuidSchema,
+  DiscountCosts: priceByCurrencySchema,
+  DiscountPercent: nonnegativeNumberSchema,
+  IsSeen: z.boolean().optional(),
+  Offer: offerSchema,
+});
+
+const bonusStoreSchema = z.object({
+  BonusStoreOffers: z.array(bonusStoreOfferSchema),
+  BonusStoreRemainingDurationInSeconds: nonnegativeIntegerSchema,
+});
+
+export type BonusStorePayload = z.infer<typeof bonusStoreSchema>;
+
+/** Returns null for an absent, malformed, or unexpectedly shaped night market. */
+export function parseNightMarketPayload(
+  payload: unknown,
+): BonusStorePayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const bonusStore = (payload as { BonusStore?: unknown }).BonusStore;
+  const parsed = bonusStoreSchema.safeParse(bonusStore);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Skin levels offered by a running night market, for catalog resolution. */
+export function extractNightMarketSkinLevelUuids(payload: unknown): string[] {
+  const nightMarket = parseNightMarketPayload(payload);
+  if (!nightMarket) {
+    return [];
+  }
+
+  const levelUuids = new Set<string>();
+  for (const bonus of nightMarket.BonusStoreOffers) {
+    for (const reward of bonus.Offer.Rewards) {
+      if (reward.ItemTypeID === SKIN_LEVEL_ITEM_TYPE_ID) {
+        levelUuids.add(reward.ItemID);
+      }
+    }
+  }
+  return [...levelUuids];
+}
