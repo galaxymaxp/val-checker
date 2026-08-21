@@ -35,8 +35,8 @@ describe("security documentation", () => {
     const readme = readRepositoryFile("README.md");
     const security = readRepositoryFile("SECURITY.md");
 
-    expect(readme).toMatch(/single-user dogfooding/i);
-    expect(readme).toMatch(/operator's own account only for approximately three\s+weeks/i);
+    expect(readme).toMatch(/private dogfooding/i);
+    expect(readme).toMatch(/operator and explicitly trusted friends/i);
     expect(readme).toMatch(/Public magic-link signup remains open/i);
     expect(readme).toMatch(/session submission is a separate,\s+fail-closed capability/is);
     expect(readme).toMatch(

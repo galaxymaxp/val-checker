@@ -2,39 +2,43 @@
 
 VAL Checker watches selected VALORANT skins and emails an authenticated user
 when one appears in that user's daily storefront. Phase 6 is open for
-single-user dogfooding under a staged rollout; the decision history and earlier
+private dogfooding under a staged rollout; the decision history and earlier
 closed gates remain in [the roadmap](docs/roadmap.md).
 
 ## Operating policy
 
-Public magic-link signup remains open. The primary connection candidate is a
-temporary, isolated Chromium browser controlled through the website. It shows
-Riot Games' real login page, captures the resulting complete cookie jar only on
-the server, feeds that jar into the existing encrypted session pipeline, and is
-then destroyed. Manual cookie JSON remains the advanced fallback.
+Public magic-link signup remains open, but Riot connection is a separate,
+fail-closed private capability. Only identities in
+`RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` receive the
+direct Riot credential form or cookie-JSON fallback. The server derives the
+identity from verified Supabase claims and repeats the allowlist check before it
+reads a credential or session submission.
 Riot session submission is a separate, fail-closed capability from public
 signup and Riot-independent features.
 
-Cloud connection is fail-closed behind `RIOT_CLOUD_CONNECT_ENABLED`. While
-`RIOT_CLOUD_CONNECT_PUBLIC=false`, only identities in
-`RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` may start a
-session. The server derives identity from verified Supabase claims and repeats
-authorization at every route boundary. The direct credential and Electron
-implementations remain temporarily only as rollback paths: they must not be
-removed until the real Singapore canary proves login, identity, storefront,
-destruction, and a later cookie reauthentication. See
-[the cloud-browser architecture and canary runbook](docs/cloud-browser-riot-connection.md).
+The direct provider sends a Riot login username, password, and optional MFA code
+to Riot only for the active request. VAL Checker does not log, return, or store
+those values. After Riot accepts the sign-in, only the complete renewable cookie
+jar enters the existing encrypted session pipeline. Manual cookie JSON remains
+the advanced fallback.
 
-Signing in does not read a storefront. One application login may connect
-multiple Riot accounts; every account keeps its own encrypted session, store,
-health, and refresh state. The server resolves the stable Riot PUUID before a
-live session row is inserted or replaced so reconnecting cannot mint another
-allowance.
+The Singapore cloud-browser canary is disabled because Google rejects the
+embedded automated browser and Riot authentication was not reliable enough to
+pass the canary success gate. Its code remains for research, fail-closed behind
+`RIOT_CLOUD_CONNECT_ENABLED=false`; it is not presented in the production
+connection UI. See [the cloud-browser architecture and canary runbook](docs/cloud-browser-riot-connection.md).
 
-The rollout starts with the operator's own account only for approximately three
-weeks. Additional users may be added explicitly to the allowlist only after that
-dogfood period. Removing someone from the allowlist prevents a new connection;
-disconnect remains available so stored material can always be deleted.
+After a successful connection, VAL Checker performs an initial storefront
+check. One application login may connect multiple Riot accounts; every account
+keeps its own encrypted session, store, health, and refresh state. The server
+resolves the stable Riot PUUID before a live session row is inserted or replaced
+so reconnecting cannot mint another allowance.
+
+The rollout remains private to the operator and explicitly trusted friends.
+Every person must be added to the server-side allowlist before the credential or
+cookie-JSON controls render. Removing someone from the allowlist prevents a new
+connection; disconnect remains available so stored material can always be
+deleted.
 
 The automatic worker performs at most one storefront attempt per connected Riot
 account and UTC store day, scheduled for 00:05 UTC. A separately identified
@@ -105,7 +109,7 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `SESSION_ENCRYPTION_KEY_V<n>` | Server only | Base64 encoding of exactly 32 random bytes for each retained key version, such as the initial `V1`. |
 | `RIOT_CONNECT_ALLOWED_USER_IDS` | Server only | Comma-separated verified Supabase user UUIDs allowed to submit Riot session material. |
 | `RIOT_CONNECT_ALLOWED_EMAILS` | Server only | Comma-separated verified Supabase emails allowed to submit Riot session material. |
-| `RIOT_CLOUD_CONNECT_ENABLED` | Server only | Emergency kill switch for temporary browser connection. Defaults closed unless exactly `true`. |
+| `RIOT_CLOUD_CONNECT_ENABLED` | Server only | Experimental temporary-browser kill switch. Keep `false` in production while the canary is unproven. |
 | `RIOT_CLOUD_CONNECT_PUBLIC` | Server only | When `false`, cloud connection also requires the existing canary allowlist. |
 | `RIOT_CLOUD_BROWSER_URL` | Server only | HTTPS origin of the separately deployed Singapore browser service. |
 | `RIOT_CLOUD_BROWSER_API_KEY` | Server only | Bearer key for the browser service control API; never expose it to clients. |

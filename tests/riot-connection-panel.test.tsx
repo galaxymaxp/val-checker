@@ -407,14 +407,21 @@ describe("Riot connection consent UI", () => {
   it("plainly discloses credential handling, storage, encryption, revocation, and Riot logout", () => {
     render(
       <RiotConnectionPanel
-        connectAllowed={false}
+        connectAllowed
+        connectCredentials={vi.fn()}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
       />,
     );
 
-    expect(screen.getByText(/does not store your Riot password or MFA code/i)).toBeInTheDocument();
-    expect(screen.getByText(/remote-browser infrastructure carries your input/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/username, password, and any MFA code are sent through/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/does not store or log them/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Sign in with Riot credentials" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/explicitly allowlisted VAL Checker accounts/i)).toBeInTheDocument();
     expect(
       screen.getByText(/can permit access to your Riot account/i),
     ).toBeInTheDocument();
@@ -423,6 +430,6 @@ describe("Riot connection consent UI", () => {
     expect(screen.getByText(/not affiliated with Riot Games/i)).toBeInTheDocument();
     expect(screen.getByText(/Sign out everywhere/i)).toBeInTheDocument();
     expect(screen.getByText(/complete renewable cookie jar/i)).toBeInTheDocument();
-    expect(screen.getByText(/temporary browser is then destroyed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/temporary browser/i)).not.toBeInTheDocument();
   });
 });

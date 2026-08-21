@@ -2,10 +2,15 @@
 
 ## Status and success gate
 
-The repository now contains a canary-ready implementation, not a proven
-migration. A successful build or Chromium launch is insufficient. Electron and
-the direct Riot credential exchange remain rollback paths until a real canary
-completes this whole sequence:
+The repository contains an experimental implementation, not a proven migration.
+The August 2026 canary reached Riot's real login page, but Google rejected the
+automated embedded browser as unsafe and Riot credential authentication did not
+reliably pass after CAPTCHA. The production cloud flag must remain disabled.
+Direct credential connection is the allowlisted primary path for private use,
+and manual cookie JSON remains the advanced fallback.
+
+A future replacement must still complete this whole sequence before the cloud
+path can be called successful:
 
 1. A phone or desktop browser starts an owner-bound temporary session.
 2. The user completes Riot's real login, including interactive MFA/CAPTCHA when

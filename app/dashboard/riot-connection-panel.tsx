@@ -460,16 +460,29 @@ function RiotConnectionPanelState({
       <details className="consent-details">
         <summary>How your Riot session is handled</summary>
         <div className="consent-copy">
+          {connectCredentials ? (
+            <p>
+              Your Riot username, password, and any MFA code are sent through
+              VAL Checker&apos;s server directly to Riot for this sign-in. VAL
+              Checker does not store or log them.
+            </p>
+          ) : cloudConnectAvailable ? (
+            <p>
+              You sign in on Riot Games&apos; actual login page inside a temporary,
+              isolated browser. The remote-browser infrastructure carries your
+              input while you interact with that page, but VAL Checker does not
+              store your Riot password or MFA code.
+            </p>
+          ) : (
+            <p>
+              Cookie JSON connection does not ask for your Riot password. The
+              exported cookie file is a live Riot session and must be protected
+              like a password.
+            </p>
+          )}
           <p>
-            You sign in on Riot Games&apos; actual login page inside a temporary,
-            isolated browser. The remote-browser infrastructure carries your
-            input while you interact with that page, but VAL Checker does not
-            store your Riot password or MFA code.
-          </p>
-          <p>
-            After Riot accepts the login, the complete renewable cookie jar is
-            validated, encrypted, and stored. The temporary browser is then
-            destroyed.
+            After Riot accepts the sign-in or imported session, the complete
+            renewable cookie jar is validated, encrypted, and stored.
           </p>
           <p>
             The session we keep can permit access to your Riot account. It is
@@ -625,69 +638,87 @@ function RiotConnectionPanelState({
             ) : null}
 
             {connectAllowed && connectCredentials ? (
-              <div
-                className={
-                  desktopConnectAvailable
-                    ? "riot-signin-fields riot-signin-fields-deemphasized"
-                    : "riot-signin-fields"
-                }
+              <section
+                aria-labelledby="credential-riot-connect-heading"
+                className="riot-connect-method riot-connect-method-primary"
               >
-                <label>
-                  <span>Riot username</span>
-                  <input
-                    autoComplete="username"
-                    onChange={(event) => setUsername(event.target.value)}
-                    spellCheck={false}
-                    value={username}
-                  />
-                </label>
-                <label>
-                  <span>Riot password</span>
-                  <input
-                    autoComplete="current-password"
-                    onChange={(event) => setPassword(event.target.value)}
-                    type="password"
-                    value={password}
-                  />
-                </label>
-                <label>
-                  <span>Account region</span>
-                  <select
-                    onChange={(event) => setRegion(event.target.value)}
-                    value={region}
-                  >
-                    <option value="ap">Asia Pacific</option>
-                    <option value="na">North America</option>
-                    <option value="eu">Europe</option>
-                    <option value="kr">Korea</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Account name (optional)</span>
-                  <input
-                    maxLength={60}
-                    onChange={(event) => setLabel(event.target.value)}
-                    placeholder="Tells this account apart from your others"
-                    value={label}
-                  />
-                </label>
+                <div className="riot-connect-method-heading">
+                  <div>
+                    <p className="riot-connect-method-kicker">Private access</p>
+                    <h3 id="credential-riot-connect-heading">
+                      Sign in with Riot credentials
+                    </h3>
+                    <p>
+                      Available only to explicitly allowlisted VAL Checker
+                      accounts. Use your Riot login username, not your Riot ID
+                      or email address.
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={
+                    desktopConnectAvailable
+                      ? "riot-signin-fields riot-signin-fields-deemphasized"
+                      : "riot-signin-fields"
+                  }
+                >
+                  <label>
+                    <span>Riot username</span>
+                    <input
+                      autoComplete="username"
+                      onChange={(event) => setUsername(event.target.value)}
+                      spellCheck={false}
+                      value={username}
+                    />
+                  </label>
+                  <label>
+                    <span>Riot password</span>
+                    <input
+                      autoComplete="current-password"
+                      onChange={(event) => setPassword(event.target.value)}
+                      type="password"
+                      value={password}
+                    />
+                  </label>
+                  <label>
+                    <span>Account region</span>
+                    <select
+                      onChange={(event) => setRegion(event.target.value)}
+                      value={region}
+                    >
+                      <option value="ap">Asia Pacific</option>
+                      <option value="na">North America</option>
+                      <option value="eu">Europe</option>
+                      <option value="kr">Korea</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Account name (optional)</span>
+                    <input
+                      maxLength={60}
+                      onChange={(event) => setLabel(event.target.value)}
+                      placeholder="Tells this account apart from your others"
+                      value={label}
+                    />
+                  </label>
+                </div>
+                <button
+                  className="riot-connect-primary-button"
+                  disabled={!credentialsReady || isPending}
+                  onClick={signIn}
+                  type="button"
+                >
+                  {isPending ? "Signing in to Riot..." : "Sign in to Riot"}
+                </button>
                 <p className="ship-gate-note" role="note">
-                  Signing in does not fetch your shop. Each Riot account gets
-                  one automatic check and one separate manual refresh per UTC
-                  day.
+                  After connection, VAL Checker runs an initial store check.
+                  Each Riot account then gets one automatic check and one
+                  separate manual refresh per UTC day.
                 </p>
-              </div>
+              </section>
             ) : null}
 
-            {connectAllowed && connectCredentials ? (
-              <button
-                disabled={!credentialsReady || isPending}
-                onClick={signIn}
-                type="button"
-              >
-                {isPending ? "Signing in to Riot..." : "Sign in to Riot"}
-              </button>
-            ) : connectAllowed && connectFixture ? (
+            {connectAllowed && !connectCredentials && connectFixture ? (
               <button
                 disabled={!consentGranted || isPending}
                 onClick={connectFixtureSession}
@@ -721,7 +752,9 @@ function RiotConnectionPanelState({
                 <div className="riot-connect-method-heading">
                   <div>
                     <p className="riot-connect-method-kicker">
-                      {cloudConnectAvailable ? "Fallback" : "Available now"}
+                      {cloudConnectAvailable || connectCredentials
+                        ? "Advanced fallback"
+                        : "Available now"}
                     </p>
                     <h3 id="cookie-json-connect-heading">Import cookie JSON</h3>
                     <p>

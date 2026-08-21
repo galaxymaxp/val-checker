@@ -1,15 +1,16 @@
 import { redirect } from "next/navigation";
 
 import {
+  connectRiotCredentials,
   connectRiotSession,
   disconnectRiotSession,
+  submitRiotMfaCode,
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { isDevPreview } from "@/src/lib/dev/preview";
 import { previewAccounts } from "@/src/lib/dev/preview-data";
 import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
-import { canUseRiotCloudConnect } from "@/src/lib/riot/cloud-connect-policy";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -34,12 +35,9 @@ export default async function RiotConnectionPage({
       typeof data.claims.email === "string" ? data.claims.email : undefined,
     userId: data.claims.sub,
   };
-  // Riot rejects credential sign-ins posted from Vercel's datacenter IPs, so
-  // pasting an exported session is the only browser path that actually works.
-  // It is therefore offered to everyone the connect allowlist admits, not just
-  // administrators.
+  // Credential and cookie-JSON connection stay private: both the rendered
+  // controls and the server actions independently enforce this allowlist.
   const riotConnectAllowed = preview || canRiotConnect(riotIdentity);
-  const cloudConnectAllowed = !preview && canUseRiotCloudConnect(riotIdentity);
 
   const accounts = preview
     ? previewAccounts(new Date())
@@ -71,23 +69,19 @@ export default async function RiotConnectionPage({
         disconnect={disconnectRiotSession}
       />
       <RiotConnectionPanel
-        cloudConnectAvailable={cloudConnectAllowed}
+        cloudConnectAvailable={false}
         connectAllowed={riotConnectAllowed}
-        // Deliberately not wired: Riot rejects credential sign-ins posted
-        // from Vercel's datacenter IPs, so offering the form only produced a
-        // dead end. Connecting now goes through Riot's own login page in the
-        // temporary cloud browser instead.
-        connectCredentials={undefined}
+        connectCredentials={
+          riotConnectAllowed ? connectRiotCredentials : undefined
+        }
         connectSession={
-          riotConnectAllowed || cloudConnectAllowed
-            ? connectRiotSession
-            : undefined
+          riotConnectAllowed ? connectRiotSession : undefined
         }
         initialLabel={reconnectAccount?.label ?? ""}
         initialRegion={reconnectAccount?.region ?? "ap"}
         initialState="disconnected"
         keepConnectFormOpen={!reconnectAccount}
-        submitMfaCode={undefined}
+        submitMfaCode={riotConnectAllowed ? submitRiotMfaCode : undefined}
         targetConnectionId={reconnectAccount?.id}
       />
     </main>
