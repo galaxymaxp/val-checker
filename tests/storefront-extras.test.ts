@@ -197,3 +197,76 @@ describe("night market visibility", () => {
     }
   });
 });
+
+describe("catalog gaps in decoration", () => {
+  it("keeps the dashboard readable when bundle items are missing from the catalog", async () => {
+    // Regression: the strict resolver threw UnknownSkinLevelsError for bundle
+    // items absent from a partially synced catalog, which took the whole
+    // dashboard down the first time a real bundle was stored.
+    const { loadDailyShops } = await import("@/src/lib/storefront/daily-shop");
+    const knownLevel = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+    const knownSkin = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
+    const supabase = {
+      from: (table: string) => ({
+        select: () => ({
+          eq: () => ({
+            order: () => ({ data: [{ id: "c1", label: "A" }], error: null }),
+            // The watchlist read is select().eq().in()
+            in: () => ({ data: [], error: null }),
+          }),
+          in: () => {
+            if (table === "shop_checks") {
+              return {
+                order: () => ({
+                  data: [
+                    {
+                      bundle: {
+                        bundleUuid: "cccccccc-3333-4333-8333-cccccccccccc",
+                        expiresAt: "2026-08-22T00:00:00.000Z",
+                        items: [
+                          { amount: 1, basePrice: 4350, discountedPrice: 3350, itemTypeUuid: "e7c63390-eda7-46e0-bb7a-a6abdacd2433", itemUuid: knownLevel },
+                          { amount: 1, basePrice: 1775, discountedPrice: 1275, itemTypeUuid: "e7c63390-eda7-46e0-bb7a-a6abdacd2433", itemUuid: "dddddddd-4444-4444-8444-dddddddddddd" },
+                        ],
+                        totalBaseCost: 6125,
+                        totalDiscountedCost: 4625,
+                        totalDiscountPercent: 0.24,
+                      },
+                      checked_at: "2026-08-21T05:36:50.000Z",
+                      connection_id: "c1",
+                      expires_at: "2026-08-22T00:00:00.000Z",
+                      night_market: null,
+                      offer_details: [],
+                      offer_skin_uuids: [],
+                      rotation_date: "2026-08-21",
+                    },
+                  ],
+                  error: null,
+                }),
+              };
+            }
+            if (table === "skin_levels") {
+              // Only one of the two bundle items exists in the catalog.
+              return { data: [{ level_uuid: knownLevel, skin_uuid: knownSkin }], error: null };
+            }
+            if (table === "skins") {
+              return { data: [{ content_tier_uuid: null, display_icon: "icon.png", display_name: "Known Skin", skin_uuid: knownSkin, weapon_uuid: null }], error: null };
+            }
+            return { data: [], error: null };
+          },
+        }),
+      }),
+    };
+
+    const views = await loadDailyShops(
+      supabase as never,
+      "user-id",
+      new Date("2026-08-21T06:00:00.000Z"),
+    );
+
+    expect(views).toHaveLength(1);
+    expect(views[0]?.bundle?.items).toHaveLength(1);
+    expect(views[0]?.bundle?.items[0]?.displayName).toBe("Known Skin");
+    // The unresolvable item is still counted, not silently erased.
+    expect(views[0]?.bundle?.otherItemCount).toBe(1);
+  });
+});
