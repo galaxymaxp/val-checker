@@ -141,3 +141,59 @@ describe("night market snapshot", () => {
     expect(withMarket.shopHash).toBe(withoutMarket.shopHash);
   });
 });
+
+describe("night market visibility", () => {
+  it("is dropped once Riot has closed it", async () => {
+    // The stored check outlives the market: yesterday's row keeps its
+    // BonusStore, so an expired one must not keep rendering.
+    const { loadDailyShops } = await import("@/src/lib/storefront/daily-shop");
+    const now = new Date("2026-08-20T12:00:00.000Z");
+    const closed = {
+      expiresAt: "2026-08-19T00:00:00.000Z",
+      offers: [{ basePrice: 1775, discountPercent: 47, discountedPrice: 940, levelUuid: null, offerId: "o" }],
+    };
+    const running = { ...closed, expiresAt: "2026-08-21T00:00:00.000Z" };
+
+    for (const [nightMarket, expected] of [
+      [closed, null],
+      [running, "shown"],
+    ] as const) {
+      const supabase = {
+        from: (table: string) => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({ data: [{ id: "c1", label: "A" }], error: null }),
+            }),
+            in: () =>
+              table === "shop_checks"
+                ? {
+                    order: () => ({
+                      data: [
+                        {
+                          bundle: null,
+                          checked_at: "2026-08-20T00:05:00.000Z",
+                          connection_id: "c1",
+                          expires_at: "2026-08-21T00:00:00.000Z",
+                          night_market: nightMarket,
+                          offer_details: [],
+                          offer_skin_uuids: [],
+                          rotation_date: "2026-08-20",
+                        },
+                      ],
+                      error: null,
+                    }),
+                  }
+                : { data: [], error: null },
+          }),
+        }),
+      };
+
+      const [view] = await loadDailyShops(
+        supabase as never,
+        "user-id",
+        now,
+      );
+      expect(view?.nightMarket === null ? null : "shown").toBe(expected);
+    }
+  });
+});

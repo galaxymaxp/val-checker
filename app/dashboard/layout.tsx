@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { signOut } from "@/app/dashboard/actions";
+import { DEV_PREVIEW_EMAIL, isDevPreview } from "@/src/lib/dev/preview";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 
 export default async function DashboardLayout({
@@ -9,10 +10,15 @@ export default async function DashboardLayout({
 }: {
   readonly children: ReactNode;
 }) {
-  const supabase = await createServerSupabaseClient();
-  const { data } = await supabase.auth.getClaims();
-  const email =
-    typeof data?.claims.email === "string" ? data.claims.email : "your account";
+  const email = isDevPreview()
+    ? DEV_PREVIEW_EMAIL
+    : await (async () => {
+        const supabase = await createServerSupabaseClient();
+        const { data } = await supabase.auth.getClaims();
+        return typeof data?.claims.email === "string"
+          ? data.claims.email
+          : "your account";
+      })();
 
   return (
     <div className="flex min-h-dvh flex-col">

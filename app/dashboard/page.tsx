@@ -7,6 +7,13 @@ import { NightMarket } from "@/app/dashboard/_components/night-market";
 import { RiotAccountSwitcher } from "@/app/dashboard/riot-account-switcher";
 import { refreshRiotStorefront } from "@/app/dashboard/riot-actions";
 import { StoreAttentionPanel } from "@/app/dashboard/store-attention-panel";
+import { isDevPreview } from "@/src/lib/dev/preview";
+import {
+  previewAccounts,
+  previewDailyShops,
+  previewInventory,
+  previewRefreshStatus,
+} from "@/src/lib/dev/preview-data";
 import { loadWishlistInventory } from "@/src/lib/catalog/inventory";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { loadStorefrontDashboardStatus } from "@/src/lib/storefront/dashboard-status";
@@ -19,6 +26,10 @@ export default async function DashboardPage({
 }: {
   readonly searchParams?: Promise<{ readonly account?: string }>;
 } = {}) {
+  if (isDevPreview()) {
+    return renderDashboard(await previewDashboardData(await searchParams));
+  }
+
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
 
@@ -41,6 +52,41 @@ export default async function DashboardPage({
     loadWishlistInventory(supabase, data.claims.sub),
     searchParams,
   ]);
+
+  return renderDashboard({ accounts, dailyShops, refreshStatus, tiles, params });
+}
+
+interface DashboardData {
+  readonly accounts: Awaited<ReturnType<typeof loadRiotAccountsWithClient>>;
+  readonly dailyShops: Awaited<ReturnType<typeof loadDailyShops>>;
+  readonly params: { readonly account?: string };
+  readonly refreshStatus: Awaited<
+    ReturnType<typeof loadStorefrontDashboardStatus>
+  >;
+  readonly tiles: Awaited<ReturnType<typeof loadWishlistInventory>>;
+}
+
+/** Fixtures for `VAL_CHECKER_DEV_PREVIEW=1`; see src/lib/dev/preview.ts. */
+async function previewDashboardData(params: {
+  readonly account?: string;
+}): Promise<DashboardData> {
+  const now = new Date();
+  return {
+    accounts: previewAccounts(now),
+    dailyShops: previewDailyShops(now),
+    params,
+    refreshStatus: previewRefreshStatus(now),
+    tiles: previewInventory(),
+  };
+}
+
+function renderDashboard({
+  accounts,
+  dailyShops,
+  params,
+  refreshStatus,
+  tiles,
+}: DashboardData) {
   const selectedAccount =
     accounts.find((account) => account.id === params.account) ?? accounts[0];
   const selectedShop = selectedAccount
