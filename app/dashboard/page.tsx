@@ -122,11 +122,15 @@ function renderDashboard({
           shop={selectedShop}
         />
       ) : null}
+      {/* Store content stays together and above the collection: today's
+          offers, then anything else the store is running right now. The
+          bundle below the watchlist read as an afterthought, two screens
+          down from the store it belongs to. */}
       {selectedShop?.nightMarket ? (
         <NightMarket nightMarket={selectedShop.nightMarket} />
       ) : null}
-      <InventoryGrid tiles={tiles} />
       {selectedShop?.bundle ? <FeaturedBundle bundle={selectedShop.bundle} /> : null}
+      <InventoryGrid tiles={tiles} />
     </main>
   );
 }
