@@ -33,7 +33,9 @@ function canonicalStorefront(
   skinUuids: readonly string[] = [firstSkinUuid],
 ): CanonicalStorefront {
   return {
+    bundle: null,
     expiresAt: "2026-08-15T00:00:00.000Z",
+    nightMarket: null,
     offers: [],
     shopHash: "a".repeat(64),
     skinUuids,

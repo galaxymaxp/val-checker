@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { DailyShopStage } from "@/app/dashboard/_components/daily-shop-stage";
+import { FeaturedBundle } from "@/app/dashboard/_components/featured-bundle";
 import { InventoryGrid } from "@/app/dashboard/_components/inventory-grid";
+import { NightMarket } from "@/app/dashboard/_components/night-market";
 import { RiotAccountSwitcher } from "@/app/dashboard/riot-account-switcher";
 import { refreshRiotStorefront } from "@/app/dashboard/riot-actions";
 import { StoreAttentionPanel } from "@/app/dashboard/store-attention-panel";
@@ -74,7 +76,11 @@ export default async function DashboardPage({
           shop={selectedShop}
         />
       ) : null}
+      {selectedShop?.nightMarket ? (
+        <NightMarket nightMarket={selectedShop.nightMarket} />
+      ) : null}
       <InventoryGrid tiles={tiles} />
+      {selectedShop?.bundle ? <FeaturedBundle bundle={selectedShop.bundle} /> : null}
     </main>
   );
 }

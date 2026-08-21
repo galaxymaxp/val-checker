@@ -433,7 +433,9 @@ describe("storefront repository trigger policy", () => {
       consumeManualClaim: true,
       rotationLease,
       storefront: {
+        bundle: null,
         expiresAt: "2026-08-18T00:00:00.000Z",
+        nightMarket: null,
         offers: [
           {
             costs: [{ amount: 875, currencyUuid: connection.id }],
@@ -453,7 +455,9 @@ describe("storefront repository trigger policy", () => {
       consumeManualClaim: false,
       rotationLease: null,
       storefront: {
+        bundle: null,
         expiresAt: "2026-08-18T00:00:00.000Z",
+        nightMarket: null,
         offers: [
           {
             costs: [{ amount: 875, currencyUuid: connection.id }],
