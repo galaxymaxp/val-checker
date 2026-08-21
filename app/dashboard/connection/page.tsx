@@ -7,7 +7,7 @@ import {
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
-import { canRiotConnect, isRiotAdmin } from "@/src/lib/riot/connect-allowlist";
+import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -29,9 +29,11 @@ export default async function RiotConnectionPage({
       typeof data.claims.email === "string" ? data.claims.email : undefined,
     userId: data.claims.sub,
   };
+  // Riot rejects credential sign-ins posted from Vercel's datacenter IPs, so
+  // pasting an exported session is the only browser path that actually works.
+  // It is therefore offered to everyone the connect allowlist admits, not just
+  // administrators.
   const riotConnectAllowed = canRiotConnect(riotIdentity);
-  // The raw cookie-jar paste is an admin-only fallback (Version 2.4).
-  const riotJarPasteAllowed = riotConnectAllowed && isRiotAdmin(riotIdentity);
 
   const accounts = await loadRiotAccountsWithClient(
     createAdminSupabaseClient(),
@@ -67,9 +69,9 @@ export default async function RiotConnectionPage({
         // dead end. Connecting goes through Riot's own login page in the
         // desktop app instead.
         connectCredentials={undefined}
-        connectSession={riotJarPasteAllowed ? connectRiotSession : undefined}
+        connectSession={riotConnectAllowed ? connectRiotSession : undefined}
         createCaptureToken={
-          riotJarPasteAllowed ? createDesktopCaptureToken : undefined
+          riotConnectAllowed ? createDesktopCaptureToken : undefined
         }
         initialLabel={reconnectAccount?.label ?? ""}
         initialRegion={reconnectAccount?.region ?? "ap"}

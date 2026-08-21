@@ -74,9 +74,6 @@ describe("Riot disconnect server action", () => {
     revalidatePath.mockReset();
     vi.stubEnv("RIOT_CONNECT_ALLOWED_EMAILS", "");
     vi.stubEnv("RIOT_CONNECT_ALLOWED_USER_IDS", allowedUserId);
-    // The cookie-jar paste path is admin-only from Version 2.4 onward,
-    // gated by email since a Supabase user UUID isn't on hand to configure.
-    vi.stubEnv("RIOT_ADMIN_EMAILS", "operator@example.com");
     vi.stubEnv("SESSION_ENCRYPTION_CURRENT_VERSION", "1");
     vi.stubEnv(
       "SESSION_ENCRYPTION_KEY_V1",
@@ -142,10 +139,12 @@ describe("Riot disconnect server action", () => {
     expect(adminUpsert).not.toHaveBeenCalled();
   });
 
-  it("refuses the cookie paste path for an allowlisted non-admin", async () => {
+  it("admits the session paste path for an allowlisted non-admin", async () => {
     const marker = "non-admin-jar-marker";
-    // Connect-allowlisted, but not an administrator.
-    vi.stubEnv("RIOT_ADMIN_EMAILS", "");
+    // Connect-allowlisted, with no administrator role anywhere in the
+    // picture: the paste path is the only browser route that works, so the
+    // connect allowlist is its only gate. Riot is unreachable here, so the
+    // submission gets past authorization and fails downstream instead.
     getClaims.mockResolvedValue({
       data: { claims: { email: "operator@example.com", sub: allowedUserId } },
     });
@@ -156,13 +155,12 @@ describe("Riot disconnect server action", () => {
       serializedJar: marker,
     });
 
-    expect(result).toEqual({
+    expect(result).not.toEqual({
       error: "Riot connection access is not enabled.",
       ok: false,
     });
+    expect(result.ok).toBe(false);
     expect(JSON.stringify(result)).not.toContain(marker);
-    expect(createAdminSupabaseClient).not.toHaveBeenCalled();
-    expect(adminInsert).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated submission before processing session material", async () => {

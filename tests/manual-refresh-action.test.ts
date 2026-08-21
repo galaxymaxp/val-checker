@@ -20,7 +20,6 @@ vi.mock("@/src/lib/supabase/server-admin", () => ({
   createAdminSupabaseClient,
 }));
 vi.mock("@/src/lib/riot/connect-allowlist", () => ({
-  isRiotAdmin: () => false,
   loadRiotConnectAllowlist: () => ({ assertAllowed }),
 }));
 vi.mock("@/src/lib/worker/on-demand-check", () => ({

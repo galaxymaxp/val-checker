@@ -80,7 +80,6 @@ describe("security documentation", () => {
       "SESSION_ENCRYPTION_KEY_V1",
       "RIOT_CONNECT_ALLOWED_USER_IDS",
       "RIOT_CONNECT_ALLOWED_EMAILS",
-      "RIOT_ADMIN_EMAILS",
       "RIOT_TLS_CIPHERS",
       "RESEND_API_KEY",
       "RESEND_FROM_EMAIL",

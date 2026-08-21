@@ -18,9 +18,10 @@ That credential is transit-only: it is exchanged with Riot for a session cookie
 jar, is never written to the database or the logs, and is discarded as soon as
 Riot answers. Only the resulting jar is stored, encrypted as before. Enabling
 MFA on the connected Riot account is recommended, and the sign-in flow prompts
-for both emailed and authenticator codes. The raw cookie-export paste path
-remains as a fallback but is restricted to `RIOT_ADMIN_EMAILS`. See the
-Version 2.4 addendum in
+for both emailed and authenticator codes. Riot rejects credential
+sign-ins posted from Vercel's datacenter IPs, so pasting an exported session is
+the browser path that actually works, and it is available to every account the
+connect allowlist admits. See the Version 2.4 addendum in
 [the roadmap](docs/roadmap.md) for the full decision.
 
 Signing in does not read a storefront. One application login may connect
@@ -103,7 +104,6 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `SESSION_ENCRYPTION_KEY_V<n>` | Server only | Base64 encoding of exactly 32 random bytes for each retained key version, such as the initial `V1`. |
 | `RIOT_CONNECT_ALLOWED_USER_IDS` | Server only | Comma-separated verified Supabase user UUIDs allowed to submit Riot session material. |
 | `RIOT_CONNECT_ALLOWED_EMAILS` | Server only | Comma-separated verified Supabase emails allowed to submit Riot session material. |
-| `RIOT_ADMIN_EMAILS` | Server only | Comma-separated verified Supabase emails additionally allowed the raw cookie-export fallback. Email-only, since a Supabase user UUID isn't something an operator has on hand. Empty grants nobody. |
 | `RIOT_TLS_CIPHERS` | Server only | Optional TLS cipher order for Riot's auth host. Leave unset unless sign-in begins returning 403. |
 | `RESEND_API_KEY` | Server only | Resend API key used by the daily worker. |
 | `RESEND_FROM_EMAIL` | Server only | Sender identity on a verified Resend domain. |

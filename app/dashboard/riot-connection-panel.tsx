@@ -24,7 +24,7 @@ interface RiotConnectionPanelProps {
   readonly connectFixture?: (
     consentGranted: boolean,
   ) => Promise<RiotConnectionMutationResult>;
-  /** Admin-only cookie-jar fallback. Undefined for ordinary users. */
+  /** Session paste. Undefined when the connect allowlist excludes the user. */
   readonly connectSession?: (
     submission: RiotSessionSubmission,
   ) => Promise<RiotConnectionMutationResult>;
@@ -618,22 +618,32 @@ function RiotConnectionPanelState({
             ) : null}
 
             {connectSession ? (
-              <div className="riot-admin-fallback">
+              <div className="riot-session-connect">
                 <button
                   aria-expanded={showJarPaste}
                   onClick={() => setShowJarPaste((shown) => !shown)}
                   type="button"
                 >
                   {showJarPaste
-                    ? "Hide manual session paste"
-                    : "Paste a captured session instead"}
+                    ? "Hide session paste"
+                    : "Connect with an exported session"}
                 </button>
                 {showJarPaste ? (
-                  <p role="note">
-                    Run <code>pnpm desktop:capture</code>, sign in on
-                    Riot&apos;s own page, and the session is copied to your
-                    clipboard. Paste it here to finish connecting.
-                  </p>
+                  <div className="consent-copy" role="note">
+                    <p>
+                      Sign in to Riot in your browser, then export your
+                      cookies for <code>auth.riotgames.com</code> as JSON with
+                      a cookie-export extension and paste the result below. The
+                      <code> ssid</code> cookie is the one that matters.
+                    </p>
+                    <p>
+                      <strong>What you are pasting is a live session.</strong>{" "}
+                      Anyone holding it can act as your Riot account until it
+                      expires or you sign out everywhere. VAL Checker encrypts
+                      it, uses it only for the daily store check, and deletes it
+                      when you disconnect. Only paste it if you accept that.
+                    </p>
+                  </div>
                 ) : null}
                 {showJarPaste ? (
                   <div className="riot-session-fields">
@@ -665,10 +675,9 @@ function RiotConnectionPanelState({
                         : "Connect from cookie export"}
                     </button>
                     <p className="ship-gate-note" role="note">
-                      Admin fallback for an already-authenticated cookie export.
-                      VAL Checker contacts Riot to verify the account identity
-                      and rotate the session before encrypting it. This does not
-                      fetch the store.
+                      VAL Checker contacts Riot to verify which account the
+                      session belongs to and rotates it before encrypting. This
+                      does not fetch your store.
                     </p>
                   </div>
                 ) : null}
