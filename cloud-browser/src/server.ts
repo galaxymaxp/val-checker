@@ -8,7 +8,11 @@ import {
   type Page,
 } from "playwright-core";
 import { WebSocketServer, WebSocket } from "ws";
-import { z } from "zod";
+
+import {
+  cloudBrowserSessionSchema,
+  type CloudBrowserSessionInput,
+} from "./session-schema.js";
 
 const REAUTH_URL =
   "https://auth.riotgames.com/authorize" +
@@ -60,15 +64,6 @@ class SessionCreationError extends Error {
 }
 
 const sessions = new Map<string, Session>();
-const createSchema = z.object({
-  connectionSessionId: z.uuid(),
-  expiresAt: z.iso.datetime(),
-  viewport: z.object({
-    height: z.number().int().min(568).max(1200),
-    width: z.number().int().min(320).max(1440),
-  }),
-});
-
 function hash(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
 }
@@ -155,7 +150,7 @@ async function observe(session: Session): Promise<void> {
 }
 
 async function createBrowserSession(
-  input: z.infer<typeof createSchema>,
+  input: CloudBrowserSessionInput,
 ): Promise<Session> {
   const expiresAt = Date.parse(input.expiresAt);
   if (
@@ -260,7 +255,7 @@ const server = createServer(async (request, response) => {
       return json(response, 401, { error: "unauthorized" });
     }
     if (request.method === "POST" && url.pathname === "/v1/sessions") {
-      const input = createSchema.parse(await readBody(request));
+      const input = cloudBrowserSessionSchema.parse(await readBody(request));
       const session = await createBrowserSession(input);
       sessions.set(session.id, session);
       return json(response, 201, {
