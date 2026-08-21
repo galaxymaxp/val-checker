@@ -370,7 +370,13 @@ export async function loadDailyShops(
       : undefined;
     const bundle: DailyShopBundleView | null = storedBundle
       ? {
-          displayIcon: metadata?.promoImage ?? metadata?.displayIcon ?? null,
+          // Widest first: the panel is a band, so the ultra-wide banner keeps
+          // its subject where the 16:9 and portrait assets lose it to cropping.
+          displayIcon:
+            metadata?.wideIcon ??
+            metadata?.displayIcon ??
+            metadata?.promoImage ??
+            null,
           displayName: metadata?.displayName ?? null,
           expiresAt: storedBundle.expiresAt,
           items: bundleItems,

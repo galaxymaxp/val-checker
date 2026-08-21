@@ -10,6 +10,7 @@ const REQUEST_TIMEOUT_MS = 4_000;
 const bundleResponseSchema = z.object({
   data: z.object({
     displayIcon: z.string().nullable(),
+    displayIcon2: z.string().nullable().optional(),
     displayName: z.string(),
     verticalPromoImage: z.string().nullable().optional(),
   }),
@@ -19,6 +20,12 @@ export interface BundleMetadata {
   readonly displayIcon: string | null;
   readonly displayName: string;
   readonly promoImage: string | null;
+  /**
+   * Riot's ultra-wide bundle banner (~3.3:1), the one asset shaped for a
+   * full-bleed band. displayIcon is 16:9 and verticalPromoImage is portrait —
+   * both lose most of their subject when cropped into a wide panel.
+   */
+  readonly wideIcon: string | null;
 }
 
 /**
@@ -51,6 +58,7 @@ export async function loadBundleMetadata(
       displayIcon: parsed.data.data.displayIcon,
       displayName: parsed.data.data.displayName,
       promoImage: parsed.data.data.verticalPromoImage ?? null,
+      wideIcon: parsed.data.data.displayIcon2 ?? null,
     };
   } catch {
     return null;
