@@ -8,6 +8,8 @@ import type { RiotConnectionMutationResult } from "@/src/types/riot-connection";
 
 interface StoreAttentionPanelProps {
   readonly account: RiotAccountView;
+  /** Reveals the panel on a healthy store; see `forced` below. */
+  readonly force?: boolean;
   readonly refreshStatus: AccountRefreshStatus;
   readonly refreshStore: (
     connectionId: string,
@@ -63,6 +65,7 @@ function connectionLabel(status: RiotAccountView["authStatus"]): string | null {
  */
 export function StoreAttentionPanel({
   account,
+  force = false,
   refreshStatus,
   refreshStore,
   shop,
@@ -76,7 +79,11 @@ export function StoreAttentionPanel({
     failure ??
     (missingToday ? "Today’s store has not been checked yet." : null);
 
-  if (!reason) {
+  // Nothing is wrong, so nothing is shown -- but the manual allowance still
+  // exists, and hiding the control is not the same as spending it. `?refresh=1`
+  // reaches it deliberately, for the case where the stored store is valid yet
+  // known to be incomplete.
+  if (!reason && !force) {
     return null;
   }
 
@@ -87,9 +94,16 @@ export function StoreAttentionPanel({
     >
       <div className="space-y-1">
         <h2 className="text-sm! font-semibold" id="store-attention-heading">
-          {missingToday ? "Store not checked yet" : "Last check needs attention"}
+          {reason
+            ? missingToday
+              ? "Store not checked yet"
+              : "Last check needs attention"
+            : "Check this store again"}
         </h2>
-        <p className="max-w-prose text-sm text-ink-muted">{reason}</p>
+        <p className="max-w-prose text-sm text-ink-muted">
+          {reason ??
+            "Today’s store is already stored. Refreshing spends this account’s one manual check for the UTC day."}
+        </p>
       </div>
       {account.authStatus === "CONNECTED" ? (
         <ManualStorefrontRefresh

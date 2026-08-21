@@ -24,7 +24,10 @@ import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 export default async function DashboardPage({
   searchParams = Promise.resolve({}),
 }: {
-  readonly searchParams?: Promise<{ readonly account?: string }>;
+  readonly searchParams?: Promise<{
+    readonly account?: string;
+    readonly refresh?: string;
+  }>;
 } = {}) {
   if (isDevPreview()) {
     return renderDashboard(await previewDashboardData(await searchParams));
@@ -59,7 +62,7 @@ export default async function DashboardPage({
 interface DashboardData {
   readonly accounts: Awaited<ReturnType<typeof loadRiotAccountsWithClient>>;
   readonly dailyShops: Awaited<ReturnType<typeof loadDailyShops>>;
-  readonly params: { readonly account?: string };
+  readonly params: { readonly account?: string; readonly refresh?: string };
   readonly refreshStatus: Awaited<
     ReturnType<typeof loadStorefrontDashboardStatus>
   >;
@@ -69,6 +72,7 @@ interface DashboardData {
 /** Fixtures for `VAL_CHECKER_DEV_PREVIEW=1`; see src/lib/dev/preview.ts. */
 async function previewDashboardData(params: {
   readonly account?: string;
+  readonly refresh?: string;
 }): Promise<DashboardData> {
   const now = new Date();
   return {
@@ -109,6 +113,7 @@ function renderDashboard({
       {selectedAccount && selectedRefreshStatus ? (
         <StoreAttentionPanel
           account={selectedAccount}
+          force={params.refresh === "1"}
           refreshStatus={selectedRefreshStatus}
           refreshStore={refreshRiotStorefront}
           shop={selectedShop}
