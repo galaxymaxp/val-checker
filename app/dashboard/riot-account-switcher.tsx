@@ -42,7 +42,7 @@ export function RiotAccountSwitcher({
           </p>
         </div>
         <Link
-          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-white px-5 text-sm font-semibold text-bg no-underline"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-white px-5 text-sm font-semibold text-bg! no-underline"
           href="/dashboard/connection#connect-riot-account"
         >
           Connect Riot account
