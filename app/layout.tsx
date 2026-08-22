@@ -12,6 +12,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "VAL Checker",
   description: "Track your VALORANT daily store and watchlist matches.",
+  icons: {
+    icon: [
+      {
+        url: "/brand/val-checker-eye-vandal.png",
+        type: "image/png",
+      },
+    ],
+    shortcut: "/brand/val-checker-eye-vandal.png",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
