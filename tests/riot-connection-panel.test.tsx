@@ -73,12 +73,12 @@ describe("Riot connection consent UI", () => {
       await screen.findByText("Extension ready"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Sign in on Riot's website" }),
+      screen.getByRole("heading", { name: "Sign in with Riot" }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Riot password")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Open Riot sign-in" }));
+    await user.click(screen.getByRole("button", { name: "Sign in with Riot" }));
 
     await waitFor(() => expect(createCaptureToken).toHaveBeenCalledTimes(1));
     const start = await waitFor(() => {
@@ -135,7 +135,7 @@ describe("Riot connection consent UI", () => {
       await screen.findByText("Extension needed", {}, { timeout: 2_000 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Download browser extension" }),
+      screen.getByRole("link", { name: "Download helper" }),
     ).toHaveAttribute("href", "/downloads/val-checker-riot-extension.zip");
     expect(
       screen.getByRole("heading", { name: "Import cookie JSON" }),
@@ -143,6 +143,47 @@ describe("Riot connection consent UI", () => {
     expect(
       screen.queryByRole("textbox", { name: "Riot cookie JSON" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("places consent after the primary action and opens the setup guide", async () => {
+    const user = userEvent.setup();
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={vi.fn()}
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    const signIn = screen.getByRole("button", { name: "Sign in with Riot" });
+    const consent = screen.getByRole("checkbox");
+    expect(
+      signIn.compareDocumentPosition(consent) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "How to connect" }));
+    expect(
+      screen.getByRole("dialog", { name: "How to connect your Riot account" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByAltText(/Four-step Riot account setup guide/i),
+    ).toHaveAttribute(
+      "src",
+      expect.stringContaining("val-checker-riot-account-setup-guide.jpg"),
+    );
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "How to connect" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "How to connect" }));
+    fireEvent.mouseDown(
+      screen.getByRole("dialog", {
+        name: "How to connect your Riot account",
+      }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("makes web sign-in primary and cookie JSON an explicit fallback", async () => {

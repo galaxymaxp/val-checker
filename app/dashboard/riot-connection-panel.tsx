@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { RiotConnectTutorial } from "@/app/dashboard/riot-connect-tutorial";
 import type {
   RiotCaptureTokenResult,
   RiotConnectionMutationResult,
@@ -455,62 +456,13 @@ function RiotConnectionPanelState({
                   : "Connect a Riot account"}
           </h2>
           {connectionState === "disconnected" || keepConnectFormOpen ? (
-            <p>Choose the connection method that works for you.</p>
+            <p>Check your VALORANT store automatically.</p>
           ) : null}
         </div>
         <span className={`connection-badge connection-badge-${connectionState}`}>
           {connectionBadgeLabel}
         </span>
       </div>
-
-      <details className="consent-details">
-        <summary>How your Riot session is handled</summary>
-        <div className="consent-copy">
-          {createCaptureToken ? (
-            <p>
-              You sign in on Riot Games&apos; actual page in your normal browser.
-              The extension cannot read your password, MFA code, CAPTCHA,
-              keyboard, or mouse. After Riot accepts the sign-in, it sends the
-              resulting session directly to VAL Checker without exposing it to
-              this webpage.
-            </p>
-          ) : connectCredentials ? (
-            <p>
-              Your Riot username, password, and any MFA code are sent through
-              VAL Checker&apos;s server directly to Riot for this sign-in. VAL
-              Checker does not store or log them.
-            </p>
-          ) : cloudConnectAvailable ? (
-            <p>
-              You sign in on Riot Games&apos; actual login page inside a temporary,
-              isolated browser. The remote-browser infrastructure carries your
-              input while you interact with that page, but VAL Checker does not
-              store your Riot password or MFA code.
-            </p>
-          ) : (
-            <p>
-              Cookie JSON connection does not ask for your Riot password. The
-              exported cookie file is a live Riot session and must be protected
-              like a password.
-            </p>
-          )}
-          <p>
-            After Riot accepts the sign-in or imported session, the complete
-            renewable cookie jar is validated, encrypted, and stored.
-          </p>
-          <p>
-            The session we keep can permit access to your Riot account. It is
-            encrypted at rest, and you can disconnect and delete it at any
-            time.
-          </p>
-          <p>
-            VAL Checker is not affiliated with Riot Games. To invalidate
-            existing sessions outside VAL Checker, use Riot&apos;s
-            <strong> Sign out everywhere</strong> option in your account
-            security settings.
-          </p>
-        </div>
-      </details>
 
       {connectionState === "disconnected" || keepConnectFormOpen ? (
         mfaChallenge ? (
@@ -546,20 +498,6 @@ function RiotConnectionPanelState({
           </div>
         ) : (
           <>
-            {hasConnectMethod ? (
-              <label className="consent-check">
-                <input
-                  checked={consentGranted}
-                  onChange={(event) => setConsentGranted(event.target.checked)}
-                  type="checkbox"
-                />
-                <span>
-                  I understand that VAL Checker stores an encrypted Riot session
-                  so it can check this account&apos;s store.
-                </span>
-              </label>
-            ) : null}
-
             {createCaptureToken ? (
               <section
                 aria-labelledby="extension-riot-connect-heading"
@@ -568,13 +506,9 @@ function RiotConnectionPanelState({
                 <div className="riot-connect-method-heading">
                   <div>
                     <p className="riot-connect-method-kicker">Recommended</p>
-                    <h3 id="extension-riot-connect-heading">
-                      Sign in on Riot&apos;s website
-                    </h3>
+                    <h3 id="extension-riot-connect-heading">Sign in with Riot</h3>
                     <p>
-                      VAL Checker opens Riot in a normal browser tab. Sign in,
-                      finish any Google, MFA, or CAPTCHA step, and the extension
-                      connects the session automatically.
+                      Continue on Riot&apos;s website. Your password stays with Riot.
                     </p>
                   </div>
                   <span
@@ -612,27 +546,6 @@ function RiotConnectionPanelState({
                     />
                   </label>
                 </div>
-                {extensionState === "missing" ? (
-                  <div className="consent-copy" role="note">
-                    <p>
-                      Install the private extension once, then refresh this page.
-                      In Chrome or Edge, unzip it, open the extensions page,
-                      enable Developer mode, and choose <strong>Load unpacked</strong>.
-                    </p>
-                    <a
-                      className="riot-connect-download-link"
-                      download
-                      href="/downloads/val-checker-riot-extension.zip"
-                    >
-                      Download browser extension
-                    </a>
-                    <p>
-                      Chrome on iPhone, iPad, and Android cannot install this
-                      extension. This first automatic version is desktop-only;
-                      cookie JSON remains below where export tooling is available.
-                    </p>
-                  </div>
-                ) : null}
                 <button
                   className="riot-connect-primary-button"
                   disabled={
@@ -641,11 +554,39 @@ function RiotConnectionPanelState({
                   onClick={() => void connectViaExtension()}
                   type="button"
                 >
-                  {isPending ? "Waiting for Riot sign-in..." : "Open Riot sign-in"}
+                  {isPending ? "Waiting for Riot sign-in..." : "Sign in with Riot"}
                 </button>
+                <label className="consent-check">
+                  <input
+                    checked={consentGranted}
+                    onChange={(event) => setConsentGranted(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    I understand that VAL Checker stores an encrypted Riot session
+                    so it can check this account&apos;s store.
+                  </span>
+                </label>
+                <div className="riot-connect-help-row">
+                  <RiotConnectTutorial />
+                  {extensionState === "missing" ? (
+                    <a
+                      className="riot-connect-download-link"
+                      download
+                      href="/downloads/val-checker-riot-extension.zip"
+                    >
+                      Download helper
+                    </a>
+                  ) : null}
+                </div>
+                {extensionState === "missing" ? (
+                  <p className="riot-extension-note" role="note">
+                    The helper works in Chrome or Edge on a computer. Install it
+                    once, then refresh this page.
+                  </p>
+                ) : null}
                 <p role="note">
-                  Your password stays on Riot&apos;s page. After a successful sign-in,
-                  the Riot tab closes and this dashboard refreshes automatically.
+                  After sign-in, this page refreshes automatically.
                 </p>
               </section>
             ) : cloudConnectAvailable ? (
@@ -694,6 +635,17 @@ function RiotConnectionPanelState({
                 >
                   Sign in with Riot
                 </button>
+                <label className="consent-check">
+                  <input
+                    checked={consentGranted}
+                    onChange={(event) => setConsentGranted(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    I understand that VAL Checker stores an encrypted Riot session
+                    so it can check this account&apos;s store.
+                  </span>
+                </label>
                 <p role="note">
                   Works on phones, tablets, and computers. Complete MFA or
                   CAPTCHA directly on Riot&apos;s page if Riot asks for it.
@@ -789,6 +741,17 @@ function RiotConnectionPanelState({
                 >
                   {isPending ? "Signing in to Riot..." : "Sign in to Riot"}
                 </button>
+                <label className="consent-check">
+                  <input
+                    checked={consentGranted}
+                    onChange={(event) => setConsentGranted(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    I understand that VAL Checker stores an encrypted Riot session
+                    so it can check this account&apos;s store.
+                  </span>
+                </label>
                 <p className="ship-gate-note" role="note">
                   After connection, VAL Checker runs an initial store check.
                   Each Riot account then gets one automatic check and one
@@ -798,13 +761,26 @@ function RiotConnectionPanelState({
             ) : null}
 
             {connectAllowed && !connectCredentials && connectFixture ? (
-              <button
-                disabled={!consentGranted || isPending}
-                onClick={connectFixtureSession}
-                type="button"
-              >
-                {isPending ? "Connecting fixture..." : "Connect fixture session"}
-              </button>
+              <div className="riot-fixture-connect">
+                <button
+                  disabled={!consentGranted || isPending}
+                  onClick={connectFixtureSession}
+                  type="button"
+                >
+                  {isPending ? "Connecting fixture..." : "Connect fixture session"}
+                </button>
+                <label className="consent-check">
+                  <input
+                    checked={consentGranted}
+                    onChange={(event) => setConsentGranted(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    I understand that VAL Checker stores an encrypted Riot session
+                    so it can check this account&apos;s store.
+                  </span>
+                </label>
+              </div>
             ) : !connectAllowed && !cloudConnectAvailable ? (
               // Only a real state gets a control. An allowlisted account with
               // no wired form used to land on a disabled "not yet available"
@@ -900,6 +876,23 @@ function RiotConnectionPanelState({
                           ? "Connecting Riot session..."
                           : "Connect with cookie JSON"}
                       </button>
+                      {!createCaptureToken &&
+                      !cloudConnectAvailable &&
+                      !connectCredentials ? (
+                        <label className="consent-check">
+                          <input
+                            checked={consentGranted}
+                            onChange={(event) =>
+                              setConsentGranted(event.target.checked)
+                            }
+                            type="checkbox"
+                          />
+                          <span>
+                            I understand that VAL Checker stores an encrypted Riot
+                            session so it can check this account&apos;s store.
+                          </span>
+                        </label>
+                      ) : null}
                       <p className="ship-gate-note" role="note">
                         VAL Checker contacts Riot to verify which account the
                         session belongs to and rotates it before encrypting. This
@@ -923,6 +916,56 @@ function RiotConnectionPanelState({
             invalidate existing sessions.
           </p>
         </div>
+      ) : null}
+
+      {hasConnectMethod ? (
+        <details className="consent-details">
+          <summary>How your Riot session is handled</summary>
+          <div className="consent-copy">
+            {createCaptureToken ? (
+              <p>
+                You sign in on Riot Games&apos; actual page in your normal browser.
+                The extension cannot read your password, MFA code, CAPTCHA,
+                keyboard, or mouse. After Riot accepts the sign-in, it sends the
+                resulting session directly to VAL Checker without exposing it to
+                this webpage.
+              </p>
+            ) : connectCredentials ? (
+              <p>
+                Your Riot username, password, and any MFA code are sent through
+                VAL Checker&apos;s server directly to Riot for this sign-in. VAL
+                Checker does not store or log them.
+              </p>
+            ) : cloudConnectAvailable ? (
+              <p>
+                You sign in on Riot Games&apos; actual login page inside a temporary,
+                isolated browser. The remote-browser infrastructure carries your
+                input while you interact with that page, but VAL Checker does not
+                store your Riot password or MFA code.
+              </p>
+            ) : (
+              <p>
+                Cookie JSON connection does not ask for your Riot password. The
+                exported cookie file is a live Riot session and must be protected
+                like a password.
+              </p>
+            )}
+            <p>
+              After Riot accepts the sign-in or imported session, the complete
+              renewable cookie jar is validated, encrypted, and stored.
+            </p>
+            <p>
+              The session we keep can permit access to your Riot account. It is
+              encrypted at rest, and you can disconnect and delete it at any time.
+            </p>
+            <p>
+              VAL Checker is not affiliated with Riot Games. To invalidate existing
+              sessions outside VAL Checker, use Riot&apos;s
+              <strong> Sign out everywhere</strong> option in your account security
+              settings.
+            </p>
+          </div>
+        </details>
       ) : null}
 
       {success ? (

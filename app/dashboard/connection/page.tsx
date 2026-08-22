@@ -52,15 +52,15 @@ export default async function RiotConnectionPage({
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <p className="eyebrow">RIOT CONNECTION</p>
+        <p className="eyebrow">RIOT ACCOUNTS</p>
         <h1>
           {reconnectAccount
             ? `Reconnect ${reconnectAccount.label ?? "this Riot account"}.`
-            : "Manage your Riot accounts."}
+            : "Your Riot accounts."}
         </h1>
         <p className="lede">
-          Each account keeps its own encrypted session, store history, and
-          daily refresh allowance. This service is unaffiliated with Riot Games.
+          Connect the accounts you want VAL Checker to monitor. Each account
+          keeps its own store and watchlist matches.
         </p>
       </header>
       <ConnectedRiotAccounts
