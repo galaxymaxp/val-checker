@@ -128,6 +128,7 @@ describe("Riot connection consent UI", () => {
   });
 
   it("offers a one-time extension download while keeping JSON as fallback", async () => {
+    const user = userEvent.setup();
     render(
       <RiotConnectionPanel
         connectAllowed
@@ -140,9 +141,27 @@ describe("Riot connection consent UI", () => {
     expect(
       await screen.findByText("Extension needed", {}, { timeout: 2_000 }),
     ).toBeInTheDocument();
+    const download = screen.getByRole("link", {
+      name: "Download & Unzip Extension",
+    });
+    expect(download).toHaveAttribute(
+      "href",
+      "/downloads/val-checker-riot-extension.zip",
+    );
+    expect(download).toHaveAttribute(
+      "download",
+      "VAL Checker Extension (UNZIP ME).zip",
+    );
+
+    const signIn = screen.getByRole("button", { name: "Sign in with Riot" });
+    await user.hover(signIn);
     expect(
-      screen.getByRole("link", { name: "Download & Unzip Extension" }),
-    ).toHaveAttribute("href", "/downloads/val-checker-riot-extension.zip");
+      screen.getByText("Download and unzip the extension first."),
+    ).toBeInTheDocument();
+    expect(download).toHaveClass("riot-connect-download-link-highlighted");
+
+    await user.click(signIn);
+    expect(download).toHaveFocus();
     expect(
       screen.getByRole("heading", { name: "Import cookie JSON" }),
     ).toBeInTheDocument();

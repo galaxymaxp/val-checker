@@ -819,6 +819,28 @@ section[id] {
   width: 100% !important;
 }
 
+.riot-extension-signin-gate {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.riot-extension-signin-gate .riot-connect-primary-button[aria-disabled="true"]:not(:disabled) {
+  cursor: help;
+  opacity: 0.65;
+}
+
+.riot-extension-install-hint {
+  color: var(--text);
+  font-size: 0.82rem;
+  margin: 0;
+  text-align: center;
+}
+
+.riot-connect-download-link-highlighted {
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px) scale(1.02);
+}
+
 .riot-connect-progress {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);

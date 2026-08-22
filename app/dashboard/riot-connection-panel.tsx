@@ -106,6 +106,8 @@ function RiotConnectionPanelState({
   const [isPending, setIsPending] = useState(false);
   const [isExtensionPending, setIsExtensionPending] = useState(false);
   const [extensionAttemptFailed, setExtensionAttemptFailed] = useState(false);
+  const [showExtensionInstallHint, setShowExtensionInstallHint] =
+    useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [extensionState, setExtensionState] = useState<ExtensionState>(
@@ -113,6 +115,7 @@ function RiotConnectionPanelState({
   );
   const activeExtensionRequest = useRef<string | null>(null);
   const extensionRequestTimer = useRef<number | null>(null);
+  const extensionDownloadRef = useRef<HTMLAnchorElement>(null);
 
   const hasConnectMethod =
     cloudConnectAvailable ||
@@ -574,18 +577,60 @@ function RiotConnectionPanelState({
                     </small>
                   </div>
                 ) : (
-                  <button
-                    className="riot-connect-primary-button"
-                    disabled={
-                      extensionState !== "ready" ||
-                      !consentGranted ||
-                      isPending
-                    }
-                    onClick={() => void connectViaExtension()}
-                    type="button"
+                  <div
+                    className="riot-extension-signin-gate"
+                    onBlur={() => setShowExtensionInstallHint(false)}
+                    onFocus={() => {
+                      if (extensionState === "missing") {
+                        setShowExtensionInstallHint(true);
+                      }
+                    }}
+                    onMouseEnter={() => {
+                      if (extensionState === "missing") {
+                        setShowExtensionInstallHint(true);
+                      }
+                    }}
+                    onMouseLeave={() => setShowExtensionInstallHint(false)}
                   >
-                    {extensionAttemptFailed ? "Try again" : "Sign in with Riot"}
-                  </button>
+                    <button
+                      aria-disabled={
+                        extensionState !== "ready" ||
+                        !consentGranted ||
+                        isPending
+                      }
+                      className="riot-connect-primary-button"
+                      disabled={
+                        extensionState !== "missing" &&
+                        (extensionState !== "ready" ||
+                          !consentGranted ||
+                          isPending)
+                      }
+                      onClick={() => {
+                        if (extensionState === "missing") {
+                          setShowExtensionInstallHint(true);
+                          extensionDownloadRef.current?.focus();
+                          return;
+                        }
+                        void connectViaExtension();
+                      }}
+                      title={
+                        extensionState === "missing"
+                          ? "Download and unzip the extension first"
+                          : undefined
+                      }
+                      type="button"
+                    >
+                      {extensionAttemptFailed
+                        ? "Try again"
+                        : "Sign in with Riot"}
+                    </button>
+                    {extensionState === "missing" &&
+                    showExtensionInstallHint ? (
+                      <p className="riot-extension-install-hint" role="status">
+                        Download and unzip the extension first.
+                      </p>
+                    ) : null}
+                  </div>
                 )}
                 <label className="consent-check">
                   <input
@@ -602,9 +647,16 @@ function RiotConnectionPanelState({
                   <RiotConnectTutorial />
                   {extensionState === "missing" ? (
                     <a
-                      className="riot-connect-download-link"
-                      download
+                      className={`riot-connect-download-link${
+                        showExtensionInstallHint
+                          ? " riot-connect-download-link-highlighted"
+                          : ""
+                      }`}
+                      download="VAL Checker Extension (UNZIP ME).zip"
                       href="/downloads/val-checker-riot-extension.zip"
+                      onBlur={() => setShowExtensionInstallHint(false)}
+                      onFocus={() => setShowExtensionInstallHint(true)}
+                      ref={extensionDownloadRef}
                     >
                       Download &amp; Unzip Extension
                     </a>
