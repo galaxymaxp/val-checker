@@ -2,6 +2,7 @@ import type { RenderedEmail } from "@/src/lib/notifications/session-expired";
 import type { StorefrontSkinMatch } from "@/src/lib/storefront/match";
 
 export interface StorefrontMatchEmailInput {
+  readonly accountName: string;
   readonly displayName: string;
   readonly expiresAt: string;
   /** Skin artwork, shown at the top. Omitted when the catalog has none. */
@@ -32,6 +33,7 @@ function subjectName(displayName: string): string {
 export function renderStorefrontMatchEmail(
   input: StorefrontMatchEmailInput,
 ): RenderedEmail {
+  const accountName = escapeHtml(input.accountName);
   const displayName = escapeHtml(input.displayName);
   const expiresAt = escapeHtml(input.expiresAt);
 
@@ -63,12 +65,13 @@ export function renderStorefrontMatchEmail(
       : "";
 
   return {
-    subject: `${subjectName(input.displayName)} is in your store!`,
+    subject: `${subjectName(input.displayName)} is in ${subjectName(input.accountName)}'s shop`,
     html: [
       "<!doctype html>",
       '<html lang="en">',
       "<body>",
-      `<h1>${displayName} is in your store!</h1>`,
+      `<h1>${displayName} is in ${accountName}&#39;s shop</h1>`,
+      `<p><strong>Riot account: ${accountName}</strong></p>`,
       artwork,
       price,
       `<p>It is available in today&#39;s rotation, which ends <time datetime="${expiresAt}">${expiresLabel}</time>.</p>`,

@@ -19,6 +19,7 @@ import type {
   StorefrontRefreshSnapshot,
 } from "@/src/lib/storefront/canonicalize";
 import type { Database } from "@/src/types/database";
+import { riotAccountDisplayName } from "@/src/lib/riot/account-display";
 
 type AuthStatus = Database["public"]["Enums"]["auth_status"];
 
@@ -27,9 +28,12 @@ export type WorkerConnection = {
   readonly connectionEpoch: string;
   readonly consecutiveFailures: number;
   readonly createdAt: string;
+  readonly gameName: string | null;
   readonly id: string;
+  readonly label: string | null;
   readonly lastRefreshAt: string | null;
   readonly region: string | null;
+  readonly tagLine: string | null;
   readonly userId: string;
 };
 
@@ -707,7 +711,9 @@ export class DailyStorefrontWorker {
           claim.storeDate,
         );
       plan = await this.dependencies.pipeline({
+        accountName: riotAccountDisplayName(connection, 0),
         checkedAt,
+        connectionId: connection.id,
         sentNotifications,
         storefront,
         userId: connection.userId,

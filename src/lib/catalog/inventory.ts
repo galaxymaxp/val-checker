@@ -22,8 +22,13 @@ interface WatchedSkinJoinRow {
 async function loadWatchedSkins(
   supabase: SupabaseClient<Database>,
   userId: string,
+  connectionId: string | null,
 ) {
   const rows: WatchedSkinJoinRow[] = [];
+
+  if (!connectionId) {
+    return rows;
+  }
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase
@@ -32,6 +37,7 @@ async function loadWatchedSkins(
         "skin_uuid, created_at, skins!inner(skin_uuid, display_name, display_icon, weapon_uuid)",
       )
       .eq("user_id", userId)
+      .eq("connection_id", connectionId)
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
 
@@ -61,6 +67,7 @@ async function loadWatchedSkins(
 export async function loadWishlistInventory(
   supabase: SupabaseClient<Database>,
   userId: string,
+  connectionId: string | null,
 ): Promise<readonly InventoryTileView[]> {
   const [{ data: weapons, error: weaponsError }, watchedSkins] =
     await Promise.all([
@@ -69,7 +76,7 @@ export async function loadWishlistInventory(
         .select(
           "weapon_uuid, display_name, display_icon, inventory_label, inventory_ordinal, category",
         ),
-      loadWatchedSkins(supabase, userId),
+      loadWatchedSkins(supabase, userId, connectionId),
     ]);
 
   if (weaponsError) {

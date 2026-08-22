@@ -35,6 +35,7 @@ export async function loadWeaponSkins(
   weaponUuid: string,
   options: { readonly limit: number; readonly offset: number },
   userId: string,
+  connectionId: string,
 ): Promise<WeaponSkinsView> {
   const { limit, offset } = options;
 
@@ -74,6 +75,7 @@ export async function loadWeaponSkins(
       .from("watchlist")
       .select("skin_uuid")
       .eq("user_id", userId)
+      .eq("connection_id", connectionId)
       .in(
         "skin_uuid",
         pageSkins.map((skin) => skin.skin_uuid),

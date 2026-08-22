@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const deleteEqSkin = vi.fn();
-const deleteEqUser = vi.fn(() => ({ eq: deleteEqSkin }));
+const deleteEqConnection = vi.fn(() => ({ eq: deleteEqSkin }));
+const deleteEqUser = vi.fn(() => ({ eq: deleteEqConnection }));
 const deleteRows = vi.fn(() => ({ eq: deleteEqUser }));
 const getClaims = vi.fn();
 const revalidatePath = vi.fn();
@@ -16,11 +17,13 @@ vi.mock("@/src/lib/supabase/server", () => ({
 vi.mock("next/cache", () => ({ revalidatePath }));
 
 const skinUuid = "11111111-1111-0111-0111-111111111111";
+const connectionId = "22222222-2222-4222-8222-222222222222";
 
 describe("watchlist server action", () => {
   beforeEach(() => {
     deleteEqSkin.mockReset();
     deleteEqSkin.mockResolvedValue({ error: null });
+    deleteEqConnection.mockClear();
     deleteEqUser.mockClear();
     deleteRows.mockClear();
     getClaims.mockReset();
@@ -33,15 +36,16 @@ describe("watchlist server action", () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(connectionId, skinUuid, true)).resolves.toEqual({ ok: true });
     expect(upsert).toHaveBeenCalledWith(
       {
+        connection_id: connectionId,
         skin_uuid: skinUuid,
         user_id: "verified-user",
       },
       {
         ignoreDuplicates: true,
-        onConflict: "user_id,skin_uuid",
+        onConflict: "connection_id,skin_uuid",
       },
     );
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
@@ -51,16 +55,45 @@ describe("watchlist server action", () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({ ok: true });
-    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(connectionId, skinUuid, true)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(connectionId, skinUuid, true)).resolves.toEqual({ ok: true });
     expect(upsert).toHaveBeenCalledTimes(2);
     expect(revalidatePath).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps add and remove mutations scoped to the selected Riot account", async () => {
+    const otherConnectionId = "33333333-3333-4333-8333-333333333333";
+    getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
+    const { setSkinWatched } = await import("@/app/dashboard/actions");
+
+    await setSkinWatched(connectionId, skinUuid, true);
+    await setSkinWatched(otherConnectionId, skinUuid, true);
+    await setSkinWatched(connectionId, skinUuid, false);
+
+    expect(upsert).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ connection_id: connectionId }),
+      expect.anything(),
+    );
+    expect(upsert).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ connection_id: otherConnectionId }),
+      expect.anything(),
+    );
+    expect(deleteEqConnection).toHaveBeenCalledWith(
+      "connection_id",
+      connectionId,
+    );
+    expect(deleteEqConnection).not.toHaveBeenCalledWith(
+      "connection_id",
+      otherConnectionId,
+    );
   });
 
   it("rejects malformed watched values before authentication", async () => {
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, "true")).resolves.toEqual({
+    await expect(setSkinWatched(connectionId, skinUuid, "true")).resolves.toEqual({
       error: "This watch request is not valid.",
       ok: false,
     });
@@ -73,7 +106,7 @@ describe("watchlist server action", () => {
   it("rejects an invalid skin UUID before authentication", async () => {
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched("not-a-uuid", true)).resolves.toEqual({
+    await expect(setSkinWatched(connectionId, "not-a-uuid", true)).resolves.toEqual({
       error: "This skin is not valid.",
       ok: false,
     });
@@ -87,7 +120,7 @@ describe("watchlist server action", () => {
     getClaims.mockResolvedValue({ data: { claims: {} } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({
+    await expect(setSkinWatched(connectionId, skinUuid, true)).resolves.toEqual({
       error: "Please sign in again.",
       ok: false,
     });
@@ -100,8 +133,9 @@ describe("watchlist server action", () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, false)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(connectionId, skinUuid, false)).resolves.toEqual({ ok: true });
     expect(deleteEqUser).toHaveBeenCalledWith("user_id", "verified-user");
+    expect(deleteEqConnection).toHaveBeenCalledWith("connection_id", connectionId);
     expect(deleteEqSkin).toHaveBeenCalledWith("skin_uuid", skinUuid);
   });
 
@@ -109,8 +143,8 @@ describe("watchlist server action", () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "verified-user" } } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, false)).resolves.toEqual({ ok: true });
-    await expect(setSkinWatched(skinUuid, false)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(connectionId, skinUuid, false)).resolves.toEqual({ ok: true });
+    await expect(setSkinWatched(connectionId, skinUuid, false)).resolves.toEqual({ ok: true });
     expect(deleteRows).toHaveBeenCalledTimes(2);
     expect(deleteEqUser).toHaveBeenCalledTimes(2);
     expect(deleteEqUser).toHaveBeenCalledWith("user_id", "verified-user");
@@ -124,7 +158,7 @@ describe("watchlist server action", () => {
     upsert.mockResolvedValue({ error: { message: "sensitive database detail" } });
     const { setSkinWatched } = await import("@/app/dashboard/actions");
 
-    await expect(setSkinWatched(skinUuid, true)).resolves.toEqual({
+    await expect(setSkinWatched(connectionId, skinUuid, true)).resolves.toEqual({
       error: "Your watchlist could not be updated.",
       ok: false,
     });

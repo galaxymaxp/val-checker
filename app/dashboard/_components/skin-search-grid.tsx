@@ -18,6 +18,7 @@ const UNTIERED_KEY = "untiered";
 const UNTIERED_LABEL = "No edition";
 
 interface SkinSearchGridProps {
+  readonly connectionId: string;
   readonly skins: readonly WeaponSkinRowView[];
   readonly updateWatch: (
     skinUuid: string,
@@ -36,6 +37,7 @@ function tierKey(skin: WeaponSkinRowView): string {
 }
 
 export function SkinSearchGrid({
+  connectionId,
   skins,
   updateWatch,
   weaponName,
@@ -164,6 +166,7 @@ export function SkinSearchGrid({
                 key={skin.skinUuid}
               >
                 <SkinCard
+                  connectionId={connectionId}
                   skin={skin}
                   updateWatch={updateWatch}
                   weaponUuid={weaponUuid}

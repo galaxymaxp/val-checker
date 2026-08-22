@@ -40,6 +40,7 @@ export default async function DashboardPage({
     redirect("/sign-in?next=/dashboard");
   }
 
+  const params = await searchParams;
   const adminSupabase = createAdminSupabaseClient();
   const accountsPromise = loadRiotAccountsWithClient(
     adminSupabase,
@@ -48,12 +49,17 @@ export default async function DashboardPage({
   const refreshStatusPromise = accountsPromise.then((accounts) =>
     loadStorefrontDashboardStatus(adminSupabase, data.claims.sub, accounts),
   );
-  const [accounts, dailyShops, refreshStatus, tiles, params] = await Promise.all([
-    accountsPromise,
+  const accounts = await accountsPromise;
+  const selectedAccount =
+    accounts.find((account) => account.id === params.account) ?? accounts[0];
+  const [dailyShops, refreshStatus, tiles] = await Promise.all([
     loadDailyShops(adminSupabase, data.claims.sub),
     refreshStatusPromise,
-    loadWishlistInventory(supabase, data.claims.sub),
-    searchParams,
+    loadWishlistInventory(
+      supabase,
+      data.claims.sub,
+      selectedAccount?.id ?? null,
+    ),
   ]);
 
   return renderDashboard({ accounts, dailyShops, refreshStatus, tiles, params });
@@ -135,7 +141,10 @@ function renderDashboard({
         <NightMarket nightMarket={selectedShop.nightMarket} />
       ) : null}
       {selectedShop?.bundle ? <FeaturedBundle bundle={selectedShop.bundle} /> : null}
-      <InventoryGrid tiles={tiles} />
+      <InventoryGrid
+        connectionId={selectedAccount?.id ?? null}
+        tiles={tiles}
+      />
     </main>
   );
 }

@@ -16,9 +16,12 @@ const connection: WorkerConnection = {
   connectionEpoch: "22222222-2222-4222-8222-222222222222",
   consecutiveFailures: 0,
   createdAt: "2026-08-16T00:00:00.000Z",
+  gameName: "PlayerName",
   id: "33333333-3333-4333-8333-333333333333",
+  label: "Main",
   lastRefreshAt: null,
   region: "ap",
+  tagLine: "APAC",
   userId: "11111111-1111-4111-8111-111111111111",
 };
 

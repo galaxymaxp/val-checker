@@ -38,9 +38,12 @@ function connection(
     connectionEpoch: "22222222-2222-4222-8222-222222222222",
     consecutiveFailures: 0,
     createdAt: "2026-08-13T00:00:00.000Z",
+    gameName: "PlayerName",
     id: "33333333-3333-4333-8333-333333333333",
+    label: "Main",
     lastRefreshAt: "2026-08-13T23:00:00.000Z",
     region: "ap",
+    tagLine: "APAC",
     userId: "11111111-1111-4111-8111-111111111111",
     ...overrides,
   };
@@ -228,7 +231,9 @@ describe("daily storefront worker", () => {
       fixture.refreshSession.mock.invocationCallOrder[0],
     );
     expect(fixture.pipeline).toHaveBeenCalledWith({
+      accountName: "PlayerName#APAC",
       checkedAt,
+      connectionId: connection().id,
       sentNotifications: [],
       storefront: { levelUuids: [], payload: {} },
       userId: connection().userId,

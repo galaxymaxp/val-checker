@@ -61,13 +61,13 @@ afterEach(cleanup);
 
 describe("InventoryGrid", () => {
   it("renders one tile per weapon", () => {
-    render(<InventoryGrid tiles={fixture} />);
+    render(<InventoryGrid connectionId="connection-one" tiles={fixture} />);
 
     expect(screen.getAllByRole("listitem")).toHaveLength(20);
   });
 
   it("groups the classes into the buy menu's columns", () => {
-    render(<InventoryGrid tiles={fixture} />);
+    render(<InventoryGrid connectionId="connection-one" tiles={fixture} />);
 
     const headings = screen
       .getAllByRole("heading", { level: 3 })
@@ -85,7 +85,7 @@ describe("InventoryGrid", () => {
   });
 
   it("keeps every category the catalog produces", () => {
-    render(<InventoryGrid tiles={fixture} />);
+    render(<InventoryGrid connectionId="connection-one" tiles={fixture} />);
 
     const headings = screen
       .getAllByRole("heading", { level: 3 })
@@ -95,14 +95,14 @@ describe("InventoryGrid", () => {
   });
 
   it("shows the newest watched skin and the watch count", () => {
-    render(<InventoryGrid tiles={fixture} />);
+    render(<InventoryGrid connectionId="connection-one" tiles={fixture} />);
 
     expect(screen.getByText("Prime Vandal")).toBeInTheDocument();
     expect(screen.getByText("2 skins watched")).toBeInTheDocument();
   });
 
   it("marks tiles with nothing watched", () => {
-    render(<InventoryGrid tiles={fixture} />);
+    render(<InventoryGrid connectionId="connection-one" tiles={fixture} />);
 
     expect(screen.getAllByText("Not watched")).toHaveLength(19);
   });

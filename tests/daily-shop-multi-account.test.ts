@@ -20,7 +20,7 @@ interface ClientFixture {
     display_name: string;
     skin_uuid: string;
   }[];
-  readonly watchlist?: readonly { skin_uuid: string }[];
+  readonly watchlist?: readonly { connection_id: string; skin_uuid: string }[];
 }
 
 function createShopClient({
@@ -47,7 +47,8 @@ function createShopClient({
   const watchlistIn = vi.fn<(column: string, skinUuids: readonly string[]) => Promise<{ data: typeof watchlist; error: null }>>(
     async () => ({ data: watchlist, error: null }),
   );
-  const watchlistEq = vi.fn(() => ({ in: watchlistIn }));
+  const watchlistConnectionIn = vi.fn(() => ({ in: watchlistIn }));
+  const watchlistEq = vi.fn(() => ({ in: watchlistConnectionIn }));
   const watchlistSelect = vi.fn(() => ({ eq: watchlistEq }));
 
   const from = vi.fn((table: string) => {
@@ -71,6 +72,7 @@ function createShopClient({
     from,
     skinsIn,
     watchlistIn,
+    watchlistConnectionIn,
   };
 }
 
@@ -78,7 +80,7 @@ const userId = "11111111-1111-4111-8111-111111111111";
 
 describe("daily shop with multiple Riot accounts", () => {
   it("returns one view per connection, in connection creation order", async () => {
-    const { checksIn, client, from, skinsIn, watchlistIn } = createShopClient({
+    const { checksIn, client, from, skinsIn, watchlistConnectionIn, watchlistIn } = createShopClient({
       // Newest rotation first, as the descending order clause would return.
       checks: [
         {
@@ -112,7 +114,10 @@ describe("daily shop with multiple Riot accounts", () => {
         { display_icon: null, display_name: "Skin B", skin_uuid: "skin-b" },
         { display_icon: "c.png", display_name: "Skin C", skin_uuid: "skin-c" },
       ],
-      watchlist: [{ skin_uuid: "skin-c" }],
+      watchlist: [
+        { connection_id: "conn-one", skin_uuid: "skin-b" },
+        { connection_id: "conn-two", skin_uuid: "skin-c" },
+      ],
     });
 
     const views = await loadDailyShops(client, userId);
@@ -141,7 +146,7 @@ describe("daily shop with multiple Riot accounts", () => {
           price: null,
           skinUuid: "skin-b",
           tierName: null,
-          watched: false,
+          watched: true,
           weaponName: null,
         },
       ],
@@ -182,6 +187,10 @@ describe("daily shop with multiple Riot accounts", () => {
     expect(from.mock.calls.filter(([table]) => table === "skins")).toHaveLength(1);
     expect(from.mock.calls.filter(([table]) => table === "watchlist")).toHaveLength(1);
     expect(skinsIn.mock.calls[0]?.[1]).toEqual(["skin-a", "skin-b", "skin-c"]);
+    expect(watchlistConnectionIn).toHaveBeenCalledWith("connection_id", [
+      "conn-one",
+      "conn-two",
+    ]);
     expect(watchlistIn.mock.calls[0]?.[1]).toEqual(["skin-a", "skin-b", "skin-c"]);
   });
 

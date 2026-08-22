@@ -211,8 +211,8 @@ describe("catalog gaps in decoration", () => {
         select: () => ({
           eq: () => ({
             order: () => ({ data: [{ id: "c1", label: "A" }], error: null }),
-            // The watchlist read is select().eq().in()
-            in: () => ({ data: [], error: null }),
+            // The watchlist read is select().eq().in().in()
+            in: () => ({ in: () => ({ data: [], error: null }) }),
           }),
           in: () => {
             if (table === "shop_checks") {

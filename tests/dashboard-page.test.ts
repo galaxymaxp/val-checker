@@ -62,6 +62,11 @@ describe("dashboard page", () => {
     expect(redirect).not.toHaveBeenCalled();
     expect(content.type).toBe("main");
     expect(loadWishlistInventory).toHaveBeenCalled();
+    expect(loadWishlistInventory).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-id",
+      null,
+    );
     expect(loadRiotAccountsWithClient).toHaveBeenCalledWith(
       admin,
       "user-id",
@@ -70,6 +75,27 @@ describe("dashboard page", () => {
       admin,
       "user-id",
       [],
+    );
+  });
+
+  it("loads only the selected Riot account's wishlist", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { email: "user@example.com", sub: "user-id" } },
+    });
+    loadRiotAccountsWithClient.mockResolvedValue([
+      { id: "connection-one" },
+      { id: "connection-two" },
+    ]);
+    const { default: DashboardPage } = await import("@/app/dashboard/page");
+
+    await DashboardPage({
+      searchParams: Promise.resolve({ account: "connection-two" }),
+    });
+
+    expect(loadWishlistInventory).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-id",
+      "connection-two",
     );
   });
 

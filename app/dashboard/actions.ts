@@ -12,9 +12,16 @@ const databaseUuidSchema = z.string().regex(
 );
 
 export async function setSkinWatched(
+  connectionId: string,
   skinUuid: string,
   watched: unknown,
 ): Promise<WatchMutationResult> {
+  const parsedConnectionId = databaseUuidSchema.safeParse(connectionId);
+
+  if (!parsedConnectionId.success) {
+    return { error: "This Riot account is not valid.", ok: false };
+  }
+
   const parsedSkinUuid = databaseUuidSchema.safeParse(skinUuid);
 
   if (!parsedSkinUuid.success) {
@@ -38,18 +45,20 @@ export async function setSkinWatched(
   const { error } = parsedWatched.data
     ? await supabase.from("watchlist").upsert(
         {
+          connection_id: parsedConnectionId.data,
           skin_uuid: parsedSkinUuid.data,
           user_id: userId,
         },
         {
           ignoreDuplicates: true,
-          onConflict: "user_id,skin_uuid",
+          onConflict: "connection_id,skin_uuid",
         },
       )
     : await supabase
         .from("watchlist")
         .delete()
         .eq("user_id", userId)
+        .eq("connection_id", parsedConnectionId.data)
         .eq("skin_uuid", parsedSkinUuid.data);
 
   if (error) {

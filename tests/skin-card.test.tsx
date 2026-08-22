@@ -23,6 +23,7 @@ describe("SkinCard", () => {
   it("links the art and name to the skin detail page", () => {
     render(
       <SkinCard
+        connectionId="connection-one"
         skin={skin}
         updateWatch={vi.fn(async () => ({ ok: true as const }))}
         weaponUuid={weaponUuid}
@@ -33,13 +34,14 @@ describe("SkinCard", () => {
 
     expect(link).toHaveAttribute(
       "href",
-      `/dashboard/inventory/${weaponUuid}/${skin.skinUuid}`,
+      `/dashboard/inventory/${weaponUuid}/${skin.skinUuid}?account=connection-one`,
     );
   });
 
   it("keeps the watch toggle outside the link", () => {
     render(
       <SkinCard
+        connectionId="connection-one"
         skin={skin}
         updateWatch={vi.fn(async () => ({ ok: true as const }))}
         weaponUuid={weaponUuid}

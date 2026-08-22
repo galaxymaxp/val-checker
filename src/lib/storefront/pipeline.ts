@@ -21,11 +21,13 @@ import {
   extractStorefrontSkinLevelUuids,
   parseStorefrontPayload,
 } from "@/src/lib/storefront/schema";
-import { loadWatchedSkinUuidsForUser } from "@/src/lib/watchlist/load";
+import { loadWatchedSkinUuidsForConnection } from "@/src/lib/watchlist/load";
 import type { Database } from "@/src/types/database";
 
 export interface StorefrontPipelineInput {
+  readonly accountName: string;
   readonly checkedAt: Date;
+  readonly connectionId: string;
   readonly sentNotifications: readonly SentStorefrontNotification[];
   readonly storefront: FetchedStorefront;
   readonly userId: string;
@@ -89,7 +91,11 @@ export async function planStorefrontNotificationsWithClient(
   const levelUuids = extractStorefrontSkinLevelUuids(parsedStorefront);
   const [resolvedLevels, watchedSkinUuids] = await Promise.all([
     resolveSkinLevelsWithClient(supabase, levelUuids),
-    loadWatchedSkinUuidsForUser(supabase, input.userId),
+    loadWatchedSkinUuidsForConnection(
+      supabase,
+      input.userId,
+      input.connectionId,
+    ),
   ]);
   const canonicalStorefront = canonicalizeStorefront(
     parsedStorefront,
@@ -121,6 +127,7 @@ export async function planStorefrontNotificationsWithClient(
 
     return {
       email: renderStorefrontMatchEmail({
+        accountName: input.accountName,
         displayName: catalog?.displayName ?? "A watched skin",
         expiresAt: canonicalStorefront.expiresAt,
         imageUrl: catalog?.imageUrl ?? null,

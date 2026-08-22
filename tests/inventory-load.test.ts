@@ -47,7 +47,8 @@ function createInventoryClient({
     error: watchlistError,
   }));
   const watchlistOrder = vi.fn(() => ({ range: watchlistRange }));
-  const watchlistEq = vi.fn(() => ({ order: watchlistOrder }));
+  const watchlistConnectionEq = vi.fn(() => ({ order: watchlistOrder }));
+  const watchlistEq = vi.fn(() => ({ eq: watchlistConnectionEq }));
   const watchlistSelect = vi.fn(() => ({ eq: watchlistEq }));
 
   const from = vi.fn((table: string) => {
@@ -65,6 +66,7 @@ function createInventoryClient({
     client: { from } as unknown as SupabaseClient<Database>,
     from,
     watchlistEq,
+    watchlistConnectionEq,
     watchlistOrder,
     watchlistRange,
     watchlistSelect,
@@ -73,10 +75,11 @@ function createInventoryClient({
 }
 
 const userId = "11111111-1111-4111-8111-111111111111";
+const connectionId = "22222222-2222-4222-8222-222222222222";
 
 describe("wishlist inventory loader", () => {
   it("tiles every weapon, with the newest watched skin supplying the art", async () => {
-    const { client, watchlistEq, watchlistOrder } = createInventoryClient({
+    const { client, watchlistConnectionEq, watchlistEq, watchlistOrder } = createInventoryClient({
       // Newest first, as the descending order clause would return.
       watchlist: [
         {
@@ -120,7 +123,7 @@ describe("wishlist inventory loader", () => {
       ],
     });
 
-    const tiles = await loadWishlistInventory(client, userId);
+    const tiles = await loadWishlistInventory(client, userId, connectionId);
 
     // Sidearms outrank rifles in the collection-screen order.
     expect(tiles).toEqual([
@@ -146,6 +149,7 @@ describe("wishlist inventory loader", () => {
       },
     ]);
     expect(watchlistEq).toHaveBeenCalledWith("user_id", userId);
+    expect(watchlistConnectionEq).toHaveBeenCalledWith("connection_id", connectionId);
     expect(watchlistOrder).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
@@ -171,7 +175,7 @@ describe("wishlist inventory loader", () => {
       ],
     });
 
-    const tiles = await loadWishlistInventory(client, userId);
+    const tiles = await loadWishlistInventory(client, userId, connectionId);
 
     expect(tiles.map((tile) => tile.displayName)).toEqual(["Bulldog", "Phantom"]);
   });
@@ -190,7 +194,7 @@ describe("wishlist inventory loader", () => {
       ],
     });
 
-    const tiles = await loadWishlistInventory(client, userId);
+    const tiles = await loadWishlistInventory(client, userId, connectionId);
 
     expect(tiles[0]).toMatchObject({
       categoryLabel: "SNIPER RIFLES",
@@ -203,7 +207,7 @@ describe("wishlist inventory loader", () => {
       weaponsError: new Error("sensitive database detail"),
     });
 
-    await expect(loadWishlistInventory(client, userId)).rejects.toThrow(
+    await expect(loadWishlistInventory(client, userId, connectionId)).rejects.toThrow(
       "The inventory could not be read.",
     );
   });
@@ -213,7 +217,7 @@ describe("wishlist inventory loader", () => {
       watchlistError: new Error("sensitive database detail"),
     });
 
-    await expect(loadWishlistInventory(client, userId)).rejects.toThrow(
+    await expect(loadWishlistInventory(client, userId, connectionId)).rejects.toThrow(
       "The inventory could not be read.",
     );
   });

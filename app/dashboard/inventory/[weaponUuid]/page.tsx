@@ -4,6 +4,8 @@ import { SkinSearchGrid } from "@/app/dashboard/_components/skin-search-grid";
 import { TransitionLink } from "@/app/dashboard/_components/transition-link";
 import { setSkinWatched } from "@/app/dashboard/actions";
 import { loadWeaponSkins } from "@/src/lib/catalog/weapon-detail";
+import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
+import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import type { WeaponSkinsView } from "@/src/types/catalog-view";
 
@@ -15,10 +17,12 @@ const UUID_PATTERN =
 
 interface WeaponInventoryPageProps {
   readonly params: Promise<{ weaponUuid: string }>;
+  readonly searchParams?: Promise<{ readonly account?: string }>;
 }
 
 export default async function WeaponInventoryPage({
   params,
+  searchParams = Promise.resolve({}),
 }: WeaponInventoryPageProps) {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
@@ -27,10 +31,21 @@ export default async function WeaponInventoryPage({
     redirect("/sign-in?next=/dashboard");
   }
 
-  const { weaponUuid } = await params;
+  const [{ weaponUuid }, query] = await Promise.all([params, searchParams]);
 
   if (!UUID_PATTERN.test(weaponUuid)) {
     notFound();
+  }
+
+  const accounts = await loadRiotAccountsWithClient(
+    createAdminSupabaseClient(),
+    data.claims.sub,
+  );
+  const selectedAccount =
+    accounts.find((account) => account.id === query.account) ?? accounts[0];
+
+  if (!selectedAccount) {
+    redirect("/dashboard/connection#connect-riot-account");
   }
 
   let view: WeaponSkinsView;
@@ -41,6 +56,7 @@ export default async function WeaponInventoryPage({
       weaponUuid,
       { limit: MAX_SKINS, offset: 0 },
       data.claims.sub,
+      selectedAccount.id,
     );
   } catch (error) {
     if (
@@ -58,7 +74,7 @@ export default async function WeaponInventoryPage({
       <header className="flex flex-col gap-2">
         <TransitionLink
           className="w-fit text-sm text-ink-dim! no-underline transition-colors hocus:text-ink!"
-          href="/dashboard"
+          href={`/dashboard?account=${encodeURIComponent(selectedAccount.id)}`}
         >
           ← Arsenal
         </TransitionLink>
@@ -74,8 +90,9 @@ export default async function WeaponInventoryPage({
         </p>
       ) : (
         <SkinSearchGrid
+          connectionId={selectedAccount.id}
           skins={view.skins}
-          updateWatch={setSkinWatched}
+          updateWatch={setSkinWatched.bind(null, selectedAccount.id)}
           weaponName={view.weaponName}
           weaponUuid={view.weaponUuid}
         />

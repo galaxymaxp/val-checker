@@ -150,6 +150,30 @@ describe("foundation schema RLS", () => {
       if (connectionError || !connection) {
         throw new Error("Unable to seed the Riot connection fixture.");
       }
+      const { data: connectionA2, error: connectionA2Error } = await admin
+        .from("riot_connections")
+        .insert({
+          encrypted_jar: "\\x00",
+          jar_nonce: "\\x00",
+          user_id: userA.userId,
+        })
+        .select("id")
+        .single();
+      if (connectionA2Error || !connectionA2) {
+        throw new Error("Unable to seed the sibling Riot connection fixture.");
+      }
+      const { data: connectionB, error: connectionBError } = await admin
+        .from("riot_connections")
+        .insert({
+          encrypted_jar: "\\x00",
+          jar_nonce: "\\x00",
+          user_id: userB.userId,
+        })
+        .select("id")
+        .single();
+      if (connectionBError || !connectionB) {
+        throw new Error("Unable to seed the second Riot connection fixture.");
+      }
 
       const { error: shopSeedError } = await admin.from("shop_checks").insert({
         connection_id: connection.id,
@@ -214,31 +238,47 @@ describe("foundation schema RLS", () => {
       expect(catalogInsertErrors.every(({ error }) => error !== null)).toBe(true);
 
       const { error: ownInsertError } = await userA.client.from("watchlist").insert({
+        connection_id: connection.id,
         skin_uuid: skinUuid,
         user_id: userA.userId,
       });
       expect(ownInsertError).toBeNull();
 
+      const { error: siblingInsertError } = await userA.client
+        .from("watchlist")
+        .insert({
+          connection_id: connectionA2.id,
+          skin_uuid: skinUuid,
+          user_id: userA.userId,
+        });
+      expect(siblingInsertError).toBeNull();
+
       const { error: crossUserInsertError } = await userA.client.from("watchlist").insert({
+        connection_id: connectionB.id,
         skin_uuid: skinUuid,
         user_id: userB.userId,
       });
       expect(crossUserInsertError).not.toBeNull();
 
       const { error: userBInsertError } = await userB.client.from("watchlist").insert({
+        connection_id: connectionB.id,
         skin_uuid: skinUuid,
         user_id: userB.userId,
       });
       expect(userBInsertError).toBeNull();
 
       const [watchlistA, watchlistB] = await Promise.all([
-        userA.client.from("watchlist").select("user_id, skin_uuid"),
-        userB.client.from("watchlist").select("user_id, skin_uuid"),
+        userA.client.from("watchlist").select("connection_id, user_id, skin_uuid"),
+        userB.client.from("watchlist").select("connection_id, user_id, skin_uuid"),
       ]);
       expect(watchlistA.error).toBeNull();
-      expect(watchlistA.data).toEqual([{ user_id: userA.userId, skin_uuid: skinUuid }]);
+      expect(watchlistA.data).toHaveLength(2);
+      expect(watchlistA.data).toEqual(expect.arrayContaining([
+        { connection_id: connection.id, user_id: userA.userId, skin_uuid: skinUuid },
+        { connection_id: connectionA2.id, user_id: userA.userId, skin_uuid: skinUuid },
+      ]));
       expect(watchlistB.error).toBeNull();
-      expect(watchlistB.data).toEqual([{ user_id: userB.userId, skin_uuid: skinUuid }]);
+      expect(watchlistB.data).toEqual([{ connection_id: connectionB.id, user_id: userB.userId, skin_uuid: skinUuid }]);
 
       const reloadedUserA = makeClient(status.API_URL, status.ANON_KEY);
       const { error: reloadSignInError } = await reloadedUserA.auth.signInWithPassword({
@@ -248,11 +288,9 @@ describe("foundation schema RLS", () => {
       expect(reloadSignInError).toBeNull();
       const reloadedWatchlistA = await reloadedUserA
         .from("watchlist")
-        .select("user_id, skin_uuid");
+        .select("connection_id, user_id, skin_uuid");
       expect(reloadedWatchlistA.error).toBeNull();
-      expect(reloadedWatchlistA.data).toEqual([
-        { user_id: userA.userId, skin_uuid: skinUuid },
-      ]);
+      expect(reloadedWatchlistA.data).toHaveLength(2);
 
       const { error: crossUserDeleteError } = await userB.client
         .from("watchlist")
@@ -262,10 +300,22 @@ describe("foundation schema RLS", () => {
       expect(crossUserDeleteError).toBeNull();
       const watchlistAfterCrossUserDelete = await reloadedUserA
         .from("watchlist")
-        .select("user_id, skin_uuid");
+        .select("connection_id, user_id, skin_uuid");
       expect(watchlistAfterCrossUserDelete.error).toBeNull();
-      expect(watchlistAfterCrossUserDelete.data).toEqual([
-        { user_id: userA.userId, skin_uuid: skinUuid },
+      expect(watchlistAfterCrossUserDelete.data).toHaveLength(2);
+
+      const { error: accountDeleteError } = await userA.client
+        .from("watchlist")
+        .delete()
+        .eq("connection_id", connection.id)
+        .eq("skin_uuid", skinUuid);
+      expect(accountDeleteError).toBeNull();
+      const watchlistAfterAccountDelete = await reloadedUserA
+        .from("watchlist")
+        .select("connection_id, skin_uuid");
+      expect(watchlistAfterAccountDelete.error).toBeNull();
+      expect(watchlistAfterAccountDelete.data).toEqual([
+        { connection_id: connectionA2.id, skin_uuid: skinUuid },
       ]);
 
       for (const client of [userA.client, userB.client]) {

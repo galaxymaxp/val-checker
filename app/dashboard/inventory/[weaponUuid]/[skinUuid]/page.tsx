@@ -34,9 +34,13 @@ function levelItemLabel(levelItem: string | null): string | null {
 
 interface SkinDetailPageProps {
   readonly params: Promise<{ skinUuid: string; weaponUuid: string }>;
+  readonly searchParams?: Promise<{ readonly account?: string }>;
 }
 
-export default async function SkinDetailPage({ params }: SkinDetailPageProps) {
+export default async function SkinDetailPage({
+  params,
+  searchParams = Promise.resolve({}),
+}: SkinDetailPageProps) {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
 
@@ -44,7 +48,10 @@ export default async function SkinDetailPage({ params }: SkinDetailPageProps) {
     redirect("/sign-in?next=/dashboard");
   }
 
-  const { skinUuid, weaponUuid } = await params;
+  const [{ skinUuid, weaponUuid }, query] = await Promise.all([params, searchParams]);
+  const accountSuffix = query.account
+    ? `?account=${encodeURIComponent(query.account)}`
+    : "";
 
   if (!UUID_PATTERN.test(weaponUuid) || !UUID_PATTERN.test(skinUuid)) {
     notFound();
@@ -74,7 +81,7 @@ export default async function SkinDetailPage({ params }: SkinDetailPageProps) {
       <header className="flex flex-col gap-3">
         <TransitionLink
           className="w-fit text-sm text-ink-dim! no-underline transition-colors hocus:text-ink!"
-          href={`/dashboard/inventory/${view.weaponUuid}`}
+          href={`/dashboard/inventory/${view.weaponUuid}${accountSuffix}`}
         >
           ← {view.weaponName}
         </TransitionLink>

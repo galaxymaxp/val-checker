@@ -215,7 +215,7 @@ export async function loadDailyShops(
     }
   >();
   let tierNameByUuid = new Map<string, string>();
-  let watchedSkinUuids = new Set<string>();
+  const watchedSkinUuidsByConnection = new Map<string, Set<string>>();
   let weaponNameByUuid = new Map<string, string>();
 
   // One catalog read and one watchlist read regardless of how many accounts
@@ -231,8 +231,12 @@ export async function loadDailyShops(
           .in("skin_uuid", resolvedSkinUuidUnion),
         supabase
           .from("watchlist")
-          .select("skin_uuid")
+          .select("connection_id, skin_uuid")
           .eq("user_id", userId)
+          .in(
+            "connection_id",
+            connections.map((connection) => connection.id),
+          )
           .in("skin_uuid", resolvedSkinUuidUnion),
       ]);
 
@@ -240,7 +244,15 @@ export async function loadDailyShops(
       throw new Error("The daily shop could not be read.");
     }
 
-    watchedSkinUuids = new Set((watched ?? []).map((row) => row.skin_uuid));
+    for (const row of watched ?? []) {
+      if (!row.connection_id) {
+        continue;
+      }
+      const watchedForConnection =
+        watchedSkinUuidsByConnection.get(row.connection_id) ?? new Set<string>();
+      watchedForConnection.add(row.skin_uuid);
+      watchedSkinUuidsByConnection.set(row.connection_id, watchedForConnection);
+    }
     bySkinUuid = new Map((skins ?? []).map((row) => [row.skin_uuid, row]));
 
     const weaponUuids = [
@@ -306,6 +318,8 @@ export async function loadDailyShops(
     if (!check) {
       continue;
     }
+    const watchedSkinUuids =
+      watchedSkinUuidsByConnection.get(connection.id) ?? new Set<string>();
 
     const offers =
       (check.offer_details ?? []).length > 0

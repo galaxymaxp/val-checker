@@ -58,6 +58,7 @@ type ContentTierRow = {
 type WatchlistRow = {
   id: string;
   user_id: string;
+  connection_id: string | null;
   skin_uuid: string;
   created_at: string;
 };
@@ -349,9 +350,10 @@ export interface Database {
       };
       watchlist: {
         Row: WatchlistRow;
-        Insert: Omit<WatchlistRow, "id" | "created_at"> & {
+        Insert: Omit<WatchlistRow, "id" | "created_at" | "connection_id"> & {
           id?: string;
           created_at?: string;
+          connection_id: string;
         };
         Update: Partial<WatchlistRow>;
         Relationships: [];

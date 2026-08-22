@@ -6,6 +6,7 @@ const PAGE_SIZE = 1_000;
 
 async function loadWatchedSkinUuidsWithScope(
   supabase: SupabaseClient<Database>,
+  connectionId: string,
   userId?: string,
 ) {
   const watchedSkinUuids: string[] = [];
@@ -13,7 +14,8 @@ async function loadWatchedSkinUuidsWithScope(
   for (let offset = 0; ; offset += PAGE_SIZE) {
     let query = supabase
       .from("watchlist")
-      .select("skin_uuid");
+      .select("skin_uuid")
+      .eq("connection_id", connectionId);
 
     if (userId !== undefined) {
       query = query.eq("user_id", userId);
@@ -39,18 +41,24 @@ async function loadWatchedSkinUuidsWithScope(
 /** Uses the caller's RLS identity to scope rows. */
 export async function loadWatchedSkinUuids(
   supabase: SupabaseClient<Database>,
+  connectionId: string,
 ) {
-  return loadWatchedSkinUuidsWithScope(supabase);
-}
-
-/** Explicit service-role scope for per-user worker runs. */
-export async function loadWatchedSkinUuidsForUser(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-) {
-  if (userId.length === 0) {
-    throw new Error("A user is required to load a worker watchlist.");
+  if (connectionId.length === 0) {
+    throw new Error("A Riot connection is required to load a watchlist.");
   }
 
-  return loadWatchedSkinUuidsWithScope(supabase, userId);
+  return loadWatchedSkinUuidsWithScope(supabase, connectionId);
+}
+
+/** Explicit service-role scope for one account's worker run. */
+export async function loadWatchedSkinUuidsForConnection(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  connectionId: string,
+) {
+  if (userId.length === 0 || connectionId.length === 0) {
+    throw new Error("A user and Riot connection are required to load a worker watchlist.");
+  }
+
+  return loadWatchedSkinUuidsWithScope(supabase, connectionId, userId);
 }

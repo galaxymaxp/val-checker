@@ -84,6 +84,7 @@ describe("watchlist loader pagination", () => {
         makeUuid(uuidPrefix, ordinal),
       );
       let userId: string | undefined;
+      let connectionId: string | undefined;
 
       try {
         const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -101,6 +102,22 @@ describe("watchlist loader pagination", () => {
         }
 
         const verifiedUserId = userId;
+
+        const { data: connection, error: connectionError } = await admin
+          .from("riot_connections")
+          .insert({
+            encrypted_jar: "\\x00",
+            jar_nonce: "\\x00",
+            user_id: verifiedUserId,
+          })
+          .select("id")
+          .single();
+        expect(connectionError).toBeNull();
+        connectionId = connection?.id;
+        if (!connectionId) {
+          throw new Error("Unable to create the local Riot connection fixture.");
+        }
+        const verifiedConnectionId = connectionId;
 
         const userClient = createClient<Database>(status.API_URL, status.ANON_KEY, {
           auth: {
@@ -139,6 +156,7 @@ describe("watchlist loader pagination", () => {
         const createdAt = "2026-08-14T00:00:00.000Z";
         const watchRows = skinUuids.map((skinUuid, ordinal) => ({
           created_at: createdAt,
+          connection_id: verifiedConnectionId,
           id: makeUuid(uuidPrefix, ordinal),
           skin_uuid: skinUuid,
           user_id: verifiedUserId,
@@ -148,7 +166,7 @@ describe("watchlist loader pagination", () => {
           expect((await admin.from("watchlist").insert(batch)).error).toBeNull();
         }
 
-        const loaded = await loadWatchedSkinUuids(userClient);
+        const loaded = await loadWatchedSkinUuids(userClient, verifiedConnectionId);
 
         expect(loaded).toEqual(skinUuids);
         expect(loaded).toHaveLength(ROW_COUNT);
@@ -156,6 +174,7 @@ describe("watchlist loader pagination", () => {
       } finally {
         if (userId) {
           await admin.from("watchlist").delete().eq("user_id", userId);
+          await admin.from("riot_connections").delete().eq("user_id", userId);
           await admin.auth.admin.deleteUser(userId);
         }
 

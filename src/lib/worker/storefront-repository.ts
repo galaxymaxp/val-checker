@@ -65,7 +65,7 @@ export class SupabaseDailyStorefrontRepository
     let query = this.supabase
       .from("riot_connections")
       .select(
-        "auth_status, connection_epoch, consecutive_failures, created_at, id, last_refresh_at, region, user_id",
+        "auth_status, connection_epoch, consecutive_failures, created_at, game_name, id, label, last_refresh_at, region, tag_line, user_id",
       )
       .order("user_id", { ascending: true });
 
@@ -85,9 +85,12 @@ export class SupabaseDailyStorefrontRepository
       connectionEpoch: row.connection_epoch,
       consecutiveFailures: row.consecutive_failures,
       createdAt: row.created_at,
+      gameName: row.game_name,
       id: row.id,
+      label: row.label,
       lastRefreshAt: row.last_refresh_at,
       region: row.region,
+      tagLine: row.tag_line,
       userId: row.user_id,
     }));
   }

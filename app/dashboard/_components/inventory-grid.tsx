@@ -2,6 +2,7 @@ import { InventoryTile } from "@/app/dashboard/_components/inventory-tile";
 import type { InventoryTileView } from "@/src/types/catalog-view";
 
 interface InventoryGridProps {
+  readonly connectionId: string | null;
   readonly tiles: readonly InventoryTileView[];
 }
 
@@ -27,7 +28,7 @@ function categoryId(label: string) {
   return `arsenal-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
-export function InventoryGrid({ tiles }: InventoryGridProps) {
+export function InventoryGrid({ connectionId, tiles }: InventoryGridProps) {
   const tilesByCategory = new Map<string, InventoryTileView[]>();
 
   for (const tile of tiles) {
@@ -90,7 +91,7 @@ export function InventoryGrid({ tiles }: InventoryGridProps) {
                 <ul className="flex flex-1 flex-col gap-2" role="list">
                   {(tilesByCategory.get(label) ?? []).map((tile) => (
                     <li className="flex flex-1" key={tile.weaponUuid}>
-                      <InventoryTile tile={tile} />
+                      <InventoryTile connectionId={connectionId} tile={tile} />
                     </li>
                   ))}
                 </ul>

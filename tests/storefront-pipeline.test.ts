@@ -42,6 +42,7 @@ type ResolverRow = {
 };
 
 type WatchRow = {
+  readonly connection_id: string;
   readonly skin_uuid: string;
   readonly user_id: string;
 };
@@ -73,16 +74,24 @@ function createPipelineClient(options: {
     }),
   );
   let scopedUserId: string | undefined;
+  let scopedConnectionId: string | undefined;
   const watchEq = vi.fn((column: string, value: string) => {
     if (column === "user_id") {
       scopedUserId = value;
+    }
+    if (column === "connection_id") {
+      scopedConnectionId = value;
     }
     return watchQuery;
   });
   const watchOrder = vi.fn(() => watchQuery);
   const watchRange = vi.fn(async (from: number, to: number) => ({
     data: options.watchRows
-      .filter((row) => row.user_id === scopedUserId)
+      .filter(
+        (row) =>
+          row.user_id === scopedUserId &&
+          row.connection_id === scopedConnectionId,
+      )
       .slice(from, to + 1)
       .map(({ skin_uuid }) => ({ skin_uuid })),
     error: null,
@@ -211,6 +220,7 @@ describe("offline storefront notification pipeline", () => {
       skin_uuid: skinUuids[ordinal],
     }));
     const userId = "22222222-2222-4222-8222-222222222222";
+    const connectionId = "44444444-4444-4444-8444-444444444444";
     const otherUserId = "33333333-3333-4333-8333-333333333333";
     const escapedName = `Mage's <Choice> & "Rare"\r\nEdition`;
     const { client, levelIn, skinIn, watchEq } = createPipelineClient({
@@ -220,15 +230,18 @@ describe("offline storefront notification pipeline", () => {
         skin_uuid,
       })),
       watchRows: [
-        { skin_uuid: skinUuids[0], user_id: userId },
-        { skin_uuid: skinUuids[1], user_id: userId },
-        { skin_uuid: skinUuids[2], user_id: otherUserId },
+        { connection_id: connectionId, skin_uuid: skinUuids[0], user_id: userId },
+        { connection_id: connectionId, skin_uuid: skinUuids[1], user_id: userId },
+        { connection_id: connectionId, skin_uuid: skinUuids[2], user_id: otherUserId },
+        { connection_id: "55555555-5555-4555-8555-555555555555", skin_uuid: skinUuids[2], user_id: userId },
       ],
     });
     const storefront: FetchedStorefront = { levelUuids, payload: fixture };
 
     const result = await planStorefrontNotificationsWithClient(client, {
+      accountName: "PlayerName#APAC",
       checkedAt: new Date("2026-08-14T00:05:00.000Z"),
+      connectionId,
       sentNotifications: [
         { skinUuid: skinUuids[0], storeDate: "2026-08-14" },
         { skinUuid: skinUuids[1], storeDate: "2026-08-13" },
@@ -249,13 +262,16 @@ describe("offline storefront notification pipeline", () => {
     expect(result.emails).toHaveLength(1);
     expect(result.emails[0].skinUuid).toBe(skinUuids[1]);
     expect(result.emails[0].email.subject).toBe(
-      `Mage's <Choice> & "Rare" Edition is in your store!`,
+      `Mage's <Choice> & "Rare" Edition is in PlayerName#APAC's shop`,
     );
     expect(result.emails[0].email.subject).not.toMatch(/[\r\n]/);
     expect(result.emails[0].email.html).toContain(
       "Mage&#39;s &lt;Choice&gt; &amp; &quot;Rare&quot;",
     );
     expect(result.emails[0].email.html).not.toContain("<Choice>");
+    expect(result.emails[0].email.html).toContain(
+      "Riot account: PlayerName#APAC",
+    );
 
     const matchingOffer =
       parsedFixture.SkinsPanelLayout.SingleItemStoreOffers.find((offer) =>
@@ -272,11 +288,13 @@ describe("offline storefront notification pipeline", () => {
 
     expect(result.canonicalStorefront.shopHash).toMatch(/^[0-9a-f]{64}$/);
     expect(watchEq).toHaveBeenCalledWith("user_id", userId);
+    expect(watchEq).toHaveBeenCalledWith("connection_id", connectionId);
     expect(levelIn).toHaveBeenCalledWith("level_uuid", levelUuids);
     expect(skinIn).toHaveBeenCalledWith("skin_uuid", [skinUuids[1]]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(
       renderStorefrontMatchEmail({
+        accountName: "PlayerName#APAC",
         displayName: escapedName,
         expiresAt: result.canonicalStorefront.expiresAt,
         // The fixture catalog rows carry no artwork.
@@ -293,17 +311,20 @@ describe("offline storefront notification pipeline", () => {
       fixtureSkinUuid(ordinal + 1),
     );
     const userId = "22222222-2222-4222-8222-222222222222";
+    const connectionId = "44444444-4444-4444-8444-444444444444";
     const { client, skinIn } = createPipelineClient({
       resolverRows: levelUuids.map((level_uuid, ordinal) => ({
         level_uuid,
         skin_uuid: skinUuids[ordinal],
       })),
       skinRows: [],
-      watchRows: [{ skin_uuid: skinUuids[0], user_id: userId }],
+      watchRows: [{ connection_id: connectionId, skin_uuid: skinUuids[0], user_id: userId }],
     });
 
     const result = await planStorefrontNotificationsWithClient(client, {
+      accountName: "PlayerName#APAC",
       checkedAt: new Date("2026-08-14T00:05:00.000Z"),
+      connectionId,
       sentNotifications: [
         { skinUuid: skinUuids[0], storeDate: "2026-08-14" },
       ],

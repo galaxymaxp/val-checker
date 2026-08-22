@@ -54,7 +54,8 @@ function createWeaponDetailClient({
   const watchlistIn = vi.fn<
     (column: string, skinUuids: readonly string[]) => Promise<{ data: typeof watchlist; error: null }>
   >(async () => ({ data: watchlist, error: null }));
-  const watchlistEq = vi.fn(() => ({ in: watchlistIn }));
+  const watchlistConnectionEq = vi.fn(() => ({ in: watchlistIn }));
+  const watchlistEq = vi.fn(() => ({ eq: watchlistConnectionEq }));
   const watchlistSelect = vi.fn(() => ({ eq: watchlistEq }));
 
   const from = vi.fn((table: string) => {
@@ -78,10 +79,12 @@ function createWeaponDetailClient({
     skinsRange,
     skinsSelect,
     watchlistIn,
+    watchlistConnectionEq,
   };
 }
 
 const userId = "11111111-1111-4111-8111-111111111111";
+const connectionId = "22222222-2222-4222-8222-222222222222";
 
 describe("weapon detail loader", () => {
   it("assembles a page with watched flags and resolved tiers", async () => {
@@ -128,6 +131,7 @@ describe("weapon detail loader", () => {
       "weapon-vandal",
       { limit: 3, offset: 0 },
       userId,
+      connectionId,
     );
 
     const deluxe = {
@@ -198,6 +202,7 @@ describe("weapon detail loader", () => {
       "weapon-vandal",
       { limit: 4, offset: 4 },
       userId,
+      connectionId,
     );
 
     expect(view.hasMore).toBe(false);
@@ -216,6 +221,7 @@ describe("weapon detail loader", () => {
       "weapon-vandal",
       { limit: 10, offset: 0 },
       userId,
+      connectionId,
     );
 
     expect(view.skins).toEqual([]);
@@ -227,7 +233,7 @@ describe("weapon detail loader", () => {
     const { client } = createWeaponDetailClient({ weapon: null });
 
     await expect(
-      loadWeaponSkins(client, "weapon-missing", { limit: 10, offset: 0 }, userId),
+      loadWeaponSkins(client, "weapon-missing", { limit: 10, offset: 0 }, userId, connectionId),
     ).rejects.toThrow("The weapon could not be found.");
   });
 
@@ -237,7 +243,7 @@ describe("weapon detail loader", () => {
     });
 
     await expect(
-      loadWeaponSkins(client, "weapon-vandal", { limit: 10, offset: 0 }, userId),
+      loadWeaponSkins(client, "weapon-vandal", { limit: 10, offset: 0 }, userId, connectionId),
     ).rejects.toThrow("The weapon skins could not be read.");
   });
 });

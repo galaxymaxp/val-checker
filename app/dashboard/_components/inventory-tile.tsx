@@ -6,6 +6,7 @@ import { TransitionLink } from "@/app/dashboard/_components/transition-link";
 import type { InventoryTileView } from "@/src/types/catalog-view";
 
 interface InventoryTileProps {
+  readonly connectionId: string | null;
   readonly tile: InventoryTileView;
 }
 
@@ -15,7 +16,7 @@ interface InventoryTileProps {
  * price. Watched weapons carry the selected-state ring the buy menu uses for
  * what you already own -- in this palette a white rail rather than a hue.
  */
-export function InventoryTile({ tile }: InventoryTileProps) {
+export function InventoryTile({ connectionId, tile }: InventoryTileProps) {
   const watched = tile.watchedCount > 0;
 
   return (
@@ -25,7 +26,9 @@ export function InventoryTile({ tile }: InventoryTileProps) {
           ? "border-white/35 bg-white/[0.07]"
           : "border-line-soft bg-white/[0.025] hocus:border-white/25 hocus:bg-white/[0.05]"
       }`}
-      href={`/dashboard/inventory/${tile.weaponUuid}`}
+      href={`/dashboard/inventory/${tile.weaponUuid}${
+        connectionId ? `?account=${encodeURIComponent(connectionId)}` : ""
+      }`}
     >
       {watched ? (
         <span

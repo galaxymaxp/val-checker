@@ -8,6 +8,7 @@ import type { WeaponSkinRowView } from "@/src/types/catalog-view";
 import type { WatchMutationResult } from "@/src/types/watchlist";
 
 interface SkinCardProps {
+  readonly connectionId: string;
   readonly skin: WeaponSkinRowView;
   readonly updateWatch: (
     skinUuid: string,
@@ -16,7 +17,7 @@ interface SkinCardProps {
   readonly weaponUuid: string;
 }
 
-export function SkinCard({ skin, updateWatch, weaponUuid }: SkinCardProps) {
+export function SkinCard({ connectionId, skin, updateWatch, weaponUuid }: SkinCardProps) {
   // Optimistic toggle with rollback, mirroring the collection browser.
   const [watched, setWatched] = useState(skin.watched);
   const [pending, setPending] = useState(false);
@@ -64,7 +65,7 @@ export function SkinCard({ skin, updateWatch, weaponUuid }: SkinCardProps) {
           stays a sibling so no interactive element nests inside the link. */}
       <TransitionLink
         className="flex flex-col gap-2 text-ink! no-underline"
-        href={`/dashboard/inventory/${weaponUuid}/${skin.skinUuid}`}
+        href={`/dashboard/inventory/${weaponUuid}/${skin.skinUuid}?account=${encodeURIComponent(connectionId)}`}
       >
         <div
           className="relative h-24"
