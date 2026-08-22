@@ -36,7 +36,7 @@ import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import type {
   RiotConnectionMutationResult,
   RiotCredentialConnectResult,
-  RiotDesktopCaptureTokenResult,
+  RiotCaptureTokenResult,
 } from "@/src/types/riot-connection";
 
 const CONNECT_FAILED_MESSAGE = "The Riot session could not be connected.";
@@ -311,13 +311,12 @@ export async function connectRiotSession(
 }
 
 /**
- * Mints the one-time token that starts the desktop deep-link handshake
- * (valchecker://capture?token=...). The token proves which signed-in user a
- * captured jar belongs to, so it is minted behind the exact gate that guards
- * the jar submission itself: the connect allowlist. The raw token is returned
- * once and only its hash is stored; it is never logged.
+ * Mints the one-time token used by the browser extension capture handshake.
+ * The token proves which signed-in user a captured jar belongs to, so it is
+ * minted behind the exact gate that guards jar submission. The raw token is
+ * returned once and only its hash is stored; it is never logged.
  */
-export async function createDesktopCaptureToken(): Promise<RiotDesktopCaptureTokenResult> {
+export async function createRiotCaptureToken(): Promise<RiotCaptureTokenResult> {
   const resolved = await resolveConnectIdentity();
   if (!resolved.ok) {
     return { error: resolved.error, ok: false };

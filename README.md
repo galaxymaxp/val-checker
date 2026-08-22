@@ -10,17 +10,20 @@ closed gates remain in [the roadmap](docs/roadmap.md).
 Public magic-link signup remains open, but Riot connection is a separate,
 fail-closed private capability. Only identities in
 `RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` receive the
-direct Riot credential form or cookie-JSON fallback. The server derives the
+browser-extension connection flow or cookie-JSON fallback. The server derives the
 identity from verified Supabase claims and repeats the allowlist check before it
-reads a credential or session submission.
+reads a session submission.
 Riot session submission is a separate, fail-closed capability from public
 signup and Riot-independent features.
 
-The direct provider sends a Riot login username, password, and optional MFA code
-to Riot only for the active request. VAL Checker does not log, return, or store
-those values. After Riot accepts the sign-in, only the complete renewable cookie
-jar enters the existing encrypted session pipeline. Manual cookie JSON remains
-the advanced fallback.
+The private browser extension is the primary connection method. It opens Riot's
+real sign-in page in the user's normal Chrome or Edge browser, so Google sign-in,
+MFA, and CAPTCHA remain normal human interactions on Riot's site. The extension
+does not read the password, MFA code, CAPTCHA, keyboard, or mouse. After Riot's
+successful redirect, it sends the complete renewable cookie jar directly from
+its background worker to an owner-bound, single-use VAL Checker endpoint. The
+jar is never exposed to the VAL Checker webpage. Manual cookie JSON remains the
+advanced and mobile fallback.
 
 The Singapore cloud-browser canary is disabled because Google rejects the
 embedded automated browser and Riot authentication was not reliable enough to
@@ -35,7 +38,7 @@ resolves the stable Riot PUUID before a live session row is inserted or replaced
 so reconnecting cannot mint another allowance.
 
 The rollout remains private to the operator and explicitly trusted friends.
-Every person must be added to the server-side allowlist before the credential or
+Every person must be added to the server-side allowlist before the extension or
 cookie-JSON controls render. Removing someone from the allowlist prevents a new
 connection; disconnect remains available so stored material can always be
 deleted.
@@ -158,6 +161,21 @@ migrate old rows by itself.
 The unit and fixture test paths do not make Riot requests or send real email.
 Never add captured cookies, tokens, PUUIDs, jars, or production secrets to a
 fixture, snapshot, command, or debug route.
+
+## Private browser extension
+
+The production connection page offers
+`/downloads/val-checker-riot-extension.zip`. Unzip it, open
+`chrome://extensions` or `edge://extensions`, enable Developer mode, choose
+**Load unpacked**, and select the unzipped `browser-extension` folder. Refresh
+VAL Checker once; the connection card should report **Extension ready**.
+
+After that one-time setup, **Open Riot sign-in** handles the full flow: Riot tab
+open, human sign-in, cookie capture, direct submission, Riot tab close, and
+dashboard refresh. The pairing token expires after ten minutes and is consumed
+atomically on its first submission. Chrome on iPhone, iPad, and Android does not
+support this extension. This first automatic flow is desktop-only; the advanced
+JSON fallback remains available where cookie-export tooling exists.
 
 ## Database migrations
 

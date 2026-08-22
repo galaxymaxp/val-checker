@@ -33,6 +33,118 @@ async function revealJarPaste(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("Riot connection consent UI", () => {
+  it("hands a one-time token to the installed extension and finishes automatically", async () => {
+    const user = userEvent.setup();
+    const createCaptureToken = vi.fn().mockResolvedValue({
+      ok: true,
+      token: "a".repeat(43),
+    });
+    const webMessages: unknown[] = [];
+    const collectWebMessages = (event: MessageEvent) => {
+      if (event.data?.source === "val-checker-web") {
+        webMessages.push(event.data);
+      }
+    };
+    window.addEventListener("message", collectWebMessages);
+
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={vi.fn()}
+        createCaptureToken={createCaptureToken}
+        initialLabel="Main"
+        initialRegion="ap"
+        initialState="disconnected"
+      />,
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          source: "val-checker-extension",
+          type: "VAL_CHECKER_EXTENSION_READY",
+        },
+        origin: window.location.origin,
+        source: window,
+      }),
+    );
+
+    expect(
+      await screen.findByText("Extension ready"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Sign in on Riot's website" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Riot password")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Open Riot sign-in" }));
+
+    await waitFor(() => expect(createCaptureToken).toHaveBeenCalledTimes(1));
+    const start = await waitFor(() => {
+      const message = webMessages.find(
+        (candidate) =>
+          typeof candidate === "object" &&
+          candidate !== null &&
+          (candidate as { type?: unknown }).type ===
+            "VAL_CHECKER_RIOT_CONNECT_START",
+      );
+      expect(message).toBeDefined();
+      return message as {
+        payload: { label: string; region: string; requestId: string; token: string };
+      };
+    });
+    expect(start.payload).toMatchObject({
+      label: "Main",
+      region: "ap",
+      token: "a".repeat(43),
+    });
+    expect(start.payload).not.toHaveProperty("jar");
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          ok: true,
+          requestId: start.payload.requestId,
+          source: "val-checker-extension",
+          type: "VAL_CHECKER_RIOT_CONNECT_RESULT",
+        },
+        origin: window.location.origin,
+        source: window,
+      }),
+    );
+
+    expect(
+      await screen.findByText(/Riot account connected/i),
+    ).toBeInTheDocument();
+    expect(router.refresh).toHaveBeenCalled();
+    window.removeEventListener("message", collectWebMessages);
+  });
+
+  it("offers a one-time extension download while keeping JSON as fallback", async () => {
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        connectSession={vi.fn()}
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Extension needed", {}, { timeout: 2_000 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Download browser extension" }),
+    ).toHaveAttribute("href", "/downloads/val-checker-riot-extension.zip");
+    expect(
+      screen.getByRole("heading", { name: "Import cookie JSON" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Riot cookie JSON" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("makes web sign-in primary and cookie JSON an explicit fallback", async () => {
     const user = userEvent.setup();
     render(

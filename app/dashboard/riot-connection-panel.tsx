@@ -1,13 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { RiotDesktopCaptureResult } from "@/src/types/desktop-bridge";
 import type {
+  RiotCaptureTokenResult,
   RiotConnectionMutationResult,
   RiotConnectionState,
-  RiotDesktopCaptureTokenResult,
   RiotCredentialConnectResult,
   RiotCredentialSubmission,
   RiotMfaSubmission,
@@ -17,8 +16,8 @@ import type {
 interface RiotConnectionPanelProps {
   readonly cloudConnectAvailable?: boolean;
   readonly connectAllowed: boolean;
-  /** Mints the one-time token behind the valchecker:// deep link. */
-  readonly createCaptureToken?: () => Promise<RiotDesktopCaptureTokenResult>;
+  /** Mints the one-time token handed directly to the browser extension. */
+  readonly createCaptureToken?: () => Promise<RiotCaptureTokenResult>;
   readonly connectCredentials?: (
     submission: RiotCredentialSubmission,
   ) => Promise<RiotCredentialConnectResult>;
@@ -46,18 +45,26 @@ type MfaChallenge = {
   readonly method: string | null;
 };
 
-// The desktop bridge is injected once, before the app loads, and never changes
-// for the life of the window, so there is nothing to subscribe to.
-function subscribeToDesktopBridge(): () => void {
-  return () => {};
-}
+const WEB_MESSAGE_SOURCE = "val-checker-web";
+const EXTENSION_MESSAGE_SOURCE = "val-checker-extension";
 
-function getDesktopBridgeSnapshot(): boolean {
-  return window.valChecker?.isDesktop === true;
-}
+type ExtensionState = "checking" | "missing" | "ready";
 
-function getDesktopBridgeServerSnapshot(): boolean {
-  return false;
+function extensionFailureMessage(reason: unknown): string {
+  switch (reason) {
+    case "cancelled":
+      return "Riot sign-in was cancelled. Start again when you’re ready.";
+    case "denied":
+      return "Riot did not complete that sign-in. Please try again.";
+    case "expired":
+      return "That connection attempt expired. Please start again.";
+    case "capture-failed":
+      return "Riot signed in, but no usable session was captured. Please try again.";
+    case "open-failed":
+      return "The Riot sign-in tab could not be opened. Check the extension and try again.";
+    default:
+      return "The Riot session could not be connected. Please try again.";
+  }
 }
 
 function RiotConnectionPanelState({
@@ -87,30 +94,23 @@ function RiotConnectionPanelState({
   const [mfaCode, setMfaCode] = useState("");
   const [serializedJar, setSerializedJar] = useState("");
   const [showJarPaste, setShowJarPaste] = useState(
-    !cloudConnectAvailable && !connectCredentials && Boolean(connectSession),
+    !cloudConnectAvailable &&
+      !createCaptureToken &&
+      !connectCredentials &&
+      Boolean(connectSession),
   );
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
-  // Detect the Electron desktop shell without breaking SSR or hydration. The
-  // server snapshot is always false, so the server-rendered HTML never contains
-  // the desktop button; after hydration React reconciles to the client snapshot.
-  // window is only touched in the client snapshot, which never runs during SSR
-  // (and stays undefined in jsdom, so the button does not render under test).
-
-
-  const isDesktop = useSyncExternalStore(
-    subscribeToDesktopBridge,
-    getDesktopBridgeSnapshot,
-    getDesktopBridgeServerSnapshot,
+  const [extensionState, setExtensionState] = useState<ExtensionState>(
+    createCaptureToken ? "checking" : "missing",
   );
-
-  const desktopConnectAvailable =
-    (isDesktop || Boolean(createCaptureToken)) && Boolean(connectSession);
+  const activeExtensionRequest = useRef<string | null>(null);
+  const extensionRequestTimer = useRef<number | null>(null);
 
   const hasConnectMethod =
     cloudConnectAvailable ||
-    desktopConnectAvailable ||
+    Boolean(createCaptureToken) ||
     Boolean(connectCredentials) ||
     Boolean(connectFixture) ||
     Boolean(connectSession);
@@ -125,6 +125,77 @@ function RiotConnectionPanelState({
 
   const credentialsReady =
     username.trim().length > 0 && password.length > 0 && consentGranted;
+
+  useEffect(() => {
+    if (!createCaptureToken) {
+      return;
+    }
+
+    const detectionTimer = window.setTimeout(() => {
+      setExtensionState((current) =>
+        current === "checking" ? "missing" : current,
+      );
+    }, 1_200);
+
+    function onExtensionMessage(event: MessageEvent) {
+      if (
+        event.source !== window ||
+        event.origin !== window.location.origin ||
+        event.data?.source !== EXTENSION_MESSAGE_SOURCE
+      ) {
+        return;
+      }
+
+      if (event.data.type === "VAL_CHECKER_EXTENSION_READY") {
+        window.clearTimeout(detectionTimer);
+        setExtensionState("ready");
+        return;
+      }
+
+      if (
+        event.data.type !== "VAL_CHECKER_RIOT_CONNECT_RESULT" ||
+        event.data.requestId !== activeExtensionRequest.current
+      ) {
+        return;
+      }
+
+      activeExtensionRequest.current = null;
+      if (extensionRequestTimer.current !== null) {
+        window.clearTimeout(extensionRequestTimer.current);
+        extensionRequestTimer.current = null;
+      }
+      setIsPending(false);
+      if (event.data.ok !== true) {
+        setSuccess(undefined);
+        setError(extensionFailureMessage(event.data.reason));
+        return;
+      }
+
+      setError(undefined);
+      setConnectionState("connected");
+      setSuccess(
+        targetConnectionId
+          ? "This Riot account was reconnected."
+          : "Riot account connected. You can close the one-time sign-in flow.",
+      );
+      setConsentGranted(false);
+      router.refresh();
+    }
+
+    window.addEventListener("message", onExtensionMessage);
+    window.postMessage(
+      { source: WEB_MESSAGE_SOURCE, type: "VAL_CHECKER_EXTENSION_PING" },
+      window.location.origin,
+    );
+
+    return () => {
+      window.clearTimeout(detectionTimer);
+      if (extensionRequestTimer.current !== null) {
+        window.clearTimeout(extensionRequestTimer.current);
+      }
+      window.removeEventListener("message", onExtensionMessage);
+    };
+  }, [createCaptureToken, router, targetConnectionId]);
 
   function startCloudConnect() {
     if (!cloudConnectAvailable || !consentGranted || isPending) return;
@@ -261,26 +332,13 @@ function RiotConnectionPanelState({
     }
   }
 
-  function desktopCaptureError(
-    result: Extract<RiotDesktopCaptureResult, { ok: false }>,
-  ): string {
-    switch (result.reason) {
-      case "cancelled":
-        return "Riot sign-in was cancelled.";
-      case "timeout":
-        return "The Riot sign-in window timed out. Please try again.";
-      default:
-        return "No Riot session was captured. Please complete the Riot sign-in.";
-    }
-  }
-
-  /**
-   * Hands off to the desktop app through the protocol link. Used when the page
-   * is running in an ordinary browser, where there is no desktop bridge; the
-   * app captures the session and posts it back itself.
-   */
-  async function connectViaDeepLink() {
-    if (!createCaptureToken) {
+  async function connectViaExtension() {
+    if (
+      !createCaptureToken ||
+      extensionState !== "ready" ||
+      !consentGranted ||
+      isPending
+    ) {
       return;
     }
 
@@ -292,88 +350,36 @@ function RiotConnectionPanelState({
       const result = await createCaptureToken();
       if (!result.ok) {
         setError(result.error);
+        setIsPending(false);
         return;
       }
 
-      // Every browser tested refuses to hand a custom protocol URL to the OS
-      // ("unknown protocol"), but plain loopback HTTP is always allowed. The
-      // desktop app must already be running to answer; it cannot be launched
-      // from a page.
-      let handoff: Response;
-      try {
-        handoff = await fetch("http://127.0.0.1:47821/capture", {
-          body: JSON.stringify({ token: result.token }),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-      } catch {
-        setError(
-          "The desktop app is not running. Start it with `pnpm desktop:serve`, then try again.",
-        );
-        return;
-      }
+      const requestId = crypto.randomUUID();
+      activeExtensionRequest.current = requestId;
+      extensionRequestTimer.current = window.setTimeout(() => {
+        if (activeExtensionRequest.current !== requestId) return;
+        activeExtensionRequest.current = null;
+        extensionRequestTimer.current = null;
+        setIsPending(false);
+        setError("That connection attempt expired. Please start again.");
+      }, 10 * 60 * 1_000 + 5_000);
 
-      const outcome: unknown = await handoff.json().catch(() => null);
-      const ok =
-        typeof outcome === "object" &&
-        outcome !== null &&
-        (outcome as { ok?: unknown }).ok === true;
-
-      if (ok) {
-        setSuccess("Riot account connected.");
-        router.refresh();
-        return;
-      }
-
-      setError(
-        "Riot sign-in did not complete. Check the desktop window and try again.",
+      window.postMessage(
+        {
+          payload: {
+            connectionId: targetConnectionId,
+            label: label.trim() || undefined,
+            region,
+            requestId,
+            token: result.token,
+          },
+          source: WEB_MESSAGE_SOURCE,
+          type: "VAL_CHECKER_RIOT_CONNECT_START",
+        },
+        window.location.origin,
       );
     } catch {
-      setError("The desktop sign-in could not be started.");
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  async function connectViaDesktop() {
-    const bridge = window.valChecker;
-    if (!bridge || !connectSession || !consentGranted || isPending) {
-      return;
-    }
-
-    setIsPending(true);
-    setError(undefined);
-    setSuccess(undefined);
-
-    try {
-      const capture = await bridge.connectRiot();
-      if (!capture.ok) {
-        setError(desktopCaptureError(capture));
-        return;
-      }
-
-      const result = await connectSession({
-        connectionId: targetConnectionId,
-        consentGranted: true,
-        label: label.trim() || undefined,
-        region,
-        serializedJar: capture.jar,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-
-      setConnectionState("connected");
-      setSuccess(
-        targetConnectionId
-          ? "This Riot account was reconnected."
-          : "Riot account connected. You can add another whenever you’re ready.",
-      );
-      router.refresh();
-    } catch {
-      setError("The Riot session could not be connected.");
-    } finally {
+      setError("The browser extension could not start Riot sign-in.");
       setIsPending(false);
     }
   }
@@ -460,7 +466,15 @@ function RiotConnectionPanelState({
       <details className="consent-details">
         <summary>How your Riot session is handled</summary>
         <div className="consent-copy">
-          {connectCredentials ? (
+          {createCaptureToken ? (
+            <p>
+              You sign in on Riot Games&apos; actual page in your normal browser.
+              The extension cannot read your password, MFA code, CAPTCHA,
+              keyboard, or mouse. After Riot accepts the sign-in, it sends the
+              resulting session directly to VAL Checker without exposing it to
+              this webpage.
+            </p>
+          ) : connectCredentials ? (
             <p>
               Your Riot username, password, and any MFA code are sent through
               VAL Checker&apos;s server directly to Riot for this sign-in. VAL
@@ -546,7 +560,95 @@ function RiotConnectionPanelState({
               </label>
             ) : null}
 
-            {cloudConnectAvailable ? (
+            {createCaptureToken ? (
+              <section
+                aria-labelledby="extension-riot-connect-heading"
+                className="riot-connect-method riot-connect-method-primary"
+              >
+                <div className="riot-connect-method-heading">
+                  <div>
+                    <p className="riot-connect-method-kicker">Recommended</p>
+                    <h3 id="extension-riot-connect-heading">
+                      Sign in on Riot&apos;s website
+                    </h3>
+                    <p>
+                      VAL Checker opens Riot in a normal browser tab. Sign in,
+                      finish any Google, MFA, or CAPTCHA step, and the extension
+                      connects the session automatically.
+                    </p>
+                  </div>
+                  <span
+                    className={`connection-badge connection-badge-${
+                      extensionState === "ready" ? "connected" : "disconnected"
+                    }`}
+                  >
+                    {extensionState === "ready"
+                      ? "Extension ready"
+                      : extensionState === "checking"
+                        ? "Checking extension"
+                        : "Extension needed"}
+                  </span>
+                </div>
+                <div className="riot-signin-fields">
+                  <label>
+                    <span>Account region</span>
+                    <select
+                      onChange={(event) => setRegion(event.target.value)}
+                      value={region}
+                    >
+                      <option value="ap">Asia Pacific</option>
+                      <option value="na">North America</option>
+                      <option value="eu">Europe</option>
+                      <option value="kr">Korea</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Account name (optional)</span>
+                    <input
+                      maxLength={60}
+                      onChange={(event) => setLabel(event.target.value)}
+                      placeholder="Tells this account apart from your others"
+                      value={label}
+                    />
+                  </label>
+                </div>
+                {extensionState === "missing" ? (
+                  <div className="consent-copy" role="note">
+                    <p>
+                      Install the private extension once, then refresh this page.
+                      In Chrome or Edge, unzip it, open the extensions page,
+                      enable Developer mode, and choose <strong>Load unpacked</strong>.
+                    </p>
+                    <a
+                      className="riot-connect-download-link"
+                      download
+                      href="/downloads/val-checker-riot-extension.zip"
+                    >
+                      Download browser extension
+                    </a>
+                    <p>
+                      Chrome on iPhone, iPad, and Android cannot install this
+                      extension. This first automatic version is desktop-only;
+                      cookie JSON remains below where export tooling is available.
+                    </p>
+                  </div>
+                ) : null}
+                <button
+                  className="riot-connect-primary-button"
+                  disabled={
+                    extensionState !== "ready" || !consentGranted || isPending
+                  }
+                  onClick={() => void connectViaExtension()}
+                  type="button"
+                >
+                  {isPending ? "Waiting for Riot sign-in..." : "Open Riot sign-in"}
+                </button>
+                <p role="note">
+                  Your password stays on Riot&apos;s page. After a successful sign-in,
+                  the Riot tab closes and this dashboard refreshes automatically.
+                </p>
+              </section>
+            ) : cloudConnectAvailable ? (
               <section
                 aria-labelledby="cloud-riot-connect-heading"
                 className="riot-connect-method riot-connect-method-primary"
@@ -597,7 +699,7 @@ function RiotConnectionPanelState({
                   CAPTCHA directly on Riot&apos;s page if Riot asks for it.
                 </p>
               </section>
-            ) : connectSession && !connectCredentials && !desktopConnectAvailable ? (
+            ) : connectSession && !connectCredentials ? (
               <section
                 aria-labelledby="cloud-riot-unavailable-heading"
                 className="riot-connect-method riot-connect-method-unavailable"
@@ -612,29 +714,6 @@ function RiotConnectionPanelState({
                   still connect this account with cookie JSON below.
                 </p>
               </section>
-            ) : null}
-
-            {desktopConnectAvailable ? (
-              <div className="riot-desktop-connect">
-                <button
-                  className="riot-desktop-connect-button"
-                  disabled={!consentGranted || isPending}
-                  onClick={() => {
-                    void (isDesktop ? connectViaDesktop() : connectViaDeepLink());
-                  }}
-                  type="button"
-                >
-                  {isPending
-                    ? "Opening Riot sign-in..."
-                    : "Sign in to Riot (desktop)"}
-                </button>
-                <p role="note">
-                  Opens Riot&apos;s own sign-in window and hands the session
-                  back automatically. Requires the desktop app to be running
-                  (<code>pnpm desktop:serve</code>).
-                </p>
-
-              </div>
             ) : null}
 
             {connectAllowed && connectCredentials ? (
@@ -657,7 +736,7 @@ function RiotConnectionPanelState({
                 </div>
                 <div
                   className={
-                    desktopConnectAvailable
+                    createCaptureToken
                       ? "riot-signin-fields riot-signin-fields-deemphasized"
                       : "riot-signin-fields"
                   }
@@ -752,7 +831,9 @@ function RiotConnectionPanelState({
                 <div className="riot-connect-method-heading">
                   <div>
                     <p className="riot-connect-method-kicker">
-                      {cloudConnectAvailable || connectCredentials
+                      {cloudConnectAvailable ||
+                      createCaptureToken ||
+                      connectCredentials
                         ? "Advanced fallback"
                         : "Available now"}
                     </p>

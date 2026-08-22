@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 
 import {
-  connectRiotCredentials,
   connectRiotSession,
+  createRiotCaptureToken,
   disconnectRiotSession,
-  submitRiotMfaCode,
 } from "@/app/dashboard/riot-actions";
 import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
@@ -35,7 +34,7 @@ export default async function RiotConnectionPage({
       typeof data.claims.email === "string" ? data.claims.email : undefined,
     userId: data.claims.sub,
   };
-  // Credential and cookie-JSON connection stay private: both the rendered
+  // Extension and cookie-JSON connection stay private: both the rendered
   // controls and the server actions independently enforce this allowlist.
   const riotConnectAllowed = preview || canRiotConnect(riotIdentity);
 
@@ -71,8 +70,8 @@ export default async function RiotConnectionPage({
       <RiotConnectionPanel
         cloudConnectAvailable={false}
         connectAllowed={riotConnectAllowed}
-        connectCredentials={
-          riotConnectAllowed ? connectRiotCredentials : undefined
+        createCaptureToken={
+          riotConnectAllowed ? createRiotCaptureToken : undefined
         }
         connectSession={
           riotConnectAllowed ? connectRiotSession : undefined
@@ -81,7 +80,6 @@ export default async function RiotConnectionPage({
         initialRegion={reconnectAccount?.region ?? "ap"}
         initialState="disconnected"
         keepConnectFormOpen={!reconnectAccount}
-        submitMfaCode={riotConnectAllowed ? submitRiotMfaCode : undefined}
         targetConnectionId={reconnectAccount?.id}
       />
     </main>

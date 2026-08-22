@@ -37,13 +37,16 @@ export type RiotMfaSubmission = {
 };
 
 /**
- * Result of minting a one-time desktop capture token. The token is a bearer
- * credential: it is returned to the signed-in browser exactly once so it can
- * be placed in the valchecker:// deep link, and only its hash is stored.
+ * Result of minting a one-time Riot capture token. The token is a bearer
+ * credential: it is returned to the signed-in browser exactly once for a
+ * trusted capture client, and only its hash is stored.
  */
-export type RiotDesktopCaptureTokenResult =
+export type RiotCaptureTokenResult =
   | { readonly ok: true; readonly token: string }
   | { readonly error: string; readonly ok: false };
+
+/** @deprecated Use RiotCaptureTokenResult. Kept for the legacy desktop shell. */
+export type RiotDesktopCaptureTokenResult = RiotCaptureTokenResult;
 
 /**
  * Either the connection completed, or Riot issued an MFA challenge and the UI

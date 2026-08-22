@@ -7,11 +7,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/src/types/database";
 
 /**
- * One-time desktop capture tokens.
+ * One-time Riot session capture tokens.
  *
  * The token is the bearer credential of the deep-link handshake: the browser
- * mints it while signed into Supabase, the deep link hands it to the Electron
- * desktop app, and the desktop app presents it with the captured jar. Whoever
+ * mints it while signed into Supabase, a trusted capture client receives it,
+ * and that client presents it with the captured jar. Whoever
  * holds the raw value can attach a jar to the minting user, so:
  *
  *   * The raw value is 32 bytes from a CSPRNG and is returned to the caller
@@ -19,16 +19,16 @@ import type { Database } from "@/src/types/database";
  *     the raw value or the hash.
  *   * Consumption is a single conditional UPDATE, so a token can be claimed
  *     exactly once no matter how many requests race on it.
- *   * Tokens expire after five minutes.
+ *   * Tokens expire after ten minutes so a human can complete MFA or CAPTCHA.
  */
-export const CAPTURE_TOKEN_TTL_MS = 5 * 60 * 1000;
+export const CAPTURE_TOKEN_TTL_MS = 10 * 60 * 1000;
 
 /** Base64url of 32 random bytes is 43 characters; anything longer is noise. */
 const MAX_RAW_TOKEN_LENGTH = 128;
 
 export class CaptureTokenStorageError extends Error {
   constructor() {
-    super("Desktop capture token storage operation failed.");
+    super("Riot capture token storage operation failed.");
     this.name = "CaptureTokenStorageError";
   }
 }

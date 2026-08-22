@@ -6,8 +6,12 @@ The repository contains an experimental implementation, not a proven migration.
 The August 2026 canary reached Riot's real login page, but Google rejected the
 automated embedded browser as unsafe and Riot credential authentication did not
 reliably pass after CAPTCHA. The production cloud flag must remain disabled.
-Direct credential connection is the allowlisted primary path for private use,
-and manual cookie JSON remains the advanced fallback.
+The private Chrome/Edge extension is now the allowlisted primary path. It uses
+the user's real browser and home/mobile network, then submits Riot session
+cookies through the existing one-time capture-token boundary. Manual cookie JSON
+remains the advanced fallback. Direct credential and temporary cloud-browser
+login are not presented in production because Riot rejected those automation
+trust contexts.
 
 A future replacement must still complete this whole sequence before the cloud
 path can be called successful:

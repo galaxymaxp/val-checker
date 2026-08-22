@@ -14,11 +14,12 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Destination of the desktop deep-link handshake. The Electron app captures
- * the Riot cookie jar and POSTs { token, jar } here.
+ * Destination of the trusted capture handshake. The browser extension (and
+ * the legacy Electron client during migration) captures the Riot cookie jar
+ * and POSTs { token, jar } here.
  *
- * There is no cookie session on this request — the desktop app is not signed
- * into Supabase — so the one-time capture token is the entire authentication:
+ * There is no Supabase cookie session on this request — the capture client is
+ * not signed into Supabase — so the one-time capture token is the entire authentication:
  * it resolves to the user it was minted for, exactly once, within its TTL.
  * The resolved user then passes through the very same allowlist and admin
  * gates as the browser's connectRiotSession action, so the deep link can
@@ -32,7 +33,10 @@ export const runtime = "nodejs";
 const MAX_BODY_BYTES = MAX_SUBMITTED_COOKIE_JAR_BYTES + 1024;
 
 const submissionSchema = z.object({
+  connectionId: z.string().uuid().optional(),
   jar: z.string().min(1),
+  label: z.string().max(60).optional(),
+  region: z.enum(["ap", "na", "eu", "kr"]).optional(),
   token: z.string().min(1).max(128),
 });
 
@@ -100,7 +104,10 @@ export async function POST(request: Request): Promise<Response> {
     // Consent was granted in the browser when the operator started the
     // handshake; the deep link only exists because that button was pressed.
     const result = await connectSubmittedRiotJar(identity, {
+      connectionId: submission.connectionId,
       consentGranted: true,
+      label: submission.label,
+      region: submission.region,
       serializedJar: submission.jar,
     });
 
