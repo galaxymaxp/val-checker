@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
@@ -72,36 +73,15 @@ export function RiotConnectTutorial() {
               </button>
             </header>
             <div className="riot-tutorial-scroll">
-              <p className="riot-tutorial-intro">
-                Chrome cannot load the downloaded ZIP directly. Extract it
-                before choosing Load unpacked.
-              </p>
-              <ol className="riot-tutorial-steps">
-                <li>Download the VAL Checker extension ZIP.</li>
-                <li>
-                  Unzip it with <strong>Extract All</strong>.
-                </li>
-                <li>
-                  Open <code>chrome://extensions</code>.
-                </li>
-                <li>
-                  Enable <strong>Developer mode</strong>.
-                </li>
-                <li>
-                  Choose <strong>Load unpacked</strong>.
-                </li>
-                <li>
-                  Select the extracted VAL Checker extension folder—the folder
-                  containing <code>manifest.json</code>, not the ZIP.
-                </li>
-                <li>
-                  Return to VAL Checker. It should show{" "}
-                  <strong>Extension ready</strong>.
-                </li>
-                <li>
-                  Choose <strong>Sign in with Riot</strong>.
-                </li>
-              </ol>
+              <Image
+                alt="Eight-step guide to download, unzip, and load the VAL Checker extension before signing in with Riot."
+                className="riot-tutorial-image"
+                height={1024}
+                loading="eager"
+                sizes="(max-width: 767px) 832px, 900px"
+                src="/images/val-checker-riot-account-setup-guide.png"
+                width={1536}
+              />
             </div>
           </div>
         </div>,

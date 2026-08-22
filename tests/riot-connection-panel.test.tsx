@@ -189,14 +189,10 @@ describe("Riot connection consent UI", () => {
       screen.getByRole("dialog", { name: "How to connect your Riot account" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Chrome cannot load the downloaded ZIP directly/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Unzip it with/i)).toHaveTextContent("Extract All");
-    expect(screen.getByText(/folder containing/i)).toHaveTextContent(
-      "manifest.json, not the ZIP",
-    );
-    expect(screen.getByText(/It should show/i)).toHaveTextContent(
-      "Extension ready",
+      screen.getByAltText(/Eight-step guide/i),
+    ).toHaveAttribute(
+      "src",
+      expect.stringContaining("val-checker-riot-account-setup-guide.png"),
     );
 
     await user.keyboard("{Escape}");

@@ -980,23 +980,12 @@ section[id] {
   padding: clamp(0.5rem, 2vw, 1rem);
 }
 
-.riot-tutorial-intro {
-  color: var(--text-muted);
-  margin: 0 auto 1rem;
-  max-width: 42rem;
-}
-
-.riot-tutorial-steps {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0 auto;
-  max-width: 42rem;
-  padding: 0 0 0 1.5rem;
-}
-
-.riot-tutorial-steps li {
-  line-height: 1.55;
-  padding-left: 0.35rem;
+.riot-tutorial-image {
+  border-radius: calc(var(--radius) - 2px);
+  height: auto;
+  margin-inline: auto;
+  object-fit: contain;
+  width: 100%;
 }
 
 .riot-cookie-json-form {
@@ -1174,6 +1163,11 @@ section[id] {
 
   .riot-tutorial-dialog {
     max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)));
+  }
+
+  .riot-tutorial-image {
+    max-width: none;
+    width: 52rem;
   }
 }
 
