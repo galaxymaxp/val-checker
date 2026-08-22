@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 import { signOut } from "@/app/dashboard/actions";
@@ -25,6 +26,14 @@ export default async function DashboardLayout({
       <header className="dashboard-header">
         <div className="dashboard-header-inner">
           <Link className="dashboard-brand" href="/dashboard">
+            <Image
+              alt=""
+              aria-hidden="true"
+              className="dashboard-brand-mark"
+              height={40}
+              src="/brand/val-checker-eye-vandal.png"
+              width={40}
+            />
             VAL <span>CHECKER</span>
           </Link>
 
