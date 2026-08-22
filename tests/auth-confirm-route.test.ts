@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 
 const exchangeCodeForSession = vi.fn();
 const verifyOtp = vi.fn();
+const deliverPendingAccountCreationNotification = vi.fn();
 let capturedSetAll: ((cookies: readonly CookieToSet[]) => void) | undefined;
 
 type CookieToSet = {
@@ -31,10 +32,15 @@ vi.mock("@/src/lib/supabase/public-env", () => ({
   }),
 }));
 
+vi.mock("@/src/lib/notifications/account-created", () => ({
+  deliverPendingAccountCreationNotification,
+}));
+
 describe("magic-link confirmation route", () => {
   beforeEach(() => {
     exchangeCodeForSession.mockReset();
     verifyOtp.mockReset();
+    deliverPendingAccountCreationNotification.mockReset();
     capturedSetAll = undefined;
   });
 
@@ -114,6 +120,25 @@ describe("magic-link confirmation route", () => {
     expect(response.headers.get("location")).toBe("http://localhost/dashboard");
   });
 
+  it("delivers a pending owner notification after successful account auth", async () => {
+    exchangeCodeForSession.mockResolvedValue({
+      data: { user: { id: "11111111-1111-4111-8111-111111111111" } },
+      error: null,
+    });
+    deliverPendingAccountCreationNotification.mockResolvedValue("sent");
+    const { GET } = await import("@/app/auth/confirm/route");
+
+    const response = await GET(
+      new NextRequest("http://localhost/auth/confirm?code=new-account-code"),
+    );
+
+    expect(deliverPendingAccountCreationNotification).toHaveBeenCalledOnce();
+    expect(deliverPendingAccountCreationNotification).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(response.headers.get("location")).toBe("http://localhost/dashboard");
+  });
+
   it("returns a redacted sign-in error for invalid links", async () => {
     verifyOtp.mockResolvedValue({ error: new Error("upstream detail") });
     const { GET } = await import("@/app/auth/confirm/route");
@@ -124,5 +149,6 @@ describe("magic-link confirmation route", () => {
     expect(response.headers.get("location")).toBe(
       "http://localhost/sign-in?error=invalid_or_expired_link",
     );
+    expect(deliverPendingAccountCreationNotification).not.toHaveBeenCalled();
   });
 });

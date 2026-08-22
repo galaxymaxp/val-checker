@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { deliverPendingAccountCreationNotification } from "@/src/lib/notifications/account-created";
 import { getPublicSupabaseConfig } from "@/src/lib/supabase/public-env";
 
 const PKCE_TOKEN_PREFIX = "pkce_";
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
   });
 
   let succeeded = false;
+  let userId: string | undefined;
 
   // A PKCE-issued token arrives in token_hash but must be exchanged, not
   // verified. @supabase/ssr defaults the browser client to the PKCE flow, so
@@ -60,17 +62,30 @@ export async function GET(request: NextRequest) {
   const pkceToken = tokenHash?.startsWith(PKCE_TOKEN_PREFIX) ? tokenHash : code;
 
   if (pkceToken) {
-    const { error } = await supabase.auth.exchangeCodeForSession(pkceToken);
+    const { data, error } =
+      await supabase.auth.exchangeCodeForSession(pkceToken);
     succeeded = !error;
+    userId = data?.user?.id;
   } else if (tokenHash && type && emailOtpTypes.has(type as EmailOtpType)) {
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: type as EmailOtpType,
     });
     succeeded = !error;
+    userId = data?.user?.id;
   }
 
   if (succeeded) {
+    if (userId) {
+      // Account access must not depend on an operational owner notification.
+      // The database claim makes this safe on returning logins and callbacks.
+      try {
+        await deliverPendingAccountCreationNotification(userId);
+      } catch {
+        // The one-time claim and provider idempotency key prevent retries from
+        // turning normal logins into duplicate signup notifications.
+      }
+    }
     return response;
   }
 

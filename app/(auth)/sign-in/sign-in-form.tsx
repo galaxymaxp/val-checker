@@ -57,6 +57,7 @@ export function SignInForm({ linkError = false }: SignInFormProps) {
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
+        shouldCreateUser: true,
       },
     });
 
