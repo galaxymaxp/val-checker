@@ -89,7 +89,7 @@ describe("new-account owner notification", () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
-  it("requires the owner recipient without introducing an allowlist", () => {
+  it("requires the owner recipient without restricting account signup", () => {
     const { client } = notificationClient([signupAt]);
 
     expect(() =>

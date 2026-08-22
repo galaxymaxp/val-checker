@@ -9,7 +9,6 @@ import { ConnectedRiotAccounts } from "@/app/dashboard/connected-riot-accounts";
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 import { isDevPreview } from "@/src/lib/dev/preview";
 import { previewAccounts } from "@/src/lib/dev/preview-data";
-import { canRiotConnect } from "@/src/lib/riot/connect-allowlist";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -28,15 +27,6 @@ export default async function RiotConnectionPage({
   if (!data?.claims.sub) {
     redirect("/sign-in?next=/dashboard/connection");
   }
-
-  const riotIdentity = {
-    email:
-      typeof data.claims.email === "string" ? data.claims.email : undefined,
-    userId: data.claims.sub,
-  };
-  // Extension and cookie-JSON connection stay private: both the rendered
-  // controls and the server actions independently enforce this allowlist.
-  const riotConnectAllowed = preview || canRiotConnect(riotIdentity);
 
   const accounts = preview
     ? previewAccounts(new Date())
@@ -69,13 +59,8 @@ export default async function RiotConnectionPage({
       />
       <RiotConnectionPanel
         cloudConnectAvailable={false}
-        connectAllowed={riotConnectAllowed}
-        createCaptureToken={
-          riotConnectAllowed ? createRiotCaptureToken : undefined
-        }
-        connectSession={
-          riotConnectAllowed ? connectRiotSession : undefined
-        }
+        createCaptureToken={createRiotCaptureToken}
+        connectSession={connectRiotSession}
         initialLabel={reconnectAccount?.label ?? ""}
         initialRegion={reconnectAccount?.region ?? "ap"}
         initialState="disconnected"

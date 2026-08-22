@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   createDelivery: vi.fn(),
   createTlsTunedFetch: vi.fn(),
   deliver: vi.fn(),
-  loadAllowlist: vi.fn(),
   loadKeyring: vi.fn(),
   repositoryArguments: [] as unknown[][],
   resendConstructor: vi.fn(),
@@ -50,10 +49,6 @@ vi.mock("@/src/lib/riot/client", () => ({
       mocks.riotClientArguments.push(options);
     }
   },
-}));
-
-vi.mock("@/src/lib/riot/connect-allowlist", () => ({
-  loadRiotConnectAllowlist: mocks.loadAllowlist,
 }));
 
 vi.mock("@/src/lib/riot/session-crypto", () => ({
@@ -138,7 +133,6 @@ describe("configured storefront worker runtime", () => {
     mocks.createDelivery.mockReset().mockReturnValue({ deliver: mocks.deliver });
     mocks.createTlsTunedFetch.mockReset().mockReturnValue(mocks.tunedFetch);
     mocks.deliver.mockReset().mockResolvedValue({ emailsSent: 1, emailsSkipped: 0 });
-    mocks.loadAllowlist.mockReset().mockReturnValue({ allows: vi.fn(() => true) });
     mocks.loadKeyring.mockReset().mockReturnValue({ currentVersion: 1, keys: new Map() });
     mocks.repositoryArguments.length = 0;
     mocks.resendConstructor.mockReset();

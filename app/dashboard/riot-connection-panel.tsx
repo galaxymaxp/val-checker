@@ -16,7 +16,6 @@ import type {
 
 interface RiotConnectionPanelProps {
   readonly cloudConnectAvailable?: boolean;
-  readonly connectAllowed: boolean;
   /** Mints the one-time token handed directly to the browser extension. */
   readonly createCaptureToken?: () => Promise<RiotCaptureTokenResult>;
   readonly connectCredentials?: (
@@ -25,7 +24,7 @@ interface RiotConnectionPanelProps {
   readonly connectFixture?: (
     consentGranted: boolean,
   ) => Promise<RiotConnectionMutationResult>;
-  /** Session paste. Undefined when the connect allowlist excludes the user. */
+  /** Optional advanced session-paste fallback. */
   readonly connectSession?: (
     submission: RiotSessionSubmission,
   ) => Promise<RiotConnectionMutationResult>;
@@ -73,7 +72,6 @@ function extensionFailureMessage(reason: unknown): string {
 
 function RiotConnectionPanelState({
   cloudConnectAvailable = false,
-  connectAllowed,
   connectCredentials,
   connectFixture,
   connectSession,
@@ -248,7 +246,7 @@ function RiotConnectionPanelState({
   }
 
   async function signIn() {
-    if (!connectAllowed || !connectCredentials || !credentialsReady || isPending) {
+    if (!connectCredentials || !credentialsReady || isPending) {
       return;
     }
 
@@ -752,21 +750,20 @@ function RiotConnectionPanelState({
               </section>
             ) : null}
 
-            {connectAllowed && connectCredentials ? (
+            {connectCredentials ? (
               <section
                 aria-labelledby="credential-riot-connect-heading"
                 className="riot-connect-method riot-connect-method-primary"
               >
                 <div className="riot-connect-method-heading">
                   <div>
-                    <p className="riot-connect-method-kicker">Private access</p>
+                    <p className="riot-connect-method-kicker">Direct sign-in</p>
                     <h3 id="credential-riot-connect-heading">
                       Sign in with Riot credentials
                     </h3>
                     <p>
-                      Available only to explicitly allowlisted VAL Checker
-                      accounts. Use your Riot login username, not your Riot ID
-                      or email address.
+                      Use your Riot login username, not your Riot ID or email
+                      address.
                     </p>
                   </div>
                 </div>
@@ -844,7 +841,7 @@ function RiotConnectionPanelState({
               </section>
             ) : null}
 
-            {connectAllowed && !connectCredentials && connectFixture ? (
+            {!connectCredentials && connectFixture ? (
               <div className="riot-fixture-connect">
                 <button
                   disabled={!consentGranted || isPending}
@@ -865,21 +862,6 @@ function RiotConnectionPanelState({
                   </span>
                 </label>
               </div>
-            ) : !connectAllowed && !cloudConnectAvailable ? (
-              // Only a real state gets a control. An allowlisted account with
-              // no wired form used to land on a disabled "not yet available"
-              // button presented as the primary action.
-              <button disabled type="button">
-                Riot connection access not enabled
-              </button>
-            ) : null}
-
-            {!connectAllowed && !cloudConnectAvailable ? (
-              <p className="ship-gate-note" role="note">
-                Riot connection access is limited to explicitly allowlisted
-                accounts. Public VAL Checker signup and Riot-independent features
-                remain available.
-              </p>
             ) : null}
 
             {connectSession ? (

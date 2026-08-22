@@ -3,7 +3,7 @@
 This directory preserves the original separate-VPS scaffold from the Version
 2.0 build specification. The Track C blocker is retired. Phase 6 runs through
 one shared storefront worker. The protected server cron invokes it at 00:05 UTC
-with one database-enforced automatic attempt per allowlisted Riot connection and
+with one database-enforced automatic attempt per connected Riot account and
 UTC store day. An authenticated dashboard server action can invoke that same
 pipeline for one exact, owned connection using a separate allowance of at most
 one manual storefront attempt per stable Riot PUUID and store day. Internal

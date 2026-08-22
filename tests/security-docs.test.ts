@@ -19,10 +19,10 @@ describe("security documentation", () => {
     expect(security).toMatch(/Riot enforcement and abuse detection/i);
     expect(security).toMatch(/outside Supabase/i);
     expect(security).toMatch(/AES-256-GCM encryption is load-bearing/i);
-    expect(security).toMatch(/explicit server-only allowlist/i);
     expect(security).toMatch(
-      /Public signup and Riot-independent features are not\s+allowlisted/i,
+      /Any authenticated VAL Checker account may use the Riot connection flow/i,
     );
+    expect(security).toMatch(/verified Supabase subject/i);
     expect(security).toMatch(/one automatic attempt per connection/i);
     expect(security).toMatch(
       /one\s+separate manual storefront attempt per stable Riot PUUID/is,
@@ -31,16 +31,14 @@ describe("security documentation", () => {
     expect(security).toMatch(/residual risk and limitations/i);
   });
 
-  it("documents the open gate, staged rollout, and hard cadence boundary", () => {
+  it("documents unrestricted authenticated connection and the hard cadence boundary", () => {
     const readme = readRepositoryFile("README.md");
     const security = readRepositoryFile("SECURITY.md");
 
-    expect(readme).toMatch(/private dogfooding/i);
-    expect(readme).toMatch(/operator and explicitly trusted friends/i);
     expect(readme).toMatch(
-      /Public magic-link and Google signup remain open to everyone/i,
+      /any\s+authenticated VAL Checker account may use the Riot connection flow/is,
     );
-    expect(readme).toMatch(/session submission is a separate,\s+fail-closed capability/is);
+    expect(readme).toMatch(/owner-scoped database access/i);
     expect(readme).toMatch(
       /at most one storefront attempt per connected Riot\s+account and UTC store day/is,
     );
@@ -80,10 +78,7 @@ describe("security documentation", () => {
       "SUPABASE_SERVICE_ROLE_KEY",
       "SESSION_ENCRYPTION_CURRENT_VERSION",
       "SESSION_ENCRYPTION_KEY_V1",
-      "RIOT_CONNECT_ALLOWED_USER_IDS",
-      "RIOT_CONNECT_ALLOWED_EMAILS",
       "RIOT_CLOUD_CONNECT_ENABLED",
-      "RIOT_CLOUD_CONNECT_PUBLIC",
       "RIOT_CLOUD_BROWSER_URL",
       "RIOT_CLOUD_BROWSER_API_KEY",
       "RIOT_TLS_CIPHERS",
@@ -97,6 +92,11 @@ describe("security documentation", () => {
       expect(example).toMatch(new RegExp(`^${variable}=$`, "m"));
       expect(readme).toContain(`\`${variable}\``);
     }
+
+    expect(example).not.toMatch(/RIOT_CONNECT_ALLOWED_/);
+    expect(example).not.toContain("RIOT_CLOUD_CONNECT_PUBLIC");
+    expect(readme).not.toMatch(/RIOT_CONNECT_ALLOWED_/);
+    expect(readme).not.toContain("RIOT_CLOUD_CONNECT_PUBLIC");
 
     const configuredLines = example
       .split(/\r?\n/)

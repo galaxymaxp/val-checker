@@ -2,28 +2,18 @@
 
 ## Current safety posture
 
-Phase 6 is open for single-user dogfooding. The retired 14-day durability gate
-has been superseded by a staged rollout: operate only the owner's account for
-approximately three weeks, then add users individually to the Riot connection
-allowlist. This does not restrict normal public magic-link signup, catalog
-browsing, or watchlists.
-
-The connect path accepts Riot session material only from an identity authorized
-by the explicit server-only allowlist of verified Supabase user IDs and emails.
-It checks authorization before processing credentials or a submitted jar,
-requires consent, validates bounded input, and encrypts the resulting session.
-Credential sign-in and the administrator-only submitted-jar fallback contact
-Riot's authentication and user-info hosts before storage so the session is
-bound to a stable PUUID; neither path fetches a storefront. Empty or malformed
-allowlist configuration fails closed. A client-visible eligibility flag is
-presentation only; the server repeats authorization at the trust boundary.
-Public signup and Riot-independent features are not allowlisted. A service-only
+Any authenticated VAL Checker account may use the Riot connection flow. The
+connect path derives the owner from verified Supabase claims before processing
+credentials or a submitted jar, requires consent, validates bounded input, and
+encrypts the resulting session. Credential sign-in and the submitted-jar
+fallback contact Riot's authentication and user-info hosts before storage so
+the session is bound to a stable PUUID; neither path fetches a storefront. A service-only
 database outbox records each initial Auth user creation and atomically permits
 one owner-notification attempt; ordinary logins and session refreshes create no
 outbox record.
 
 Live storefront access is confined to the protected automatic worker and the
-authenticated manual-refresh server action for allowlisted, connected accounts.
+authenticated manual-refresh server action for owner-bound, connected accounts.
 Database claims permit at most one automatic attempt per connection and one
 separate manual storefront attempt per stable Riot PUUID in each UTC store day.
 There is no polled, query-driven, or public debug request path to Riot.
@@ -88,21 +78,17 @@ Runtime keys must be supplied through environment or runtime secret configuratio
 
 The authenticated user's `user_id` is passed to AES-GCM as authenticated additional data (AAD). This cryptographically binds a ciphertext to its owner without putting the identifier inside the plaintext. Moving one user's ciphertext to another user's row therefore causes authentication to fail. Database authorization and row-level security remain required; AAD is defense in depth, not a replacement for access control.
 
-### Unauthorized connection attempts
+### Connection authorization
 
-Every connection service entry point requires an explicit allowlist and checks
-the verified Supabase user ID or email before processing submitted material or
-writing storage. Runtime configuration contains comma-separated IDs and emails;
-no configured entries means no account can connect, and malformed entries reject
-the configuration rather than applying a partial list. Email matching is
-case-normalized, user ID matching is exact after UUID normalization, and neither
-client input nor `user_metadata` is trusted for authorization. Removing a user
-from the allowlist blocks future connects but never blocks disconnect and local
-deletion.
+Every connection entry point requires a verified Supabase subject before it
+processes submitted material or writes storage. Browser-extension submissions
+also require an owner-bound, single-use capture token. Reads, updates,
+disconnects, and refreshes are scoped by both the authenticated owner and exact
+connection ID. Client input and `user_metadata` are never trusted for
+authorization.
 
-The daily worker repeats the allowlist check immediately before live Riot use.
-An old encrypted row is not permission to keep checking an identity that is no
-longer allowlisted.
+The daily worker uses service-only access to enumerate connected rows. Public
+routes cannot choose an arbitrary owner or connection for live Riot use.
 
 ### Riot request surface and cadence
 
@@ -110,7 +96,7 @@ The authenticated daily cron route enumerates eligible connections and invokes
 the shared storefront worker. A database uniqueness claim enforces one
 automatic attempt per connection and UTC store day even if the scheduler invokes
 the route more than once. The cron secret authenticates the scheduler but does
-not replace the per-connection claim or allowlist.
+not replace the per-connection claim and ownership checks.
 
 The manual-refresh server action accepts one validated connection UUID, verifies
 that the signed-in user owns it, and then invokes the same worker with the
@@ -175,10 +161,9 @@ that do not include recipient addresses, provider details, or session material.
 
 The 14-day durability gate was retired after research found project-level DMCA
 enforcement against store checkers rather than evidence of account-level bans.
-The replacement control is staged exposure: operator-only dogfooding for
-approximately three weeks, followed by individually allowlisted users. This
-evidence and rollout limit do not prove future compatibility, policy compliance,
-or safety from Riot-side changes, and they do not eliminate project-level legal
+Riot connection is now available to every authenticated VAL Checker account.
+This broader exposure does not prove future compatibility, policy compliance,
+or safety from Riot-side changes, and it does not eliminate project-level legal
 or availability risk.
 
 ## Residual risk and limitations
@@ -188,7 +173,7 @@ or availability risk.
 - AAD prevents undetected cross-user substitution only when the application supplies the correct authenticated user identifier.
 - Disconnecting from VAL Checker deletes local storage but does not itself revoke Riot-side sessions.
 - The retired durability reasoning is preserved in the roadmap, but it is not a guarantee against later enforcement or protocol changes.
-- The connect allowlist limits dogfooding scope; it does not make retained session material harmless or authorize public Riot access.
+- Authentication and owner scoping do not make retained session material harmless or prevent an authorized user from triggering Riot-side scrutiny.
 - The bounded maximum of one automatic attempt plus one manual attempt per Riot account and store day reduces the live request surface but cannot guarantee Riot availability or prevent protocol changes.
 - The unavailable lifecycle v2.1 detail has been superseded by an explicit project decision: `OK` resets the counter, `DEAD` stops checks immediately and persists `REAUTH_REQUIRED` without incrementing the counter, `UNKNOWN` and `ERROR` increment it, and a count greater than or equal to 3 also requires reauthentication. This reduces ambiguity but does not make ambiguous failures authoritative evidence of session death.
 

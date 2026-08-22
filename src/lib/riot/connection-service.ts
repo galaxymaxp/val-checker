@@ -5,10 +5,7 @@ import {
   type SubmittedCookieJarInput,
   SubmittedCookieProvider,
 } from "@/src/lib/riot/session-provider";
-import {
-  type RiotConnectIdentity,
-  type RiotConnectAuthorizer,
-} from "@/src/lib/riot/connect-allowlist";
+import type { RiotConnectIdentity } from "@/src/lib/riot/connect-identity";
 import {
   parseRiotRegion,
   type RiotRegion,
@@ -147,7 +144,6 @@ export class RiotConnectionService {
   constructor(
     private readonly provider: ManualCookieProvider,
     private readonly store: SessionStore,
-    private readonly allowlist: RiotConnectAuthorizer,
     private readonly submittedProvider = new SubmittedCookieProvider(),
     private readonly loginProvider?: RiotLoginProvider,
     private readonly pendingAuth?: PendingAuthStore,
@@ -161,8 +157,6 @@ export class RiotConnectionService {
   async connectWithCredentials(
     request: ConnectCredentialsRequest,
   ): Promise<CredentialConnectResult> {
-    this.allowlist.assertAllowed(request.identity);
-
     if (!request.consentGranted) {
       throw new RiotConsentRequiredError();
     }
@@ -208,8 +202,6 @@ export class RiotConnectionService {
   async submitMfaCode(
     request: SubmitMfaCodeRequest,
   ): Promise<CredentialConnectResult> {
-    this.allowlist.assertAllowed(request.identity);
-
     const { loginProvider, pendingAuth } = this.requireCredentialSupport();
     const pending = await pendingAuth.load(request.identity.userId);
 
@@ -311,7 +303,6 @@ export class RiotConnectionService {
   async connectCaptured(
     request: ConnectCapturedSessionRequest,
   ): Promise<ConnectedRiotAccount> {
-    this.allowlist.assertAllowed(request.identity);
     if (!request.consentGranted) {
       throw new RiotConsentRequiredError();
     }
@@ -348,8 +339,6 @@ export class RiotConnectionService {
   async connect(
     request: ConnectSubmittedSessionRequest,
   ): Promise<RiotConnectionState> {
-    this.allowlist.assertAllowed(request.identity);
-
     if (!request.consentGranted) {
       throw new RiotConsentRequiredError();
     }
@@ -374,8 +363,6 @@ export class RiotConnectionService {
   async connectFixture(
     request: ConnectFixtureRequest,
   ): Promise<RiotConnectionState> {
-    this.allowlist.assertAllowed(request.identity);
-
     if (!request.consentGranted) {
       throw new RiotConsentRequiredError();
     }

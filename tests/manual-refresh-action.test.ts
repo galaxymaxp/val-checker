@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
-const assertAllowed = vi.fn();
 const runDailyCheckForUser = vi.fn();
 const revalidatePath = vi.fn();
 const maybeSingle = vi.fn();
@@ -19,9 +18,6 @@ vi.mock("@/src/lib/supabase/server", () => ({
 vi.mock("@/src/lib/supabase/server-admin", () => ({
   createAdminSupabaseClient,
 }));
-vi.mock("@/src/lib/riot/connect-allowlist", () => ({
-  loadRiotConnectAllowlist: () => ({ assertAllowed }),
-}));
 vi.mock("@/src/lib/worker/on-demand-check", () => ({
   runDailyCheckForUser,
 }));
@@ -35,7 +31,6 @@ describe("manual storefront refresh server action", () => {
     getClaims.mockResolvedValue({
       data: { claims: { email: "player@example.com", sub: userId } },
     });
-    assertAllowed.mockReset();
     runDailyCheckForUser.mockReset();
     revalidatePath.mockReset();
     maybeSingle.mockReset();

@@ -2,11 +2,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { consumeCaptureToken } from "@/src/lib/desktop/capture-token";
-import type { RiotConnectIdentity } from "@/src/lib/riot/connect-allowlist";
-import {
-  connectSubmittedRiotJar,
-  RIOT_CONNECT_NOT_ENABLED_MESSAGE,
-} from "@/src/lib/riot/connect-submitted-jar";
+import { connectSubmittedRiotJar } from "@/src/lib/riot/connect-submitted-jar";
 import { MAX_SUBMITTED_COOKIE_JAR_BYTES } from "@/src/lib/riot/session-provider";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 
@@ -21,9 +17,8 @@ export const runtime = "nodejs";
  * There is no Supabase cookie session on this request — the capture client is
  * not signed into Supabase — so the one-time capture token is the entire authentication:
  * it resolves to the user it was minted for, exactly once, within its TTL.
- * The resolved user then passes through the very same allowlist and admin
- * gates as the browser's connectRiotSession action, so the deep link can
- * never connect a jar for a user who could not have done it in the browser.
+ * The resolved user owns the resulting connection exactly as they would through
+ * the browser's connectRiotSession action.
  *
  * Nothing here logs or echoes the token, the jar, or any cookie value.
  */
@@ -89,21 +84,9 @@ export async function POST(request: Request): Promise<Response> {
       return json({ error: UNAUTHORIZED_MESSAGE, ok: false }, 401);
     }
 
-    // The token proves which user minted it, but the allowlist and admin
-    // gates are email-aware, so resolve the account before gating.
-    const { data, error } = await admin.auth.admin.getUserById(userId);
-    if (error || !data.user) {
-      return json({ error: UNAUTHORIZED_MESSAGE, ok: false }, 401);
-    }
-
-    const identity: RiotConnectIdentity = {
-      email: typeof data.user.email === "string" ? data.user.email : undefined,
-      userId,
-    };
-
     // Consent was granted in the browser when the operator started the
     // handshake; the deep link only exists because that button was pressed.
-    const result = await connectSubmittedRiotJar(identity, {
+    const result = await connectSubmittedRiotJar({ userId }, {
       connectionId: submission.connectionId,
       consentGranted: true,
       label: submission.label,
@@ -112,9 +95,7 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     if (!result.ok) {
-      const status =
-        result.error === RIOT_CONNECT_NOT_ENABLED_MESSAGE ? 403 : 400;
-      return json(result, status);
+      return json(result, 400);
     }
 
     revalidatePath("/dashboard", "layout");

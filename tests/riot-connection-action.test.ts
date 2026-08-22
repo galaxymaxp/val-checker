@@ -72,8 +72,6 @@ describe("Riot disconnect server action", () => {
       session,
     }));
     revalidatePath.mockReset();
-    vi.stubEnv("RIOT_CONNECT_ALLOWED_EMAILS", "");
-    vi.stubEnv("RIOT_CONNECT_ALLOWED_USER_IDS", allowedUserId);
     vi.stubEnv("SESSION_ENCRYPTION_CURRENT_VERSION", "1");
     vi.stubEnv(
       "SESSION_ENCRYPTION_KEY_V1",
@@ -86,7 +84,7 @@ describe("Riot disconnect server action", () => {
     vi.unstubAllGlobals();
   });
 
-  it("resolves a stable identity before encrypting an allowlisted submitted jar", async () => {
+  it("resolves a stable identity before encrypting a submitted jar", async () => {
     getClaims.mockResolvedValue({
       data: { claims: { email: "operator@example.com", sub: allowedUserId } },
     });
@@ -113,54 +111,27 @@ describe("Riot disconnect server action", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
   });
 
-  it("rejects a non-allowlisted identity before constructing storage or processing material", async () => {
-    const marker = "do-not-process-or-echo";
+  it("allows an authenticated account without configured membership", async () => {
+    const friendUserId = "22222222-2222-4222-8222-222222222222";
     getClaims.mockResolvedValue({
       data: {
         claims: {
           email: "public@example.com",
-          sub: "22222222-2222-4222-8222-222222222222",
+          sub: friendUserId,
         },
       },
     });
     const { connectRiotSession } = await import("@/app/dashboard/riot-actions");
 
-    const result = await connectRiotSession({
-      consentGranted: true,
-      serializedJar: marker,
-    });
-
-    expect(result).toEqual({
-      error: "Riot connection access is not enabled.",
-      ok: false,
-    });
-    expect(JSON.stringify(result)).not.toContain(marker);
-    expect(createAdminSupabaseClient).not.toHaveBeenCalled();
-    expect(adminUpsert).not.toHaveBeenCalled();
-  });
-
-  it("admits the session paste path for an allowlisted non-admin", async () => {
-    const marker = "non-admin-jar-marker";
-    // Connect-allowlisted, with no administrator role anywhere in the
-    // picture: the paste path is the only browser route that works, so the
-    // connect allowlist is its only gate. Riot is unreachable here, so the
-    // submission gets past authorization and fails downstream instead.
-    getClaims.mockResolvedValue({
-      data: { claims: { email: "operator@example.com", sub: allowedUserId } },
-    });
-    const { connectRiotSession } = await import("@/app/dashboard/riot-actions");
-
-    const result = await connectRiotSession({
-      consentGranted: true,
-      serializedJar: marker,
-    });
-
-    expect(result).not.toEqual({
-      error: "Riot connection access is not enabled.",
-      ok: false,
-    });
-    expect(result.ok).toBe(false);
-    expect(JSON.stringify(result)).not.toContain(marker);
+    await expect(
+      connectRiotSession({
+        consentGranted: true,
+        serializedJar: submittedJar,
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(adminInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: friendUserId }),
+    );
   });
 
   it("rejects an unauthenticated submission before processing session material", async () => {

@@ -7,7 +7,7 @@ import type {
 } from "@/src/lib/riot/cloud-browser-service";
 import { CloudBrowserSessionNotFoundError } from "@/src/lib/riot/cloud-browser-service";
 import type { CloudConnectionStore } from "@/src/lib/riot/cloud-connection-store";
-import type { RiotConnectIdentity } from "@/src/lib/riot/connect-allowlist";
+import type { RiotConnectIdentity } from "@/src/lib/riot/connect-identity";
 import type { RiotConnectionService } from "@/src/lib/riot/connection-service";
 import { CloudBrowserSessionProvider } from "@/src/lib/riot/session-provider";
 import type { RiotCloudConnectionState } from "@/src/types/database";

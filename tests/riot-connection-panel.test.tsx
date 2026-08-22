@@ -49,7 +49,6 @@ describe("Riot connection consent UI", () => {
 
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectSession={vi.fn()}
         createCaptureToken={createCaptureToken}
         initialLabel="Main"
@@ -131,7 +130,6 @@ describe("Riot connection consent UI", () => {
     const user = userEvent.setup();
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectSession={vi.fn()}
         createCaptureToken={vi.fn()}
         initialState="disconnected"
@@ -174,7 +172,6 @@ describe("Riot connection consent UI", () => {
     const user = userEvent.setup();
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectSession={vi.fn()}
         createCaptureToken={vi.fn()}
         initialState="disconnected"
@@ -231,7 +228,6 @@ describe("Riot connection consent UI", () => {
 
     render(
       <RiotConnectionPanel
-        connectAllowed
         createCaptureToken={createCaptureToken}
         initialState="disconnected"
       />,
@@ -277,7 +273,6 @@ describe("Riot connection consent UI", () => {
     render(
       <RiotConnectionPanel
         cloudConnectAvailable
-        connectAllowed
         connectSession={vi.fn()}
         initialState="disconnected"
       />,
@@ -302,7 +297,6 @@ describe("Riot connection consent UI", () => {
   it("explains fallback-only mode and opens the usable JSON form", () => {
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectSession={vi.fn()}
         initialState="disconnected"
       />,
@@ -320,32 +314,12 @@ describe("Riot connection consent UI", () => {
     expect(screen.getByText("New account")).toBeInTheDocument();
   });
 
-  it("keeps production connection closed without accepting credential input", () => {
-    render(
-      <RiotConnectionPanel
-        connectAllowed={false}
-        disconnect={vi.fn().mockResolvedValue({ ok: true })}
-        initialState="disconnected"
-      />,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Riot connection access not enabled" }),
-    ).toBeDisabled();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Riot password")).not.toBeInTheDocument();
-    expect(screen.getByRole("note")).toHaveTextContent(
-      "limited to explicitly allowlisted accounts",
-    );
-  });
-
   it("exercises fixture-only connect and disconnect behavior", async () => {
     const user = userEvent.setup();
     const connectFixture = vi.fn().mockResolvedValue({ ok: true });
     const disconnect = vi.fn().mockResolvedValue({ ok: true });
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectFixture={connectFixture}
         disconnect={disconnect}
         initialState="disconnected"
@@ -380,7 +354,6 @@ describe("Riot connection consent UI", () => {
 
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={connectCredentials}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
@@ -420,7 +393,6 @@ describe("Riot connection consent UI", () => {
 
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={connectCredentials}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
@@ -457,7 +429,6 @@ describe("Riot connection consent UI", () => {
       status: "multifactor-required",
     });
     const sharedProps = {
-      connectAllowed: true,
       connectCredentials,
       initialState: "disconnected" as const,
       submitMfaCode: vi.fn(),
@@ -502,7 +473,6 @@ describe("Riot connection consent UI", () => {
       .mockResolvedValueOnce({ error: "Riot sign-in is unavailable.", ok: false });
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={connectCredentials}
         initialState="disconnected"
         keepConnectFormOpen
@@ -541,7 +511,6 @@ describe("Riot connection consent UI", () => {
 
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={connectCredentials}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
@@ -563,7 +532,6 @@ describe("Riot connection consent UI", () => {
   it("hides the cookie export fallback from non-admins", () => {
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={vi.fn()}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
@@ -581,7 +549,6 @@ describe("Riot connection consent UI", () => {
 
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={vi.fn()}
         connectSession={connectSession}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
@@ -620,7 +587,6 @@ describe("Riot connection consent UI", () => {
     });
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={vi.fn()}
         connectSession={connectSession}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
@@ -646,7 +612,6 @@ describe("Riot connection consent UI", () => {
   it("plainly discloses credential handling, storage, encryption, revocation, and Riot logout", () => {
     render(
       <RiotConnectionPanel
-        connectAllowed
         connectCredentials={vi.fn()}
         disconnect={vi.fn().mockResolvedValue({ ok: true })}
         initialState="disconnected"
@@ -660,7 +625,7 @@ describe("Riot connection consent UI", () => {
     expect(
       screen.getByRole("heading", { name: "Sign in with Riot credentials" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/explicitly allowlisted VAL Checker accounts/i)).toBeInTheDocument();
+    expect(screen.getByText(/Use your Riot login username/i)).toBeInTheDocument();
     expect(
       screen.getByText(/can permit access to your Riot account/i),
     ).toBeInTheDocument();

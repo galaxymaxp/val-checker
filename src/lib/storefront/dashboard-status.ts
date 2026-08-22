@@ -237,7 +237,7 @@ export async function loadStorefrontDashboardStatus(
     if (log.trigger !== "cron" && log.trigger !== "operator") {
       continue;
     }
-    // Claim-held/not-allowlisted rows are useful operational events, but they
+    // Claim-held rows are useful operational events, but they
     // are not refresh attempts and must not replace the last claimed run shown
     // in the dashboard.
     if (log.run_id && !latestAutomaticByConnection.has(log.connection_id)) {

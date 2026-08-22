@@ -36,7 +36,6 @@ const ALLOWED_REASONS = new Set([
   "DELIVERY_FAILED",
   "LIFECYCLE_STALE",
   "MANUAL_CLAIM_HELD",
-  "NOT_ALLOWLISTED",
   "REAUTH_FAILED",
   "REAUTH_REQUIRED_SKIP",
   "SESSION_UNAVAILABLE",
@@ -76,7 +75,6 @@ function session(marker: number): Session {
 
 function setup(
   options: {
-    readonly allowed?: boolean;
     readonly connections?: readonly WorkerConnection[];
     readonly emailsSent?: number;
     readonly matches?: readonly unknown[];
@@ -128,7 +126,6 @@ function setup(
     matches: options.matches ?? [],
   });
   const dependencies: DailyStorefrontWorkerDependencies = {
-    allowlist: { allows: vi.fn(() => options.allowed !== false) },
     createRiotClient: vi.fn(() => ({
       getPUUID,
       getStore,
@@ -193,12 +190,6 @@ describe("daily worker run logging", () => {
     await new DailyStorefrontWorker(blocked.dependencies).run();
     expect(loggedEntries(blocked.repository)).toMatchObject([
       { outcome: "skipped", reason: "REAUTH_REQUIRED_SKIP", runId: null },
-    ]);
-
-    const rejected = setup({ allowed: false });
-    await new DailyStorefrontWorker(rejected.dependencies).run();
-    expect(loggedEntries(rejected.repository)).toMatchObject([
-      { outcome: "skipped", reason: "NOT_ALLOWLISTED" },
     ]);
 
     const duplicate = setup();

@@ -7,7 +7,6 @@ import {
 } from "@/src/lib/notifications/resend-delivery";
 import { renderSessionExpiredEmail } from "@/src/lib/notifications/session-expired";
 import { RiotClient } from "@/src/lib/riot/client";
-import { loadRiotConnectAllowlist } from "@/src/lib/riot/connect-allowlist";
 import {
   AesGcmSessionCipher,
   loadSessionKeyring,
@@ -83,7 +82,6 @@ export async function buildConfiguredDailyStorefrontWorker(
     supabase,
     new AesGcmSessionCipher(loadSessionKeyring()),
   );
-  const allowlist = loadRiotConnectAllowlist();
   const repository = new SupabaseDailyStorefrontRepository(
     supabase,
     configured.userId,
@@ -92,7 +90,6 @@ export async function buildConfiguredDailyStorefrontWorker(
   const riotFetch = createTlsTunedFetch();
 
   return new DailyStorefrontWorker({
-    allowlist,
     createRiotClient: ({ region, session }) =>
       new RiotClient({
         account: { region },

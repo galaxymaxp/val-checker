@@ -1,20 +1,17 @@
 # VAL Checker
 
 VAL Checker watches selected VALORANT skins and emails an authenticated user
-when one appears in that user's daily storefront. Phase 6 is open for
-private dogfooding under a staged rollout; the decision history and earlier
-closed gates remain in [the roadmap](docs/roadmap.md).
+when one appears in that user's daily storefront. Account signup and Riot
+connection are available to every authenticated VAL Checker user; the decision
+history and earlier closed gates remain in [the roadmap](docs/roadmap.md).
 
 ## Operating policy
 
-Public magic-link and Google signup remain open to everyone, but Riot
-connection is a separate, fail-closed private capability. Only identities in
-`RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` receive the
-browser-extension connection flow or cookie-JSON fallback. The server derives the
-identity from verified Supabase claims and repeats the allowlist check before it
-reads a session submission.
-Riot session submission is a separate, fail-closed capability from public
-signup and Riot-independent features.
+Public magic-link and Google signup remain open to everyone, and any
+authenticated VAL Checker account may use the Riot connection flow. The server
+derives the owner from verified Supabase claims before it reads session
+material. One-time capture tokens, explicit consent, bounded input validation,
+owner-scoped database access, and encrypted session storage remain required.
 
 The private browser extension is the primary connection method. It opens Riot's
 real sign-in page in the user's normal Chrome or Edge browser, so Google sign-in,
@@ -37,11 +34,9 @@ keeps its own encrypted session, store, health, and refresh state. The server
 resolves the stable Riot PUUID before a live session row is inserted or replaced
 so reconnecting cannot mint another allowance.
 
-The rollout remains private to the operator and explicitly trusted friends.
-Every person must be added to the server-side allowlist before the extension or
-cookie-JSON controls render. Removing someone from the allowlist prevents a new
-connection; disconnect remains available so stored material can always be
-deleted.
+No manual enrollment is required for Riot connection. Every stored Riot account
+remains bound to the authenticated VAL Checker owner, and disconnect remains
+available so stored material can always be deleted.
 
 The automatic worker performs at most one storefront attempt per connected Riot
 account and UTC store day, scheduled for 00:05 UTC. A separately identified
@@ -110,10 +105,7 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Legacy alternative when no Supabase secret key is configured. |
 | `SESSION_ENCRYPTION_CURRENT_VERSION` | Server only | Positive integer identifying the key used for new encryption. |
 | `SESSION_ENCRYPTION_KEY_V<n>` | Server only | Base64 encoding of exactly 32 random bytes for each retained key version, such as the initial `V1`. |
-| `RIOT_CONNECT_ALLOWED_USER_IDS` | Server only | Comma-separated verified Supabase user UUIDs allowed to submit Riot session material. |
-| `RIOT_CONNECT_ALLOWED_EMAILS` | Server only | Comma-separated verified Supabase emails allowed to submit Riot session material. |
 | `RIOT_CLOUD_CONNECT_ENABLED` | Server only | Experimental temporary-browser kill switch. Keep `false` in production while the canary is unproven. |
-| `RIOT_CLOUD_CONNECT_PUBLIC` | Server only | When `false`, cloud connection also requires the existing canary allowlist. |
 | `RIOT_CLOUD_BROWSER_URL` | Server only | HTTPS origin of the separately deployed Singapore browser service. |
 | `RIOT_CLOUD_BROWSER_API_KEY` | Server only | Bearer key for the browser service control API; never expose it to clients. |
 | `RIOT_TLS_CIPHERS` | Server only | Optional TLS cipher order for Riot's auth host. Leave unset unless sign-in begins returning 403. |
@@ -122,8 +114,7 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `VAL_CHECKER_OWNER_EMAIL` | Server only | Recipient for one-time new-account notifications. |
 | `CRON_SECRET` | Server only | Random Vercel cron authentication secret of at least 16 characters. |
 
-Configure at least one public Supabase key, one elevated Supabase key, and one
-Riot allowlist entry for dogfooding. An empty allowlist permits nobody. Keep old
+Configure at least one public Supabase key and one elevated Supabase key. Keep old
 `SESSION_ENCRYPTION_KEY_V<n>` values available while any stored row still uses
 that version. The initial deployment uses `SESSION_ENCRYPTION_KEY_V1`; changing
 `SESSION_ENCRYPTION_CURRENT_VERSION` affects new writes but does not decrypt or
@@ -139,7 +130,7 @@ migrate old rows by itself.
 
 2. Populate `.env.local` from `.env.example` using the local URL and public and
    elevated keys reported by your own local stack. Use only generated test key
-   material and a test-only allowlisted identity locally.
+   material and a test-only authenticated identity locally.
 
 3. Apply any migration added since the stack was last started:
 
@@ -203,17 +194,15 @@ stable PUUID uniqueness, pending reconnect targeting, and supporting indexes.
 3. Verify the Resend sending domain, set `RESEND_FROM_EMAIL` to an identity on
    that domain, and set `VAL_CHECKER_OWNER_EMAIL` to the site owner's recipient
    address.
-4. Set the Riot allowlist to the operator's identity only for the initial
-   approximately three-week dogfood period.
-5. Deploy the Next.js application. The committed Vercel cron configuration runs
+4. Deploy the Next.js application. The committed Vercel cron configuration runs
    the protected worker route daily at 00:05 UTC. Do not add another scheduler or
    expose that protected cron route as a user action. Manual refresh uses an
    authenticated server action with an exact owned connection ID.
 
 `CRON_SECRET` protects the scheduled route, while per-connection automatic and
 per-PUUID manual claims enforce their independent UTC-day limits even if a
-scheduler or browser invocation is duplicated. Neither control replaces the
-Riot connect allowlist.
+scheduler or browser invocation is duplicated. These cadence controls complement
+the authenticated owner and connection checks.
 
 ## Operational visibility
 
@@ -223,8 +212,8 @@ timestamp, trigger (`cron`, `manual`, or `operator`), outcome (`checked`,
 `skipped`, or `failed`), Riot session classification, how many watchlist matches
 were found, and how many emails were actually sent.
 
-The `reason` column uses a closed vocabulary such as `NOT_ALLOWLISTED`,
-`ACCOUNT_UNAVAILABLE`, `DAILY_CLAIM_HELD`, `MANUAL_CLAIM_HELD`,
+The `reason` column uses a closed vocabulary such as `ACCOUNT_UNAVAILABLE`,
+`DAILY_CLAIM_HELD`, `MANUAL_CLAIM_HELD`,
 `SESSION_LEASE_HELD`, `CATALOG_FAILED`, `REAUTH_FAILED`, or
 `STOREFRONT_FAILED`. Raw error messages
 are deliberately never stored, so a log row cannot carry cookies, tokens, or a

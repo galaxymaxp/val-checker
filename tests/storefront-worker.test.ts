@@ -61,7 +61,6 @@ function session(marker: number): Session {
 
 function setup(options: {
   readonly connections?: readonly WorkerConnection[];
-  readonly allowed?: boolean;
   readonly trigger?: StorefrontRefreshTrigger;
 } = {}) {
   const connections = options.connections ?? [connection()];
@@ -123,7 +122,6 @@ function setup(options: {
     storeDate: "2026-08-14",
   });
   const dependencies: DailyStorefrontWorkerDependencies = {
-    allowlist: { allows: vi.fn(() => options.allowed !== false) },
     createRiotClient,
     pipeline,
     prepareStorefront,
@@ -766,16 +764,17 @@ describe("daily storefront worker", () => {
     expect(fixture.repository.applyLifecycle).not.toHaveBeenCalled();
   });
 
-  it("rechecks verified allowlist membership before claims, decryption, or Riot", async () => {
-    const fixture = setup({ allowed: false });
+  it("does not gate an authenticated connection on email membership", async () => {
+    const fixture = setup();
+    vi.mocked(fixture.repository.loadVerifiedEmail).mockResolvedValue(null);
 
     await expect(new DailyStorefrontWorker(fixture.dependencies).run()).resolves.toMatchObject({
-      skipped: 1,
+      checked: 1,
     });
     expect(fixture.repository.loadVerifiedEmail).toHaveBeenCalledTimes(1);
-    expect(fixture.repository.claim).not.toHaveBeenCalled();
-    expect(fixture.sessionStore.load).not.toHaveBeenCalled();
-    expect(fixture.createRiotClient).not.toHaveBeenCalled();
+    expect(fixture.repository.claim).toHaveBeenCalledTimes(1);
+    expect(fixture.sessionStore.load).toHaveBeenCalledTimes(1);
+    expect(fixture.createRiotClient).toHaveBeenCalledTimes(1);
   });
 
   it("treats rotated-session persistence failure as failure before storefront", async () => {

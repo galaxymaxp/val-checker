@@ -2,7 +2,6 @@ import "server-only";
 
 import type { FetchedStorefront, Session } from "@/src/lib/riot/adapter";
 import type { StorefrontRequestDisposition } from "@/src/lib/riot/client";
-import type { RiotConnectAllowlist } from "@/src/lib/riot/connect-allowlist";
 import type { SentStorefrontNotification } from "@/src/lib/notifications/dedup";
 import {
   reauthenticateAndPersist,
@@ -85,7 +84,6 @@ export type RunLogReason =
   | "DELIVERY_FAILED"
   | "LIFECYCLE_STALE"
   | "MANUAL_CLAIM_HELD"
-  | "NOT_ALLOWLISTED"
   | "REAUTH_FAILED"
   | "REAUTH_REQUIRED_SKIP"
   | "SESSION_UNAVAILABLE"
@@ -217,7 +215,6 @@ export type WorkerStorefrontSender = (
 ) => Promise<WorkerStorefrontDelivery>;
 
 export type DailyStorefrontWorkerDependencies = {
-  readonly allowlist: Pick<RiotConnectAllowlist, "allows">;
   readonly createRiotClient: WorkerRiotClientFactory;
   readonly pipeline: WorkerPipeline;
   readonly prepareStorefront: WorkerStorefrontPreparer;
@@ -418,12 +415,6 @@ export class DailyStorefrontWorker {
     const email = await this.dependencies.repository.loadVerifiedEmail(
       connection.userId,
     );
-    if (
-      !email ||
-      !this.dependencies.allowlist.allows({ email, userId: connection.userId })
-    ) {
-      return terminated("skipped", "NOT_ALLOWLISTED");
-    }
 
     const leaseResult =
       await this.dependencies.repository.acquireSessionRotationLease(connection);
@@ -609,7 +600,7 @@ export class DailyStorefrontWorker {
           classification: result,
         });
       }
-      if (lifecycle.applied && lifecycle.terminalTransition) {
+      if (lifecycle.applied && lifecycle.terminalTransition && email) {
         try {
           await this.dependencies.sendExpiry({
             email,

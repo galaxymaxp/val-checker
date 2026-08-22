@@ -4,13 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { mintCaptureToken } from "@/src/lib/desktop/capture-token";
-import {
-  loadRiotConnectAllowlist,
-  RiotConnectNotAllowedError,
-  type RiotConnectIdentity,
-} from "@/src/lib/riot/connect-allowlist";
+import type { RiotConnectIdentity } from "@/src/lib/riot/connect-identity";
 import { connectSubmittedRiotJar } from "@/src/lib/riot/connect-submitted-jar";
-import { canUseRiotCloudConnect } from "@/src/lib/riot/cloud-connect-policy";
 import {
   type CredentialConnectResult,
   RiotConnectionService,
@@ -52,7 +47,7 @@ type ResolvedIdentity =
   | { readonly identity: RiotConnectIdentity; readonly ok: true }
   | { readonly error: string; readonly ok: false };
 
-/** Resolves the caller and enforces the fail-closed connect allowlist. */
+/** Resolves the authenticated VAL Checker account that owns the connection. */
 async function resolveConnectIdentity(): Promise<ResolvedIdentity> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getClaims();
@@ -63,29 +58,16 @@ async function resolveConnectIdentity(): Promise<ResolvedIdentity> {
     return { error: "Please sign in again.", ok: false };
   }
 
-  const identity: RiotConnectIdentity = {
-    email: typeof claims?.email === "string" ? claims.email : undefined,
-    userId,
-  };
-
-  try {
-    // Authorization happens before any credential or jar is read.
-    loadRiotConnectAllowlist().assertAllowed(identity);
-  } catch {
-    return { error: "Riot connection access is not enabled.", ok: false };
-  }
-
-  return { identity, ok: true };
+  return { identity: { userId }, ok: true };
 }
 
-function buildCredentialService(allowlist: ReturnType<typeof loadRiotConnectAllowlist>) {
+function buildCredentialService() {
   const admin = createAdminSupabaseClient();
   const cipher = new AesGcmSessionCipher(loadSessionKeyring());
 
   return new RiotConnectionService(
     new ManualCookieProvider(),
     new SupabaseEncryptedSessionStore(admin, cipher),
-    allowlist,
     new SubmittedCookieProvider(),
     new RiotLoginProvider(),
     new SupabaseEncryptedPendingAuthStore(admin, cipher),
@@ -210,9 +192,7 @@ export async function connectRiotCredentials(
 
   let outcome: CredentialConnectResult;
   try {
-    outcome = await buildCredentialService(
-      loadRiotConnectAllowlist(),
-    ).connectWithCredentials({
+    outcome = await buildCredentialService().connectWithCredentials({
       consentGranted: true,
       connectionId: submission.connectionId,
       identity: resolved.identity,
@@ -250,9 +230,7 @@ export async function submitRiotMfaCode(
 
   let outcome: CredentialConnectResult;
   try {
-    outcome = await buildCredentialService(
-      loadRiotConnectAllowlist(),
-    ).submitMfaCode({
+    outcome = await buildCredentialService().submitMfaCode({
       code: submission.code,
       identity: resolved.identity,
     });
@@ -282,26 +260,7 @@ export async function connectRiotSession(
     return { error: "Please sign in again.", ok: false };
   }
 
-  const identity: RiotConnectIdentity = {
-    email: typeof claims?.email === "string" ? claims.email : undefined,
-    userId,
-  };
-
-  // The allowlist, the admin-only gate on the raw jar path, the shape checks,
-  // the connect itself and the follow-up storefront fetch all live in the
-  // shared helper, so /api/desktop/connect cannot become a way around any of
-  // them.
-  const result = await connectSubmittedRiotJar(identity, submission, {
-    assertAllowed(candidate) {
-      if (
-        loadRiotConnectAllowlist().allows(candidate) ||
-        canUseRiotCloudConnect(candidate)
-      ) {
-        return;
-      }
-      throw new RiotConnectNotAllowedError();
-    },
-  });
+  const result = await connectSubmittedRiotJar({ userId }, submission);
   if (!result.ok) {
     return result;
   }
@@ -313,19 +272,13 @@ export async function connectRiotSession(
 /**
  * Mints the one-time token used by the browser extension capture handshake.
  * The token proves which signed-in user a captured jar belongs to, so it is
- * minted behind the exact gate that guards jar submission. The raw token is
+ * minted for the authenticated owner that will receive the jar. The raw token is
  * returned once and only its hash is stored; it is never logged.
  */
 export async function createRiotCaptureToken(): Promise<RiotCaptureTokenResult> {
   const resolved = await resolveConnectIdentity();
   if (!resolved.ok) {
     return { error: resolved.error, ok: false };
-  }
-
-  try {
-    loadRiotConnectAllowlist().assertAllowed(resolved.identity);
-  } catch {
-    return { error: "Riot connection access is not enabled.", ok: false };
   }
 
   try {
@@ -386,16 +339,6 @@ export async function refreshRiotStorefront(
   const parsedConnectionId = databaseUuidSchema.safeParse(connectionId);
   if (!parsedConnectionId.success) {
     return { error: "Choose a valid Riot account to refresh.", ok: false };
-  }
-
-  try {
-    const allowlist = loadRiotConnectAllowlist();
-    allowlist.assertAllowed({
-      email: typeof claims?.email === "string" ? claims.email : undefined,
-      userId,
-    });
-  } catch {
-    return { error: "Riot connection access is not enabled.", ok: false };
   }
 
   let warning: string | undefined;

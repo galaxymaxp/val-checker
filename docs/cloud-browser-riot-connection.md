@@ -6,7 +6,7 @@ The repository contains an experimental implementation, not a proven migration.
 The August 2026 canary reached Riot's real login page, but Google rejected the
 automated embedded browser as unsafe and Riot credential authentication did not
 reliably pass after CAPTCHA. The production cloud flag must remain disabled.
-The private Chrome/Edge extension is now the allowlisted primary path. It uses
+The Chrome/Edge extension is now the primary path for authenticated users. It uses
 the user's real browser and home/mobile network, then submits Riot session
 cookies through the existing one-time capture-token boundary. Manual cookie JSON
 remains the advanced fallback. Direct credential and temporary cloud-browser
@@ -109,10 +109,8 @@ access, and logging/telemetry review before enabling the flag.
 ## Rollout controls and UX
 
 - `RIOT_CLOUD_CONNECT_ENABLED=false` is the emergency kill switch and default.
-- With the feature enabled and `RIOT_CLOUD_CONNECT_PUBLIC=false`, the existing
-  verified user/email allowlist is the canary cohort.
-- `RIOT_CLOUD_CONNECT_PUBLIC=true` removes the hard allowlist dependency only
-  for cloud connection; the kill switch remains.
+- With the feature enabled, any authenticated VAL Checker account may use the
+  cloud connection path; the normal ownership and session controls remain.
 - Manual JSON remains visible under advanced connection options and still uses
   existing structure/size limits, normalization, encryption, and lifecycle.
 - The connection view is responsive for 375×667, 390×844, and 430×932-class
@@ -132,8 +130,7 @@ cannot see the password.
    single-instance settings and secrets. Confirm health without recording a
    viewer URL.
 3. Configure the Vercel preview deployment with the browser HTTPS origin/API
-   key, `RIOT_CLOUD_CONNECT_ENABLED=true`, `RIOT_CLOUD_CONNECT_PUBLIC=false`,
-   and only the operator in the allowlist. Confirm the deployment runs in
+   key and `RIOT_CLOUD_CONNECT_ENABLED=true`. Confirm the deployment runs in
    `sin1` and Supabase remains Tokyo.
 4. From iPhone Safari, Android Chrome, and a desktop browser, verify touch,
    scaling, soft/hardware keyboard, reconnect behavior, MFA, and CAPTCHA when
@@ -151,7 +148,7 @@ cannot see the password.
    result; do not set `reauth_test_succeeded` based on the immediate validation
    run.
 8. Exercise cancellation, eight-minute expiry, failed login, browser-service
-   outage, repeated capture/status calls, and two simultaneous allowlisted users.
+   outage, repeated capture/status calls, and two simultaneous authenticated users.
 9. Keep the canary private for the agreed observation period. Only after the
    full later-reauth evidence is satisfactory remove Electron/direct credential
    code in a separate reviewed change, then consider public eligibility.
@@ -161,8 +158,8 @@ cannot see the password.
 The Vercel side stays compatible with Hobby: one function region and the
 existing daily cron; no multi-region or Pro-only configuration is introduced.
 Cloud Run has a free tier, but active WebSocket/CPU/memory time and Singapore
-egress can incur charges, so configure billing alerts and keep the feature
-allowlisted/off by default. `max-instances=1` caps cost but also creates a single
+egress can incur charges, so configure billing alerts and keep the feature off
+by default. `max-instances=1` caps cost but also creates a single
 point of failure and limited concurrency.
 
 Riot sees the Singapore data-center IP, may challenge or reject it, and can

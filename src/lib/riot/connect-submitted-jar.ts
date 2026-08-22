@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  loadRiotConnectAllowlist,
-  type RiotConnectAuthorizer,
-  type RiotConnectIdentity,
-} from "@/src/lib/riot/connect-allowlist";
+import type { RiotConnectIdentity } from "@/src/lib/riot/connect-identity";
 import {
   RiotConnectionService,
   RiotConsentRequiredError,
@@ -23,8 +19,6 @@ import { createTlsTunedFetch } from "@/src/lib/riot/tls-fetch";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import type { RiotConnectionMutationResult } from "@/src/types/riot-connection";
 
-export const RIOT_CONNECT_NOT_ENABLED_MESSAGE =
-  "Riot connection access is not enabled.";
 export const RIOT_CONNECT_FAILED_MESSAGE =
   "The Riot session could not be connected.";
 export const RIOT_CONNECT_CONSENT_MESSAGE =
@@ -39,26 +33,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * authenticated identity. Shared by the connectRiotSession server action
  * (identity from the Supabase cookie session) and /api/desktop/connect
  * (identity from a one-time capture token), so both paths enforce the same
- * gates in the same order:
- *
- *   1. connect allowlist (fail closed),
- *   2. shape and consent checks,
- *
- * all before any storage dependency is constructed or the jar is read.
+ * shape and consent checks before any storage dependency is constructed or
+ * the jar is read.
  * Error strings are generic on purpose; the jar is never echoed or logged.
  */
 export async function connectSubmittedRiotJar(
   identity: RiotConnectIdentity,
   submission: unknown,
-  authorizer: RiotConnectAuthorizer = loadRiotConnectAllowlist(),
 ): Promise<RiotConnectionMutationResult> {
-  try {
-    // Authorization happens before the submitted jar is read or transformed.
-    authorizer.assertAllowed(identity);
-  } catch {
-    return { error: RIOT_CONNECT_NOT_ENABLED_MESSAGE, ok: false };
-  }
-
   if (!isRecord(submission)) {
     return { error: RIOT_CONNECT_FAILED_MESSAGE, ok: false };
   }
@@ -92,7 +74,6 @@ export async function connectSubmittedRiotJar(
     const service = new RiotConnectionService(
       new ManualCookieProvider(),
       store,
-      authorizer,
       new SubmittedCookieProvider(),
       undefined,
       undefined,

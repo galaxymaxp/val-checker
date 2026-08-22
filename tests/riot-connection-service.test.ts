@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  RiotConnectAllowlist,
-  RiotConnectNotAllowedError,
-} from "@/src/lib/riot/connect-allowlist";
-import {
   RiotConnectionService,
   RiotConsentRequiredError,
 } from "@/src/lib/riot/connection-service";
@@ -26,12 +22,6 @@ const submittedJar = JSON.stringify([
   },
 ]);
 
-function allowlist(userIds = allowedUserId) {
-  return new RiotConnectAllowlist({
-    RIOT_CONNECT_ALLOWED_USER_IDS: userIds,
-  });
-}
-
 function fixtureStore(): SessionStore {
   return {
     delete: vi.fn().mockResolvedValue(undefined),
@@ -44,11 +34,7 @@ function fixtureStore(): SessionStore {
 describe("offline Riot connection application flow", () => {
   it("requires explicit consent before storing a fixture session", async () => {
     const store = fixtureStore();
-    const service = new RiotConnectionService(
-      new ManualCookieProvider(),
-      store,
-      allowlist(),
-    );
+    const service = new RiotConnectionService(new ManualCookieProvider(), store);
 
     await expect(
       service.connectFixture({
@@ -67,11 +53,7 @@ describe("offline Riot connection application flow", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const store = fixtureStore();
-    const service = new RiotConnectionService(
-      new ManualCookieProvider(),
-      store,
-      allowlist(),
-    );
+    const service = new RiotConnectionService(new ManualCookieProvider(), store);
     const userId = allowedUserId;
 
     await expect(
@@ -93,11 +75,11 @@ describe("offline Riot connection application flow", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("rejects an authenticated non-allowlisted user before capture or storage", async () => {
+  it("allows any authenticated account to connect after consent", async () => {
     const provider = new ManualCookieProvider();
     const capture = vi.spyOn(provider, "capture");
     const store = fixtureStore();
-    const service = new RiotConnectionService(provider, store, allowlist());
+    const service = new RiotConnectionService(provider, store);
 
     await expect(
       service.connectFixture({
@@ -107,16 +89,15 @@ describe("offline Riot connection application flow", () => {
           serializedJar: new Uint8Array([1, 2, 3]),
         },
         identity: {
-          email: "authenticated@example.com",
           userId: "22222222-2222-4222-8222-222222222222",
         },
       }),
-    ).rejects.toThrow(RiotConnectNotAllowedError);
-    expect(capture).not.toHaveBeenCalled();
-    expect(store.save).not.toHaveBeenCalled();
+    ).resolves.toBe("connected");
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(store.save).toHaveBeenCalledTimes(1);
   });
 
-  it("captures an allowlisted submitted session offline with AP as the default region", async () => {
+  it("captures a submitted session offline with AP as the default region", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const store = fixtureStore();
@@ -126,7 +107,6 @@ describe("offline Riot connection application flow", () => {
     const service = new RiotConnectionService(
       new ManualCookieProvider(),
       store,
-      allowlist(),
       submittedProvider,
     );
 
@@ -146,33 +126,6 @@ describe("offline Riot connection application flow", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("rejects submitted material before capture when the identity is not allowlisted", async () => {
-    const store = fixtureStore();
-    const submittedProvider = new SubmittedCookieProvider();
-    const capture = vi.spyOn(submittedProvider, "capture");
-    const service = new RiotConnectionService(
-      new ManualCookieProvider(),
-      store,
-      allowlist(),
-      submittedProvider,
-    );
-
-    await expect(
-      service.connect({
-        consentGranted: true,
-        identity: {
-          email: "authenticated@example.com",
-          userId: "22222222-2222-4222-8222-222222222222",
-        },
-        region: "eu",
-        session: { serializedJar: submittedJar },
-      }),
-    ).rejects.toThrow(RiotConnectNotAllowedError);
-
-    expect(capture).not.toHaveBeenCalled();
-    expect(store.save).not.toHaveBeenCalled();
-  });
-
   it("requires consent before submitted material is captured", async () => {
     const store = fixtureStore();
     const submittedProvider = new SubmittedCookieProvider();
@@ -180,7 +133,6 @@ describe("offline Riot connection application flow", () => {
     const service = new RiotConnectionService(
       new ManualCookieProvider(),
       store,
-      allowlist(),
       submittedProvider,
     );
 

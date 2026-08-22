@@ -4,7 +4,7 @@ import { HttpCloudBrowserService } from "@/src/lib/riot/cloud-browser-service";
 import { CloudConnectController } from "@/src/lib/riot/cloud-connect-controller";
 import { SupabaseCloudConnectionStore } from "@/src/lib/riot/cloud-connection-store";
 import { assertRiotCloudConnectAllowed } from "@/src/lib/riot/cloud-connect-policy";
-import type { RiotConnectIdentity } from "@/src/lib/riot/connect-allowlist";
+import type { RiotConnectIdentity } from "@/src/lib/riot/connect-identity";
 import { RiotConnectionService } from "@/src/lib/riot/connection-service";
 import { ManualCookieProvider, SubmittedCookieProvider } from "@/src/lib/riot/session-provider";
 import { AesGcmSessionCipher, loadSessionKeyring } from "@/src/lib/riot/session-crypto";
@@ -18,15 +18,9 @@ export function buildCloudConnectController(identity: RiotConnectIdentity) {
   assertRiotCloudConnectAllowed(identity);
   const admin = createAdminSupabaseClient();
   const cipher = new AesGcmSessionCipher(loadSessionKeyring());
-  const authorizer = {
-    assertAllowed(candidate: RiotConnectIdentity): void {
-      assertRiotCloudConnectAllowed(candidate);
-    },
-  };
   const connection = new RiotConnectionService(
     new ManualCookieProvider(),
     new SupabaseEncryptedSessionStore(admin, cipher),
-    authorizer,
     new SubmittedCookieProvider(),
     undefined,
     undefined,

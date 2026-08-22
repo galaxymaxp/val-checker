@@ -2,14 +2,25 @@
 
 **Version:** 2.0 · **Date:** 2026-08-14
 **Audience:** a coding agent (Codex-style) executing tasks autonomously, plus the human reviewing.
-**Mode:** Phase 6 is OPEN for allowlisted, single-user dogfooding. The Track C
+**Mode:** Phase 6 is OPEN to authenticated VAL Checker accounts. The Track C
 blockers retained in the Version 2.0/2.1 text are historical and superseded by
 the Version 2.2 decision below.
 
 > **Historical specification notice:** The Version 2.0 text below is preserved as
 > the decision record that governed Phases 1–4. Where it conflicts with the
-> Version 2.1 or Version 2.2 decision addenda immediately below, the newest
+> Version 2.1 or later decision addenda below, the newest
 > addendum controls.
+
+## Version 2.6 decision addendum — Riot connection opened
+
+**Decision date:** 2026-08-23
+
+Manual enrollment for Riot connection is retired. Any authenticated VAL Checker
+account may use the extension, submitted-session fallback, and—when its separate
+emergency switch is enabled—the experimental cloud path. Verified Supabase
+identity, owner/connection scoping, one-time capture tokens, consent, input
+bounds, encryption, request cadence, and Riot identity validation remain
+load-bearing. This supersedes every earlier restricted-cohort statement below.
 
 ## Version 2.2 decision addendum — Phase 6 ship gate opened
 
@@ -25,21 +36,15 @@ and the Track C blocker in §8 and §11; those sections remain below as the
 historical record of why collection and use of real session material was
 previously blocked.
 
-The replacement control is a staged rollout:
-
-- begin with the operator's own account only for approximately three weeks; and
-- only after that dogfood period, add explicitly allowlisted users.
-
-The Phase 6 ship gate is now **OPEN for single-user dogfooding**. Live Riot
-requests are permitted only through the daily cron path and only for an
-allowlisted account.
+The replacement was initially a staged rollout. That cohort restriction was
+retired by Version 2.6. The Phase 6 ship gate remains open, with live Riot
+requests limited by the authenticated and owner-bound paths described in the
+current README.
 
 ### Controls that remain load-bearing
 
-- The existing fail-closed connect-flow allowlist remains. It gates dogfooding
-  scope rather than account-ban risk: only allowlisted users may submit Riot
-  session material. Public magic-link signup remains open, and non-allowlisted
-  connection attempts must continue to be rejected.
+- Verified Supabase authentication and owner-bound connection checks gate who
+  may submit or use Riot session material.
 - Server-side session encryption remains mandatory. Email delivery requires the
   service to retain the Riot session, unlike store checkers that keep sessions
   client-side, so AES-256-GCM with encryption keys held outside Supabase is the
@@ -58,18 +63,15 @@ project owner separately approves it.
 
 ### Current operating and deployment contract
 
-- Production starts with only the operator's verified Supabase user ID or email
-  in the Riot connection allowlist for approximately three weeks. Additional
-  users are added explicitly after that dogfood window; public magic-link signup
-  remains open throughout.
+- Public signup and Riot connection are available to authenticated accounts.
 - The only live Riot request path is the protected daily cron, scheduled for
   00:05 UTC. A per-user UTC-rotation database claim is authoritative even if the
   scheduler invokes the route more than once. No UI action, public API route,
   debug route, or polling loop may fetch a storefront.
 - Runtime configuration uses a public Supabase URL and publishable/legacy anon
   key, a server-only Supabase secret/legacy service-role key, the versioned
-  `SESSION_ENCRYPTION_KEY_V<n>` keyring and current version, the Riot connect
-  allowlist, Resend credentials, and `CRON_SECRET`. The server-side values remain
+  `SESSION_ENCRYPTION_KEY_V<n>` keyring and current version, Resend credentials,
+  and `CRON_SECRET`. The server-side values remain
   outside source control; encryption keys remain outside Supabase.
 - Supabase schema changes are applied only from the reviewed migration history.
   The full local and deployment procedure is maintained in the root README.
@@ -185,9 +187,8 @@ window.
 The pasted-export path is kept as a fallback, because the authentication endpoint
 sits behind Cloudflare fingerprinting and may begin refusing requests from
 datacenter IPs without warning; losing it would otherwise leave no way to
-connect. It is restricted to administrators, so ordinary allowlisted users see
-only the sign-in form. The existing fail-closed connect allowlist continues to
-gate both paths.
+connect. This original administrator restriction was later retired; authenticated
+users can use the fallback under the same ownership controls as sign-in.
 
 ## Version 2.5 decision addendum — interface rebuild, phased
 
@@ -215,8 +216,8 @@ no component migration begins until the surfaces it will migrate are stable.
 - No phase may introduce a Riot request path. The daily cron and the existing
   operator-triggered check remain the only ones, under the per-account
   per-rotation claim from the Version 2.3 addendum.
-- The fail-closed connect allowlist keeps gating both connection paths, and the
-  admin-only cookie-export fallback (Version 2.4) stays reachable.
+- Verified authentication, ownership checks, and session protections keep
+  gating both connection paths.
 - The §10 copy constraints apply to every screen this work touches.
 - Each phase lands with the suite green. No phase may leave the app unusable
   between merges; a half-migrated interface is an acceptable state, a broken
@@ -303,9 +304,8 @@ detection caused by the operating model.
 - **Public signup remains available.** The Version 2.0 website-wide
   invite-only statement in §8 is superseded. Public website signup, ordinary
   site auth, catalog browsing, watchlists, and other Riot-independent
-  functionality remain open. Riot **connection**, however, is protected by a
-  separate fail-closed server-side allowlist of verified user IDs and emails;
-  that narrow authorization boundary does not satisfy or replace the ship gate.
+  functionality remain open. The historical Riot connection cohort gate did
+  not satisfy or replace the ship gate and was later retired by Version 2.6.
 
 Encryption keys remain outside Supabase. Fixture-driven Phase 5 work must never
 persist keys in Supabase, introduce real credential/session material, make live
@@ -441,7 +441,7 @@ Phase 6 work.
 ## 3. Historical Version 2.0 environment variables
 
 This table records the original plan. The Version 2.2 operating contract above
-and the root README define the current versioned keyring, Resend, allowlist, and
+and the root README define the current versioned keyring, Resend, and
 cron configuration.
 
 Create `.env.local` (gitignored) and a committed `.env.example` with empty values.
@@ -644,7 +644,7 @@ Add/remove watch entries writing to `watchlist`; optimistic UI with rollback on 
 
 **Gate to unblock:** VPS reauth loop ≥14 consecutive unattended days, no manual login, no MFA prompt. Until the human confirms this, Track C stays closed.
 
-- **Phase 5 — Connect flow + consent + encrypted storage.** Consent screen (states: what's stored, that stored material can access the account and bypass MFA, lifespan, revocation, non-affiliation with Riot). Disconnect includes Riot "Sign out everywhere". Encryption: AES-256-GCM, per-row nonce, `user_id` as AAD, `session_key_version` populated; **key held outside Supabase** (KMS/envelope preferred). Signup **allowlisted/invite-only** for V1. Ship `SECURITY.md` + README threat model.
+- **Phase 5 — Connect flow + consent + encrypted storage.** Consent screen (states: what's stored, that stored material can access the account and bypass MFA, lifespan, revocation, non-affiliation with Riot). Disconnect includes Riot "Sign out everywhere". Encryption: AES-256-GCM, per-row nonce, `user_id` as AAD, `session_key_version` populated; **key held outside Supabase** (KMS/envelope preferred). Signup was originally restricted for V1 and was later opened. Ship `SECURITY.md` + README threat model.
 - **Phase 6 — Worker loop** (on the VPS, not Vercel). Daily after 00:00 UTC rotation; jittered per-connection delay; on success **persist the full rotated jar**, resolve level→skin UUIDs (Phase 2), hash the shop, dedup via the `notifications` unique constraint, capture Night Market + bundle. 3 consecutive failures → `REAUTH_REQUIRED`.
 - **Phase 7 — Email** (Resend, verified domain, bounce webhook). Reauth cadence: one email on entering `REAUTH_REQUIRED`, one reminder on day 7, then silence. Never more than two per episode.
 - **Phase 8 — Auth-health UI.** Connection status + reconnect; honest copy about the real session ceiling (§ copy rules).
@@ -733,11 +733,11 @@ value is the unattended check, so any connect flow must yield reusable session
 material — cookies or an exported JSON session — not a token that expires the
 same hour. That rules out redirect-URL paste as the whole answer.
 
-**Implemented 2026-08-20.** The session paste is no longer admin-gated. The
-connect allowlist is now the only gate on both the paste action
+**Implemented 2026-08-20.** The session paste is no longer admin-gated. At that
+time, a manually managed cohort gated both the paste action
 (`connectSubmittedRiotJar`) and the desktop capture token, and the panel
 explains how to export cookies for `auth.riotgames.com` as JSON without
-cloning the repo. `RIOT_ADMIN_EMAILS` and the `RiotAdminAllowlist` it fed were
+cloning the repo. `RIOT_ADMIN_EMAILS` and its administrator email gate were
 removed rather than left as an inert knob that documentation still described as
 protecting something.
 
@@ -745,9 +745,8 @@ The copy states plainly that a pasted session is live credentials and what VAL
 Checker does with it. That honesty is load-bearing: it is the difference
 between a security ask a player can consent to and one they cannot.
 
-Still open: whether the connect allowlist itself should stay. It currently
-limits Riot connection to explicitly listed accounts, so "anyone can use it"
-holds only for accounts on that list.
+**Resolved 2026-08-23.** The manually managed connection cohort was removed.
+Any authenticated VAL Checker account may now use the Riot connection flow.
 
 ## 13. Featured bundle and night market (implemented 2026-08-20)
 

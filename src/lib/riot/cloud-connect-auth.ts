@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { RiotConnectIdentity } from "@/src/lib/riot/connect-allowlist";
+import type { RiotConnectIdentity } from "@/src/lib/riot/connect-identity";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 
 export async function resolveCloudConnectIdentity(): Promise<RiotConnectIdentity | null> {
@@ -10,8 +10,5 @@ export async function resolveCloudConnectIdentity(): Promise<RiotConnectIdentity
   if (typeof claims?.sub !== "string") {
     return null;
   }
-  return {
-    email: typeof claims.email === "string" ? claims.email : undefined,
-    userId: claims.sub,
-  };
+  return { userId: claims.sub };
 }

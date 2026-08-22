@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { RiotConnectAllowlist } from "@/src/lib/riot/connect-allowlist";
 import {
   RiotConnectionService,
   RiotConsentRequiredError,
@@ -92,7 +91,6 @@ function buildService(
   return new RiotConnectionService(
     new ManualCookieProvider(),
     sessionStore,
-    new RiotConnectAllowlist({ RIOT_CONNECT_ALLOWED_USER_IDS: USER_ID }),
     undefined,
     login as RiotLoginProvider,
     pendingAuth,
@@ -233,7 +231,7 @@ describe("credential connect flow", () => {
     expect(sessions.store.save).not.toHaveBeenCalled();
   });
 
-  it("checks consent and the allowlist before touching the credential", async () => {
+  it("checks consent before touching the credential", async () => {
     const sessions = fakeSessionStore();
     const pending = fakePendingAuthStore();
     const submitCredentials = vi.fn();
@@ -251,18 +249,6 @@ describe("credential connect flow", () => {
         username: "operator",
       }),
     ).rejects.toBeInstanceOf(RiotConsentRequiredError);
-
-    await expect(
-      service.connectWithCredentials({
-        consentGranted: true,
-        identity: {
-          email: "public@example.com",
-          userId: "22222222-2222-4222-8222-222222222222",
-        },
-        password: PASSWORD,
-        username: "operator",
-      }),
-    ).rejects.toThrow();
 
     expect(submitCredentials).not.toHaveBeenCalled();
   });
