@@ -276,6 +276,13 @@ type NotificationRow = {
   emailed_at: string | null;
 };
 
+type AccountCreationNotificationRow = {
+  user_id: string;
+  signup_at: string;
+  delivery_attempted_at: string | null;
+  emailed_at: string | null;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -508,6 +515,15 @@ export interface Database {
         Update: Partial<NotificationRow>;
         Relationships: [];
       };
+      account_creation_notifications: {
+        Row: AccountCreationNotificationRow;
+        Insert: Pick<AccountCreationNotificationRow, "signup_at" | "user_id"> &
+          Partial<
+            Omit<AccountCreationNotificationRow, "signup_at" | "user_id">
+          >;
+        Update: Partial<AccountCreationNotificationRow>;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: {
@@ -675,6 +691,10 @@ export interface Database {
           notification_id: string;
           shop_check_id: string;
         }[];
+      };
+      claim_account_creation_notification: {
+        Args: { p_user_id: string };
+        Returns: { signup_at: string }[];
       };
     };
     Enums: {

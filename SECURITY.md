@@ -17,7 +17,10 @@ Riot's authentication and user-info hosts before storage so the session is
 bound to a stable PUUID; neither path fetches a storefront. Empty or malformed
 allowlist configuration fails closed. A client-visible eligibility flag is
 presentation only; the server repeats authorization at the trust boundary.
-Public signup and Riot-independent features are not allowlisted.
+Public signup and Riot-independent features are not allowlisted. A service-only
+database outbox records each initial Auth user creation and atomically permits
+one owner-notification attempt; ordinary logins and session refreshes create no
+outbox record.
 
 Live storefront access is confined to the protected automatic worker and the
 authenticated manual-refresh server action for allowlisted, connected accounts.
@@ -32,7 +35,7 @@ There is no polled, query-driven, or public debug request path to Riot.
 - Encryption keys come only from the application server's runtime secret configuration. They are a separate trust domain from Supabase.
 - The application server is the only component allowed to decrypt stored session material.
 - Submitted jars, fixtures, and test inputs are untrusted data even when they are checked into the repository.
-- Resend receives the verified destination email and rendered notification content, but never Riot cookies, tokens, authorization headers, or PUUIDs.
+- Resend receives the verified destination email and rendered notification content, but never Riot cookies, tokens, authorization headers, or PUUIDs. The owner notification contains only the signup timestamp and no account identity.
 - The separate cloud-browser service temporarily sees pixels, keyboard/touch events, and the resulting Riot cookie jar. It is therefore a password-equivalent trust boundary even though VAL Checker does not store the Riot password.
 
 ### Temporary cloud browser

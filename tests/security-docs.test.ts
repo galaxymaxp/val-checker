@@ -37,7 +37,9 @@ describe("security documentation", () => {
 
     expect(readme).toMatch(/private dogfooding/i);
     expect(readme).toMatch(/operator and explicitly trusted friends/i);
-    expect(readme).toMatch(/Public magic-link signup remains open/i);
+    expect(readme).toMatch(
+      /Public magic-link and Google signup remain open to everyone/i,
+    );
     expect(readme).toMatch(/session submission is a separate,\s+fail-closed capability/is);
     expect(readme).toMatch(
       /at most one storefront attempt per connected Riot\s+account and UTC store day/is,
@@ -87,6 +89,7 @@ describe("security documentation", () => {
       "RIOT_TLS_CIPHERS",
       "RESEND_API_KEY",
       "RESEND_FROM_EMAIL",
+      "VAL_CHECKER_OWNER_EMAIL",
       "CRON_SECRET",
     ];
 

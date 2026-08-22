@@ -36,7 +36,7 @@ describe("sign-in form", () => {
     ).toBeInTheDocument();
   });
 
-  it("requests a sign-in link for the typed email and confirms politely", async () => {
+  it("allows an unrestricted account signup with the typed email", async () => {
     const user = userEvent.setup();
     render(<SignInForm />);
 
@@ -56,9 +56,13 @@ describe("sign-in form", () => {
     ).toHaveAttribute("aria-live", "polite");
 
     expect(signInWithOtp).toHaveBeenCalledTimes(1);
-    expect(signInWithOtp).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "operator@example.com" }),
-    );
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: "operator@example.com",
+      options: {
+        emailRedirectTo: "http://localhost:3000/auth/confirm?next=/dashboard",
+        shouldCreateUser: true,
+      },
+    });
   });
 
   it("surfaces a failed link request as an alert", async () => {

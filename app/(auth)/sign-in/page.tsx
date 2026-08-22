@@ -45,11 +45,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             PASSWORDLESS ACCESS
           </p>
           <h1 className="text-4xl! font-semibold tracking-tight">
-            Sign in by email.
+            Create an account or sign in.
           </h1>
           <p className="text-ink-muted">
-            We send a one-time link. No password to remember, nothing to
-            install.
+            Continue with Google or use a one-time email link. No password to
+            remember, nothing to install.
           </p>
         </div>
 

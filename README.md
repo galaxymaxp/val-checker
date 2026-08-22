@@ -7,8 +7,8 @@ closed gates remain in [the roadmap](docs/roadmap.md).
 
 ## Operating policy
 
-Public magic-link signup remains open, but Riot connection is a separate,
-fail-closed private capability. Only identities in
+Public magic-link and Google signup remain open to everyone, but Riot
+connection is a separate, fail-closed private capability. Only identities in
 `RIOT_CONNECT_ALLOWED_USER_IDS` or `RIOT_CONNECT_ALLOWED_EMAILS` receive the
 browser-extension connection flow or cookie-JSON fallback. The server derives the
 identity from verified Supabase claims and repeats the allowlist check before it
@@ -117,8 +117,9 @@ server secret in a `NEXT_PUBLIC_` variable.
 | `RIOT_CLOUD_BROWSER_URL` | Server only | HTTPS origin of the separately deployed Singapore browser service. |
 | `RIOT_CLOUD_BROWSER_API_KEY` | Server only | Bearer key for the browser service control API; never expose it to clients. |
 | `RIOT_TLS_CIPHERS` | Server only | Optional TLS cipher order for Riot's auth host. Leave unset unless sign-in begins returning 403. |
-| `RESEND_API_KEY` | Server only | Resend API key used by the daily worker. |
+| `RESEND_API_KEY` | Server only | Resend API key used for owner and storefront notifications. |
 | `RESEND_FROM_EMAIL` | Server only | Sender identity on a verified Resend domain. |
+| `VAL_CHECKER_OWNER_EMAIL` | Server only | Recipient for one-time new-account notifications. |
 | `CRON_SECRET` | Server only | Random Vercel cron authentication secret of at least 16 characters. |
 
 Configure at least one public Supabase key, one elevated Supabase key, and one
@@ -199,8 +200,9 @@ stable PUUID uniqueness, pending reconnect targeting, and supporting indexes.
    the public catalog from a trusted server environment.
 2. Configure every required environment variable above in the Vercel project.
    Environment changes apply only to subsequent deployments.
-3. Verify the Resend sending domain and set `RESEND_FROM_EMAIL` to an identity on
-   that domain.
+3. Verify the Resend sending domain, set `RESEND_FROM_EMAIL` to an identity on
+   that domain, and set `VAL_CHECKER_OWNER_EMAIL` to the site owner's recipient
+   address.
 4. Set the Riot allowlist to the operator's identity only for the initial
    approximately three-week dogfood period.
 5. Deploy the Next.js application. The committed Vercel cron configuration runs
