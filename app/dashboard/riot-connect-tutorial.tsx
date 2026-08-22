@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
@@ -73,15 +72,36 @@ export function RiotConnectTutorial() {
               </button>
             </header>
             <div className="riot-tutorial-scroll">
-              <Image
-                alt="Four-step Riot account setup guide: download the VAL Checker helper, open browser extensions, load the unpacked helper, then sign in with Riot."
-                className="riot-tutorial-image"
-                height={1280}
-                loading="eager"
-                sizes="(max-width: 720px) calc(100vw - 32px), 900px"
-                src="/images/val-checker-riot-account-setup-guide.jpg"
-                width={1024}
-              />
+              <p className="riot-tutorial-intro">
+                Chrome cannot load the downloaded ZIP directly. Extract it
+                before choosing Load unpacked.
+              </p>
+              <ol className="riot-tutorial-steps">
+                <li>Download the VAL Checker extension ZIP.</li>
+                <li>
+                  Unzip it with <strong>Extract All</strong>.
+                </li>
+                <li>
+                  Open <code>chrome://extensions</code>.
+                </li>
+                <li>
+                  Enable <strong>Developer mode</strong>.
+                </li>
+                <li>
+                  Choose <strong>Load unpacked</strong>.
+                </li>
+                <li>
+                  Select the extracted VAL Checker extension folder—the folder
+                  containing <code>manifest.json</code>, not the ZIP.
+                </li>
+                <li>
+                  Return to VAL Checker. It should show{" "}
+                  <strong>Extension ready</strong>.
+                </li>
+                <li>
+                  Choose <strong>Sign in with Riot</strong>.
+                </li>
+              </ol>
             </div>
           </div>
         </div>,

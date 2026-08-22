@@ -50,6 +50,7 @@ const WEB_MESSAGE_SOURCE = "val-checker-web";
 const EXTENSION_MESSAGE_SOURCE = "val-checker-extension";
 
 type ExtensionState = "checking" | "missing" | "ready";
+const EXTENSION_REQUEST_TIMEOUT_MS = 5 * 60 * 1_000 + 5_000;
 
 function extensionFailureMessage(reason: unknown): string {
   switch (reason) {
@@ -58,11 +59,13 @@ function extensionFailureMessage(reason: unknown): string {
     case "denied":
       return "Riot did not complete that sign-in. Please try again.";
     case "expired":
-      return "That connection attempt expired. Please start again.";
+      return "Riot sign-in wasn’t detected. Try again or open How to connect.";
     case "capture-failed":
       return "Riot signed in, but no usable session was captured. Please try again.";
     case "open-failed":
       return "The Riot sign-in tab could not be opened. Check the extension and try again.";
+    case "connect-failed":
+      return "Riot signed in, but VAL Checker couldn’t save the account. Please try again.";
     default:
       return "The Riot session could not be connected. Please try again.";
   }
@@ -101,6 +104,8 @@ function RiotConnectionPanelState({
       Boolean(connectSession),
   );
   const [isPending, setIsPending] = useState(false);
+  const [isExtensionPending, setIsExtensionPending] = useState(false);
+  const [extensionAttemptFailed, setExtensionAttemptFailed] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [extensionState, setExtensionState] = useState<ExtensionState>(
@@ -166,18 +171,21 @@ function RiotConnectionPanelState({
         extensionRequestTimer.current = null;
       }
       setIsPending(false);
+      setIsExtensionPending(false);
       if (event.data.ok !== true) {
+        setExtensionAttemptFailed(true);
         setSuccess(undefined);
         setError(extensionFailureMessage(event.data.reason));
         return;
       }
 
+      setExtensionAttemptFailed(false);
       setError(undefined);
       setConnectionState("connected");
       setSuccess(
         targetConnectionId
           ? "This Riot account was reconnected."
-          : "Riot account connected. You can close the one-time sign-in flow.",
+          : "Riot account connected.",
       );
       setConsentGranted(false);
       router.refresh();
@@ -344,14 +352,18 @@ function RiotConnectionPanelState({
     }
 
     setIsPending(true);
+    setIsExtensionPending(true);
+    setExtensionAttemptFailed(false);
     setError(undefined);
     setSuccess(undefined);
 
     try {
       const result = await createCaptureToken();
       if (!result.ok) {
+        setExtensionAttemptFailed(true);
         setError(result.error);
         setIsPending(false);
+        setIsExtensionPending(false);
         return;
       }
 
@@ -362,8 +374,10 @@ function RiotConnectionPanelState({
         activeExtensionRequest.current = null;
         extensionRequestTimer.current = null;
         setIsPending(false);
-        setError("That connection attempt expired. Please start again.");
-      }, 10 * 60 * 1_000 + 5_000);
+        setIsExtensionPending(false);
+        setExtensionAttemptFailed(true);
+        setError("Riot sign-in wasn’t detected. Try again or open How to connect.");
+      }, EXTENSION_REQUEST_TIMEOUT_MS);
 
       window.postMessage(
         {
@@ -380,8 +394,10 @@ function RiotConnectionPanelState({
         window.location.origin,
       );
     } catch {
+      setExtensionAttemptFailed(true);
       setError("The browser extension could not start Riot sign-in.");
       setIsPending(false);
+      setIsExtensionPending(false);
     }
   }
 
@@ -546,16 +562,31 @@ function RiotConnectionPanelState({
                     />
                   </label>
                 </div>
-                <button
-                  className="riot-connect-primary-button"
-                  disabled={
-                    extensionState !== "ready" || !consentGranted || isPending
-                  }
-                  onClick={() => void connectViaExtension()}
-                  type="button"
-                >
-                  {isPending ? "Waiting for Riot sign-in..." : "Sign in with Riot"}
-                </button>
+                {isExtensionPending ? (
+                  <div className="riot-connect-progress" role="status">
+                    <span className="riot-connect-progress-title">
+                      <span aria-hidden="true" className="riot-connect-spinner" />
+                      Waiting for Riot sign-in…
+                    </span>
+                    <small>
+                      Finish signing in on the Riot tab we opened. This page
+                      will update automatically.
+                    </small>
+                  </div>
+                ) : (
+                  <button
+                    className="riot-connect-primary-button"
+                    disabled={
+                      extensionState !== "ready" ||
+                      !consentGranted ||
+                      isPending
+                    }
+                    onClick={() => void connectViaExtension()}
+                    type="button"
+                  >
+                    {extensionAttemptFailed ? "Try again" : "Sign in with Riot"}
+                  </button>
+                )}
                 <label className="consent-check">
                   <input
                     checked={consentGranted}
@@ -575,14 +606,15 @@ function RiotConnectionPanelState({
                       download
                       href="/downloads/val-checker-riot-extension.zip"
                     >
-                      Download helper
+                      Download &amp; Unzip Extension
                     </a>
                   ) : null}
                 </div>
                 {extensionState === "missing" ? (
                   <p className="riot-extension-note" role="note">
-                    The helper works in Chrome or Edge on a computer. Install it
-                    once, then refresh this page.
+                    Extract the ZIP first. In Chrome or Edge, Load unpacked must
+                    select the extracted folder containing manifest.json—not the
+                    ZIP file.
                   </p>
                 ) : null}
                 <p role="note">

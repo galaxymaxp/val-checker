@@ -819,6 +819,44 @@ section[id] {
   width: 100% !important;
 }
 
+.riot-connect-progress {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+}
+
+.riot-connect-progress-title {
+  align-items: center;
+  display: flex;
+  font-size: 0.95rem;
+  font-weight: 700;
+  gap: 0.65rem;
+}
+
+.riot-connect-progress small {
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding-left: 1.65rem;
+}
+
+.riot-connect-spinner {
+  animation: riot-connect-spin 0.9s linear infinite;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  border-top-color: var(--text);
+  height: 1rem;
+  width: 1rem;
+}
+
+@keyframes riot-connect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .riot-connect-help-row {
   align-items: center;
   display: flex;
@@ -920,11 +958,23 @@ section[id] {
   padding: clamp(0.5rem, 2vw, 1rem);
 }
 
-.riot-tutorial-image {
-  border-radius: calc(var(--radius) - 2px);
-  height: auto;
-  margin-inline: auto;
-  width: 100%;
+.riot-tutorial-intro {
+  color: var(--text-muted);
+  margin: 0 auto 1rem;
+  max-width: 42rem;
+}
+
+.riot-tutorial-steps {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 auto;
+  max-width: 42rem;
+  padding: 0 0 0 1.5rem;
+}
+
+.riot-tutorial-steps li {
+  line-height: 1.55;
+  padding-left: 0.35rem;
 }
 
 .riot-cookie-json-form {

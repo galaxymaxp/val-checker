@@ -6,12 +6,14 @@ directly to VAL Checker's one-time capture endpoint.
 
 ## Install (Chrome or Edge desktop)
 
-1. Download and unzip the extension package from VAL Checker.
-2. Open `chrome://extensions` or `edge://extensions`.
-3. Enable **Developer mode**, choose **Load unpacked**, and select the unzipped
-   `browser-extension` folder.
-4. Refresh the VAL Checker Riot connection page. It should say **Extension
-   ready**.
+1. Download the extension ZIP from VAL Checker.
+2. Unzip it with **Extract All**. Chrome cannot load the ZIP itself.
+3. Open `chrome://extensions` or `edge://extensions`.
+4. Enable **Developer mode**.
+5. Choose **Load unpacked**.
+6. Select the extracted `browser-extension` folder containing `manifest.json`.
+7. Return to VAL Checker. It should say **Extension ready**.
+8. Choose **Sign in with Riot**.
 
 The extension cannot be installed in Chrome on iPhone, iPad, or Android. This
 first automatic flow is desktop-only; the advanced cookie JSON fallback remains
@@ -24,6 +26,8 @@ available where cookie-export tooling exists.
 - Cookie access is limited to Riot Games hosts.
 - Session material is sent directly from the extension background worker to
   VAL Checker and is never exposed to the VAL Checker webpage.
-- The handoff token is owner-bound, single-use, and expires after ten minutes.
+- OAuth fragment values are inspected only inside the extension. Raw access or
+  ID tokens are never sent to the webpage, logged, or persisted.
+- The handoff token is owner-bound, single-use, and expires after five minutes.
 - Transient extension state is removed after success, failure, cancellation,
   or timeout.

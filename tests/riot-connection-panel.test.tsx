@@ -81,6 +81,12 @@ describe("Riot connection consent UI", () => {
     await user.click(screen.getByRole("button", { name: "Sign in with Riot" }));
 
     await waitFor(() => expect(createCaptureToken).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Waiting for Riot sign-in",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Finish signing in on the Riot tab we opened",
+    );
     const start = await waitFor(() => {
       const message = webMessages.find(
         (candidate) =>
@@ -135,7 +141,7 @@ describe("Riot connection consent UI", () => {
       await screen.findByText("Extension needed", {}, { timeout: 2_000 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Download helper" }),
+      screen.getByRole("link", { name: "Download & Unzip Extension" }),
     ).toHaveAttribute("href", "/downloads/val-checker-riot-extension.zip");
     expect(
       screen.getByRole("heading", { name: "Import cookie JSON" }),
@@ -167,10 +173,14 @@ describe("Riot connection consent UI", () => {
       screen.getByRole("dialog", { name: "How to connect your Riot account" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByAltText(/Four-step Riot account setup guide/i),
-    ).toHaveAttribute(
-      "src",
-      expect.stringContaining("val-checker-riot-account-setup-guide.jpg"),
+      screen.getByText(/Chrome cannot load the downloaded ZIP directly/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Unzip it with/i)).toHaveTextContent("Extract All");
+    expect(screen.getByText(/folder containing/i)).toHaveTextContent(
+      "manifest.json, not the ZIP",
+    );
+    expect(screen.getByText(/It should show/i)).toHaveTextContent(
+      "Extension ready",
     );
 
     await user.keyboard("{Escape}");
@@ -184,6 +194,63 @@ describe("Riot connection consent UI", () => {
       }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("turns an undetected extension callback into an actionable retry", async () => {
+    const user = userEvent.setup();
+    const createCaptureToken = vi.fn().mockResolvedValue({
+      ok: true,
+      token: "a".repeat(43),
+    });
+    let requestId = "";
+    const collectWebMessages = (event: MessageEvent) => {
+      if (event.data?.type === "VAL_CHECKER_RIOT_CONNECT_START") {
+        requestId = event.data.payload.requestId;
+      }
+    };
+    window.addEventListener("message", collectWebMessages);
+
+    render(
+      <RiotConnectionPanel
+        connectAllowed
+        createCaptureToken={createCaptureToken}
+        initialState="disconnected"
+      />,
+    );
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          source: "val-checker-extension",
+          type: "VAL_CHECKER_EXTENSION_READY",
+        },
+        origin: window.location.origin,
+        source: window,
+      }),
+    );
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Sign in with Riot" }));
+    await waitFor(() => expect(requestId).not.toBe(""));
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          ok: false,
+          reason: "expired",
+          requestId,
+          source: "val-checker-extension",
+          type: "VAL_CHECKER_RIOT_CONNECT_RESULT",
+        },
+        origin: window.location.origin,
+        source: window,
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Riot sign-in wasn’t detected",
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "How to connect" })).toBeEnabled();
+    window.removeEventListener("message", collectWebMessages);
   });
 
   it("makes web sign-in primary and cookie JSON an explicit fallback", async () => {
