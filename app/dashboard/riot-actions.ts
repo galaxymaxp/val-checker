@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
+import { mintCaptureToken } from "@/src/lib/desktop/capture-token";
 import {
   isRiotAdmin,
   loadRiotConnectAllowlist,
   type RiotConnectIdentity,
 } from "@/src/lib/riot/connect-allowlist";
+import { connectSubmittedRiotJar } from "@/src/lib/riot/connect-submitted-jar";
 import {
   type CredentialConnectResult,
   RiotConnectionService,
@@ -30,6 +32,7 @@ import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import type {
   RiotConnectionMutationResult,
   RiotCredentialConnectResult,
+  RiotDesktopCaptureTokenResult,
 } from "@/src/types/riot-connection";
 
 const CONNECT_FAILED_MESSAGE = "The Riot session could not be connected.";
@@ -229,72 +232,50 @@ export async function connectRiotSession(
       typeof claims?.email === "string" ? claims.email : undefined,
     userId,
   };
-  let allowlist;
 
-  try {
-    allowlist = loadRiotConnectAllowlist();
-    // Authorization happens before the submitted jar is read or transformed.
-    allowlist.assertAllowed(identity);
-  } catch {
-    return { error: "Riot connection access is not enabled.", ok: false };
-  }
+  // The allowlist, the admin-only gate on the raw jar path, and the jar
+  // validation itself are shared with /api/desktop/connect so the deep-link
+  // handshake cannot become a bypass of any of them.
+  const result = await connectSubmittedRiotJar(identity, submission);
 
-  // The raw jar paste is an admin-only fallback (roadmap Version 2.4). Ordinary
-  // allowlisted users connect through the sign-in form instead.
-  if (!isRiotAdmin(identity)) {
-    return { error: "Riot connection access is not enabled.", ok: false };
-  }
-
-  if (!isRecord(submission)) {
-    return { error: CONNECT_FAILED_MESSAGE, ok: false };
-  }
-
-  if (submission.consentGranted !== true) {
-    return {
-      error: "Please confirm consent before connecting.",
-      ok: false,
-    };
-  }
-
-  if (
-    typeof submission.serializedJar !== "string" ||
-    (submission.region !== undefined && typeof submission.region !== "string")
-  ) {
-    return { error: CONNECT_FAILED_MESSAGE, ok: false };
-  }
-
-  try {
-    const admin = createAdminSupabaseClient();
-    const store = new SupabaseEncryptedSessionStore(
-      admin,
-      new AesGcmSessionCipher(loadSessionKeyring()),
-    );
-    const service = new RiotConnectionService(
-      new ManualCookieProvider(),
-      store,
-      allowlist,
-      new SubmittedCookieProvider(),
-    );
-
-    await service.connect({
-      consentGranted: submission.consentGranted,
-      identity,
-      region: submission.region,
-      session: { serializedJar: submission.serializedJar },
-    });
-  } catch (error) {
-    if (error instanceof RiotConsentRequiredError) {
-      return {
-        error: "Please confirm consent before connecting.",
-        ok: false,
-      };
-    }
-
-    return { error: CONNECT_FAILED_MESSAGE, ok: false };
+  if (!result.ok) {
+    return result;
   }
 
   revalidatePath("/dashboard", "layout");
-  return { ok: true };
+  return result;
+}
+
+/**
+ * Mints the one-time token that starts the desktop deep-link handshake
+ * (valchecker://capture?token=...). The token is the proof of which signed-in
+ * user the captured jar belongs to, so it is minted behind the exact gates
+ * that guard the jar submission itself: the connect allowlist plus the
+ * admin-only gate on the raw jar path. The raw token is returned to the
+ * browser once and only its hash is stored; it is never logged.
+ */
+export async function createDesktopCaptureToken(): Promise<RiotDesktopCaptureTokenResult> {
+  const resolved = await resolveConnectIdentity();
+  if (!resolved.ok) {
+    return { error: resolved.error, ok: false };
+  }
+
+  if (!isRiotAdmin(resolved.identity)) {
+    return { error: "Riot connection access is not enabled.", ok: false };
+  }
+
+  try {
+    const token = await mintCaptureToken(
+      createAdminSupabaseClient(),
+      resolved.identity.userId,
+    );
+    return { ok: true, token };
+  } catch {
+    return {
+      error: "The desktop connection could not be started.",
+      ok: false,
+    };
+  }
 }
 
 export async function disconnectRiotSession(

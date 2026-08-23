@@ -123,6 +123,18 @@ type RiotPendingAuthRow = {
   expires_at: string;
 };
 
+/**
+ * One-time desktop capture hand-off. Holds a SHA-256 hash of the token; the
+ * raw bearer value is never stored anywhere.
+ */
+type DesktopCaptureTokenRow = {
+  token_hash: string;
+  user_id: string;
+  created_at: string;
+  expires_at: string;
+  consumed_at: string | null;
+};
+
 type ShopCheckRow = {
   id: string;
   connection_id: string;
@@ -278,6 +290,21 @@ export interface Database {
         Update: Partial<RiotPendingAuthRow>;
         Relationships: [];
       };
+      desktop_capture_tokens: {
+        Row: DesktopCaptureTokenRow;
+        Insert: Pick<
+          DesktopCaptureTokenRow,
+          "token_hash" | "user_id" | "expires_at"
+        > &
+          Partial<
+            Omit<
+              DesktopCaptureTokenRow,
+              "token_hash" | "user_id" | "expires_at"
+            >
+          >;
+        Update: Partial<DesktopCaptureTokenRow>;
+        Relationships: [];
+      };
       riot_run_logs: {
         Row: RiotRunLogRow;
         Insert: Pick<RiotRunLogRow, "user_id" | "connection_id" | "outcome"> &
@@ -325,6 +352,10 @@ export interface Database {
         Returns: number;
       };
       purge_expired_riot_pending_auth: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      purge_expired_desktop_capture_tokens: {
         Args: Record<PropertyKey, never>;
         Returns: number;
       };
