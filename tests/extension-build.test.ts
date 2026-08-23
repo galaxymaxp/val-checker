@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { inflateRawSync } from "node:zlib";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -10,6 +12,41 @@ import { EXTENSION_PACKAGES } from "@/src/lib/extension/browsers";
 const repoRoot = process.cwd();
 const distRoot = join(repoRoot, "browser-extension", "dist");
 const downloadRoot = join(repoRoot, "public", "downloads");
+
+/**
+ * The archives under public/downloads are committed artifacts: `next build`
+ * does not regenerate them, so Vercel ships exactly what is in git. Capture
+ * them before the build below overwrites them, so a stale commit is caught
+ * instead of silently handing users an old extension.
+ */
+const COMMITTED_ARCHIVES = new Map(
+  ["chromium", "firefox"].map((build) => {
+    const filename =
+      EXTENSION_PACKAGES[build as "chromium" | "firefox"].filename;
+    return [build, readFileSync(join(downloadRoot, filename))];
+  }),
+);
+
+/** Inflates every entry of a ZIP, keyed by file name. */
+function archiveContents(archive: Buffer) {
+  const contents = new Map<string, string>();
+  for (let index = 0; index < archive.length - 4; index += 1) {
+    if (archive.readUInt32LE(index) !== 0x04034b50) continue;
+    const method = archive.readUInt16LE(index + 8);
+    const compressedSize = archive.readUInt32LE(index + 18);
+    const nameLength = archive.readUInt16LE(index + 26);
+    const extraLength = archive.readUInt16LE(index + 28);
+    const nameEnd = index + 30 + nameLength;
+    const name = archive.toString("utf8", index + 30, nameEnd);
+    const bodyStart = nameEnd + extraLength;
+    const body = archive.subarray(bodyStart, bodyStart + compressedSize);
+    contents.set(
+      name,
+      (method === 8 ? inflateRawSync(body) : body).toString("utf8"),
+    );
+  }
+  return contents;
+}
 
 /** Reads the file names out of a ZIP central directory. */
 function archiveEntries(archive: Buffer) {
@@ -58,6 +95,24 @@ describe("extension build", () => {
       expect(entries).toEqual(
         (await readdir(join(distRoot, build))).sort(),
       );
+    }
+  });
+
+  it("keeps the committed archives in step with the sources", async () => {
+    // Compares inflated contents, not raw bytes, so a different zlib build
+    // cannot make this fail spuriously.
+    for (const build of ["chromium", "firefox"] as const) {
+      const committed = archiveContents(COMMITTED_ARCHIVES.get(build)!);
+      const names = await readdir(join(distRoot, build));
+
+      expect([...committed.keys()].sort()).toEqual(names.sort());
+      for (const name of names) {
+        const fresh = await readFile(join(distRoot, build, name), "utf8");
+        expect(
+          committed.get(name),
+          `public/downloads is stale for ${build}/${name}: run pnpm run extension:build and commit the archives`,
+        ).toBe(fresh);
+      }
     }
   });
 
