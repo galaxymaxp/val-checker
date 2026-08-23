@@ -2,8 +2,7 @@
   "manifest_version": 3,
   "name": "VAL Checker Riot Connect",
   "description": "Connects a Riot session to VAL Checker after you sign in on Riot's real website.",
-  "version": "1.1.0",
-  "minimum_chrome_version": "102",
+  "version": "1.2.0",
   "permissions": ["alarms", "cookies", "storage"],
   "host_permissions": [
     "https://auth.riotgames.com/*",
@@ -11,10 +10,6 @@
     "https://playvalorant.com/*",
     "https://val-checker-three.vercel.app/*"
   ],
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
   "content_scripts": [
     {
       "matches": ["https://val-checker-three.vercel.app/*"],

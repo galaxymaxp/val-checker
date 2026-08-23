@@ -18,6 +18,7 @@ test-results/
 .claude/settings.local.json
 
 # Desktop shell build output
+browser-extension/dist/
 desktop/dist/
 cloud-browser/dist/
 

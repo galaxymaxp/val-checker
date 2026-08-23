@@ -1,4 +1,5 @@
 import { classifyRiotAuthCallback } from "./auth-callback.js";
+import { browserApi, hasRiotHostAccess } from "./browser-api.js";
 
 const APP_ORIGIN = "https://val-checker-three.vercel.app";
 const CONNECT_API = `${APP_ORIGIN}/api/desktop/connect`;
@@ -73,12 +74,12 @@ function toCanonicalCookie(cookie) {
 }
 
 async function readJobs() {
-  const stored = await chrome.storage.session.get(JOBS_KEY);
+  const stored = await browserApi.storage.session.get(JOBS_KEY);
   return isRecord(stored[JOBS_KEY]) ? stored[JOBS_KEY] : {};
 }
 
 async function writeJobs(jobs) {
-  await chrome.storage.session.set({ [JOBS_KEY]: jobs });
+  await browserApi.storage.session.set({ [JOBS_KEY]: jobs });
 }
 
 async function findJobByRiotTab(tabId) {
@@ -93,7 +94,7 @@ async function findJobByRiotTab(tabId) {
 
 async function notifyResult(job, requestId, ok, reason) {
   try {
-    await chrome.tabs.sendMessage(job.originTabId, {
+    await browserApi.tabs.sendMessage(job.originTabId, {
       ok,
       reason,
       requestId,
@@ -107,19 +108,19 @@ async function notifyResult(job, requestId, ok, reason) {
 async function removeJob(requestId, jobs) {
   delete jobs[requestId];
   await writeJobs(jobs);
-  await chrome.alarms.clear(`${ALARM_PREFIX}${requestId}`);
+  await browserApi.alarms.clear(`${ALARM_PREFIX}${requestId}`);
 }
 
 async function finishJob(requestId, job, jobs, ok, reason) {
   await removeJob(requestId, jobs);
   await notifyResult(job, requestId, ok, reason);
   try {
-    await chrome.tabs.remove(job.riotTabId);
+    await browserApi.tabs.remove(job.riotTabId);
   } catch {
     // The Riot tab may already have been closed by the user.
   }
   try {
-    await chrome.tabs.update(job.originTabId, { active: true });
+    await browserApi.tabs.update(job.originTabId, { active: true });
   } catch {
     // Returning focus is convenience only.
   }
@@ -128,7 +129,7 @@ async function finishJob(requestId, job, jobs, ok, reason) {
 async function captureAndSubmit(requestId, job, jobs) {
   let cookies;
   try {
-    cookies = await chrome.cookies.getAll({ domain: "riotgames.com" });
+    cookies = await browserApi.cookies.getAll({ domain: "riotgames.com" });
   } catch {
     await finishJob(requestId, job, jobs, false, "capture-failed");
     return;
@@ -214,9 +215,22 @@ async function startConnect(payload, sender) {
     return;
   }
 
+  // Firefox can install the add-on without granting the Riot host permissions.
+  // Opening the Riot tab without them would sign the user in and then fail at
+  // capture, so the request stops here with an actionable reason instead.
+  if (!(await hasRiotHostAccess())) {
+    await notifyResult(
+      { originTabId: sender.tab.id },
+      payload.requestId,
+      false,
+      "permissions-needed",
+    );
+    return;
+  }
+
   // Create the tab before navigating so the owner-bound job exists even when
   // an existing Riot session redirects to the callback immediately.
-  const riotTab = await chrome.tabs.create({
+  const riotTab = await browserApi.tabs.create({
     active: true,
     openerTabId: sender.tab.id,
     url: "about:blank",
@@ -242,12 +256,12 @@ async function startConnect(payload, sender) {
     token: payload.token,
   };
   await writeJobs(jobs);
-  await chrome.alarms.create(`${ALARM_PREFIX}${payload.requestId}`, {
+  await browserApi.alarms.create(`${ALARM_PREFIX}${payload.requestId}`, {
     delayInMinutes: JOB_TTL_MS / 60_000,
   });
 
   try {
-    await chrome.tabs.update(riotTab.id, { url: RIOT_AUTH_URL });
+    await browserApi.tabs.update(riotTab.id, { url: RIOT_AUTH_URL });
   } catch {
     await finishJob(
       payload.requestId,
@@ -259,7 +273,7 @@ async function startConnect(payload, sender) {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+browserApi.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "VAL_CHECKER_RIOT_CONNECT_START") {
     void startConnect(message.payload, sender).catch(async () => {
       if (
@@ -290,13 +304,13 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   }
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+browserApi.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const url = changeInfo.url ?? tab.url;
   const outcome = classifyRiotAuthCallback(url);
   if (outcome) void handleRiotCallback(tabId, outcome);
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+browserApi.tabs.onRemoved.addListener((tabId) => {
   void findJobByRiotTab(tabId).then(async (match) => {
     if (!match) return;
     await removeJob(match.requestId, match.jobs);
@@ -309,7 +323,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   });
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+browserApi.alarms.onAlarm.addListener((alarm) => {
   if (!alarm.name.startsWith(ALARM_PREFIX)) return;
   const requestId = alarm.name.slice(ALARM_PREFIX.length);
   void readJobs().then(async (jobs) => {

@@ -1,6 +1,11 @@
 // This content script runs on Riot's callback page even when the page itself
 // renders a 404. It sends only a safe outcome; the URL fragment and tokens
 // never leave the extension's trusted context.
+//
+// Content scripts cannot import modules; see browser-api.js for the shared
+// rationale behind this namespace pickup.
+const browserApi = globalThis.browser ?? globalThis.chrome;
+
 function callbackOutcome() {
   const segments = window.location.pathname.split("/").filter(Boolean);
   const locale = /^[a-z]{2}(?:-[a-z]{2})?$/i;
@@ -30,7 +35,7 @@ function callbackOutcome() {
 
 const outcome = callbackOutcome();
 if (outcome) {
-  void chrome.runtime
+  void browserApi.runtime
     .sendMessage({ outcome, type: "VAL_CHECKER_RIOT_CALLBACK_OBSERVED" })
     .catch(() => {
       // The extension may have been reloaded while this page was open.

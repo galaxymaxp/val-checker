@@ -4,9 +4,25 @@ import Image from "next/image";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
-export function RiotConnectTutorial() {
+import { ExtensionDownload } from "@/app/dashboard/extension-download";
+import type { BrowserTarget } from "@/app/dashboard/use-browser-target";
+import {
+  browserProfile,
+  type SupportedBrowser,
+} from "@/src/lib/extension/browsers";
+
+interface RiotConnectTutorialProps {
+  readonly select: (browser: SupportedBrowser) => void;
+  readonly target: BrowserTarget;
+}
+
+export function RiotConnectTutorial({
+  select,
+  target,
+}: RiotConnectTutorialProps) {
   const [isOpen, setIsOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -19,9 +35,24 @@ export function RiotConnectTutorial() {
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setIsOpen(false);
-      if (event.key === "Tab") {
+      if (event.key !== "Tab") return;
+
+      // The dialog now carries its own controls, so Tab cycles within them
+      // instead of pinning focus to Close.
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        "a[href], button:not(:disabled)",
+      );
+      if (!focusable || focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
         event.preventDefault();
-        closeButtonRef.current?.focus();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
@@ -32,6 +63,9 @@ export function RiotConnectTutorial() {
       trigger?.focus();
     };
   }, [isOpen]);
+
+  const profile = browserProfile(target.browser);
+  const showSteps = target.resolved && !target.mobile && !target.unsupported;
 
   return (
     <>
@@ -55,7 +89,7 @@ export function RiotConnectTutorial() {
           }}
           role="dialog"
         >
-          <div className="riot-tutorial-dialog">
+          <div className="riot-tutorial-dialog" ref={dialogRef}>
             <header className="riot-tutorial-header">
               <div>
                 <h2 id="riot-tutorial-title">
@@ -73,15 +107,28 @@ export function RiotConnectTutorial() {
               </button>
             </header>
             <div className="riot-tutorial-scroll">
-              <Image
-                alt="Eight-step guide to download, unzip, and load the VAL Checker extension before signing in with Riot."
-                className="riot-tutorial-image"
-                height={1024}
-                loading="eager"
-                sizes="(max-width: 767px) 832px, 900px"
-                src="/images/val-checker-riot-account-setup-guide.png"
-                width={1536}
+              <ExtensionDownload
+                select={select}
+                target={target}
               />
+              {showSteps && profile ? (
+                <ol className="riot-tutorial-steps">
+                  {profile.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              ) : null}
+              {profile?.build === "chromium" ? (
+                <Image
+                  alt="Eight-step guide to download, unzip, and load the VAL Checker extension before signing in with Riot."
+                  className="riot-tutorial-image"
+                  height={1024}
+                  loading="eager"
+                  sizes="(max-width: 767px) 832px, 900px"
+                  src="/images/val-checker-riot-account-setup-guide.png"
+                  width={1536}
+                />
+              ) : null}
             </div>
           </div>
         </div>,

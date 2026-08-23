@@ -11,6 +11,7 @@
     "dev": "next dev",
     "build": "next build",
     "desktop": "node desktop/scripts/launch.mjs",
+    "extension:build": "node scripts/build-extension.mjs",
     "auth:verify": "node scripts/verify-magic-link.mjs",
     "hero:renders": "node --experimental-strip-types scripts/fetch-hero-renders.ts",
     "start": "next start",

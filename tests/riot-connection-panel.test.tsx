@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RiotConnectionPanel } from "@/app/dashboard/riot-connection-panel";
 
@@ -11,6 +11,20 @@ const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
 }));
+
+const CHROME_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+function setUserAgent(userAgent: string) {
+  Object.defineProperty(window.navigator, "userAgent", {
+    configurable: true,
+    value: userAgent,
+  });
+}
+
+beforeEach(() => {
+  setUserAgent(CHROME_UA);
+});
 
 afterEach(() => {
   cleanup();
@@ -139,16 +153,17 @@ describe("Riot connection consent UI", () => {
     expect(
       await screen.findByText("Extension needed", {}, { timeout: 2_000 }),
     ).toBeInTheDocument();
-    const download = screen.getByRole("link", {
-      name: "Download & Unzip Extension",
-    });
+    expect(
+      await screen.findByText("Chrome detected", {}, { timeout: 2_000 }),
+    ).toBeInTheDocument();
+    const download = screen.getByRole("link", { name: "Download for Chrome" });
     expect(download).toHaveAttribute(
       "href",
-      "/downloads/val-checker-riot-extension.zip",
+      "/downloads/val-checker-chromium-extension.zip",
     );
     expect(download).toHaveAttribute(
       "download",
-      "VAL Checker Extension (UNZIP ME).zip",
+      "val-checker-chromium-extension.zip",
     );
 
     const signIn = screen.getByRole("button", { name: "Sign in with Riot" });
@@ -166,6 +181,177 @@ describe("Riot connection consent UI", () => {
     expect(
       screen.queryByRole("textbox", { name: "Riot cookie JSON" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("labels the download for each detected browser without saying Chromium", async () => {
+    const cases = [
+      {
+        expected: "Microsoft Edge detected",
+        href: "/downloads/val-checker-chromium-extension.zip",
+        label: "Download for Microsoft Edge",
+        userAgent: `${CHROME_UA} Edg/126.0.0.0`,
+      },
+      {
+        expected: "Opera GX detected",
+        href: "/downloads/val-checker-chromium-extension.zip",
+        label: "Download for Opera GX",
+        userAgent: `${CHROME_UA} OPR/112.0.0.0 OPX/112.0.0.0`,
+      },
+      {
+        expected: "Firefox detected",
+        href: "/downloads/val-checker-firefox-extension-unsigned.zip",
+        label: "Install for Firefox",
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+      },
+    ];
+
+    for (const scenario of cases) {
+      setUserAgent(scenario.userAgent);
+      render(
+        <RiotConnectionPanel
+          createCaptureToken={vi.fn()}
+          initialState="disconnected"
+        />,
+      );
+
+      expect(
+        await screen.findByText(scenario.expected, {}, { timeout: 2_000 }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: scenario.label }),
+      ).toHaveAttribute("href", scenario.href);
+      expect(screen.queryByText(/Chromium detected/)).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("keeps the download reachable when the browser cannot be identified", async () => {
+    const user = userEvent.setup();
+    setUserAgent("Mozilla/5.0 (Unknown) SomeUnlistedBrowser/1.0");
+    render(
+      <RiotConnectionPanel
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Choose your browser", {}, { timeout: 2_000 }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Chrome / Chromium" }));
+
+    expect(screen.getByText("Chrome selected")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Download for Chrome" }),
+    ).toHaveAttribute("href", "/downloads/val-checker-chromium-extension.zip");
+  });
+
+  it("lets a detected browser be overridden by hand", async () => {
+    const user = userEvent.setup();
+    render(
+      <RiotConnectionPanel
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Chrome detected", {}, { timeout: 2_000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Using another browser?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Firefox" }));
+
+    expect(screen.getByText("Firefox selected")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Install for Firefox" }),
+    ).toHaveAttribute(
+      "href",
+      "/downloads/val-checker-firefox-extension-unsigned.zip",
+    );
+  });
+
+  it("refuses to hand a Chromium package to Safari or a phone", async () => {
+    setUserAgent(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+    );
+    render(
+      <RiotConnectionPanel
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+    expect(
+      await screen.findByText(
+        "This browser isn’t supported yet.",
+        {},
+        { timeout: 2_000 },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    cleanup();
+
+    setUserAgent(
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+    );
+    render(
+      <RiotConnectionPanel
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+    expect(
+      await screen.findByText(
+        "Riot connection currently requires a desktop browser.",
+        {},
+        { timeout: 2_000 },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("shows the detected browser's own steps inside the tutorial", async () => {
+    const user = userEvent.setup();
+    setUserAgent(`${CHROME_UA} Edg/126.0.0.0`);
+    render(
+      <RiotConnectionPanel
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "How to connect" }));
+    const dialog = screen.getByRole("dialog", {
+      name: "How to connect your Riot account",
+    });
+    expect(dialog).toHaveTextContent("Open edge://extensions.");
+    expect(dialog).not.toHaveTextContent("chrome://extensions");
+    expect(
+      screen.getByRole("link", { name: "Download for Microsoft Edge" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    cleanup();
+
+    setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+    );
+    render(
+      <RiotConnectionPanel
+        createCaptureToken={vi.fn()}
+        initialState="disconnected"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "How to connect" }));
+    const firefoxDialog = screen.getByRole("dialog", {
+      name: "How to connect your Riot account",
+    });
+    expect(firefoxDialog).toHaveTextContent(
+      "Open about:debugging#/runtime/this-firefox.",
+    );
+    expect(firefoxDialog).toHaveTextContent("Load Temporary Add-on");
+    expect(firefoxDialog).toHaveTextContent(/development install/i);
+    expect(firefoxDialog.querySelector("img")).toBeNull();
   });
 
   it("places consent after the primary action and opens the setup guide", async () => {

@@ -14,11 +14,11 @@ material. One-time capture tokens, explicit consent, bounded input validation,
 owner-scoped database access, and encrypted session storage remain required.
 
 The private browser extension is the primary connection method. It opens Riot's
-real sign-in page in the user's normal Chrome or Edge browser, so Google sign-in,
+real sign-in page in the user's normal desktop browser, so Google sign-in,
 MFA, and CAPTCHA remain normal human interactions on Riot's site. The extension
 does not read the password, MFA code, CAPTCHA, keyboard, or mouse. After Riot's
 successful redirect, it sends the complete renewable cookie jar directly from
-its background worker to an owner-bound, single-use VAL Checker endpoint. The
+its background context to an owner-bound, single-use VAL Checker endpoint. The
 jar is never exposed to the VAL Checker webpage. Manual cookie JSON remains the
 advanced and mobile fallback.
 
@@ -156,18 +156,33 @@ fixture, snapshot, command, or debug route.
 
 ## Private browser extension
 
-The production connection page offers
-`/downloads/val-checker-riot-extension.zip`. Unzip it, open
-`chrome://extensions` or `edge://extensions`, enable Developer mode, choose
-**Load unpacked**, and select the unzipped `browser-extension` folder. Refresh
-VAL Checker once; the connection card should report **Extension ready**.
+One shared implementation in `browser-extension/src` produces two packages via
+`pnpm run extension:build`:
 
-After that one-time setup, **Open Riot sign-in** handles the full flow: Riot tab
+| Build    | Browsers                                                   | Archive                                       |
+| -------- | ---------------------------------------------------------- | --------------------------------------------- |
+| chromium | Chrome, Edge, Brave, Opera, Opera GX, other Chromium forks | `val-checker-chromium-extension.zip`          |
+| firefox  | Firefox                                                     | `val-checker-firefox-extension-unsigned.zip`  |
+
+The connection card detects the browser and offers the right package with that
+browser's own wording, extensions URL, and steps; a manual picker is always
+present so a failed detection never blocks the download. Unrecognised browsers
+get a Chrome/Chromium-or-Firefox choice, Safari is told it is unsupported, and
+mobile browsers are told the flow is desktop-only rather than being handed an
+archive they cannot use.
+
+For Chromium browsers, unzip the archive first, open the browser's extensions
+page, enable Developer mode, choose **Load unpacked**, and select the extracted
+folder containing `manifest.json`. Firefox has no signed add-on yet, so its
+artifact is a development build loaded through
+`about:debugging#/runtime/this-firefox`; see `browser-extension/README.md` for
+the production distribution steps that are still outstanding.
+
+After that one-time setup, **Sign in with Riot** handles the full flow: Riot tab
 open, human sign-in, cookie capture, direct submission, Riot tab close, and
 dashboard refresh. The pairing token expires after ten minutes and is consumed
-atomically on its first submission. Chrome on iPhone, iPad, and Android does not
-support this extension. This first automatic flow is desktop-only; the advanced
-JSON fallback remains available where cookie-export tooling exists.
+atomically on its first submission. The extension flow is desktop-only; the
+advanced JSON fallback remains available where cookie-export tooling exists.
 
 ## Database migrations
 

@@ -896,6 +896,66 @@ section[id] {
   font-size: 0.84rem;
 }
 
+/* Browser-aware extension download: detected label, action, manual escape. */
+
+.riot-browser-picker {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+
+.riot-browser-detected {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.riot-browser-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.riot-browser-choice {
+  font-size: 0.88rem;
+  padding: 0.6rem 1.1rem;
+}
+
+.riot-browser-supported,
+.riot-browser-switch {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.riot-browser-switch-option {
+  background: none !important;
+  border: 0 !important;
+  color: var(--text-muted) !important;
+  font: inherit !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  width: auto !important;
+}
+
+.riot-browser-switch-option:hover:not(:disabled) {
+  color: var(--text) !important;
+  transform: none !important;
+}
+
+.riot-tutorial-steps {
+  color: var(--text-muted);
+  display: grid;
+  font-size: 0.9rem;
+  gap: 0.45rem;
+  line-height: 1.55;
+  list-style: decimal;
+  margin: 1rem 0;
+  padding-left: 1.35rem;
+}
+
 .riot-fixture-connect {
   display: grid;
   gap: 0.8rem;
@@ -1148,6 +1208,18 @@ section[id] {
 
   .riot-connect-help-row .riot-connect-download-link,
   .riot-connect-help-row .riot-tutorial-trigger {
+    width: 100%;
+  }
+
+  .riot-browser-picker,
+  .riot-browser-choices {
+    justify-items: stretch;
+    width: 100%;
+  }
+
+  .riot-browser-picker .riot-connect-download-link,
+  .riot-browser-choices .riot-browser-choice {
+    flex: 1 1 12rem;
     width: 100%;
   }
 

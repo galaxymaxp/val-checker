@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { ExtensionDownload } from "@/app/dashboard/extension-download";
 import { RiotConnectTutorial } from "@/app/dashboard/riot-connect-tutorial";
+import { useBrowserTarget } from "@/app/dashboard/use-browser-target";
+import { browserProfile } from "@/src/lib/extension/browsers";
 import type {
   RiotCaptureTokenResult,
   RiotConnectionMutationResult,
@@ -61,6 +64,8 @@ function extensionFailureMessage(reason: unknown): string {
       return "Riot sign-in wasn’t detected. Try again or open How to connect.";
     case "capture-failed":
       return "Riot signed in, but no usable session was captured. Please try again.";
+    case "permissions-needed":
+      return "Allow the extension to access Riot Games in your browser’s add-on settings, then try again.";
     case "open-failed":
       return "The Riot sign-in tab could not be opened. Check the extension and try again.";
     case "connect-failed":
@@ -111,6 +116,15 @@ function RiotConnectionPanelState({
   const [extensionState, setExtensionState] = useState<ExtensionState>(
     createCaptureToken ? "checking" : "missing",
   );
+  const { select: selectBrowser, target: browserTarget } = useBrowserTarget();
+  // The nudge follows the detected browser: Firefox installs an add-on rather
+  // than unzipping a folder, and a phone cannot install either build.
+  const installHint =
+    browserTarget.mobile || browserTarget.unsupported
+      ? "Riot connection requires a supported desktop browser."
+      : browserProfile(browserTarget.browser)?.build === "firefox"
+        ? "Install the extension first."
+        : "Download and unzip the extension first.";
   const activeExtensionRequest = useRef<string | null>(null);
   const extensionRequestTimer = useRef<number | null>(null);
   const extensionDownloadRef = useRef<HTMLAnchorElement>(null);
@@ -612,9 +626,7 @@ function RiotConnectionPanelState({
                         void connectViaExtension();
                       }}
                       title={
-                        extensionState === "missing"
-                          ? "Download and unzip the extension first"
-                          : undefined
+                        extensionState === "missing" ? installHint : undefined
                       }
                       type="button"
                     >
@@ -625,7 +637,7 @@ function RiotConnectionPanelState({
                     {extensionState === "missing" &&
                     showExtensionInstallHint ? (
                       <p className="riot-extension-install-hint" role="status">
-                        Download and unzip the extension first.
+                        {installHint}
                       </p>
                     ) : null}
                   </div>
@@ -641,32 +653,22 @@ function RiotConnectionPanelState({
                     so it can check this account&apos;s store.
                   </span>
                 </label>
-                <div className="riot-connect-help-row">
-                  <RiotConnectTutorial />
-                  {extensionState === "missing" ? (
-                    <a
-                      className={`riot-connect-download-link${
-                        showExtensionInstallHint
-                          ? " riot-connect-download-link-highlighted"
-                          : ""
-                      }`}
-                      download="VAL Checker Extension (UNZIP ME).zip"
-                      href="/downloads/val-checker-riot-extension.zip"
-                      onBlur={() => setShowExtensionInstallHint(false)}
-                      onFocus={() => setShowExtensionInstallHint(true)}
-                      ref={extensionDownloadRef}
-                    >
-                      Download &amp; Unzip Extension
-                    </a>
-                  ) : null}
-                </div>
                 {extensionState === "missing" ? (
-                  <p className="riot-extension-note" role="note">
-                    Extract the ZIP first. In Chrome or Edge, Load unpacked must
-                    select the extracted folder containing manifest.json—not the
-                    ZIP file.
-                  </p>
+                  <ExtensionDownload
+                    downloadRef={extensionDownloadRef}
+                    highlighted={showExtensionInstallHint}
+                    onBlur={() => setShowExtensionInstallHint(false)}
+                    onFocus={() => setShowExtensionInstallHint(true)}
+                    select={selectBrowser}
+                    target={browserTarget}
+                  />
                 ) : null}
+                <div className="riot-connect-help-row">
+                  <RiotConnectTutorial
+                    select={selectBrowser}
+                    target={browserTarget}
+                  />
+                </div>
                 <p role="note">
                   After sign-in, this page refreshes automatically.
                 </p>
