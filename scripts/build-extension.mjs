@@ -152,7 +152,15 @@ export async function buildExtension() {
   );
   const sources = await Promise.all(
     sourceNames.map(async (name) => ({
-      data: await readFile(join(sourceDir, name)),
+      // Normalise to LF so the archives are identical whether the checkout
+      // converted line endings (Windows autocrlf) or not.
+      data: Buffer.from(
+        (await readFile(join(sourceDir, name), "utf8")).replaceAll(
+          "\r\n",
+          "\n",
+        ),
+        "utf8",
+      ),
       name,
     })),
   );
