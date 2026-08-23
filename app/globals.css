@@ -1277,14 +1277,25 @@ section[id] {
   /* Everything below is driven off the two custom properties the component
      sets per card: the signed distance from the featured slot, and the
      unsigned one. Cards further out step sideways, drop, turn away, shrink,
-     dim, and fall behind -- all from the same pair of numbers. */
+     dim, and fall behind -- all from the same pair of numbers. The two hover
+     knobs fold into the same expressions rather than restating them. */
+  --fan-lift: 0px;
+  --fan-boost: 0;
+
   opacity: calc(1 - var(--fan-depth) * 0.2);
   transform: translateX(calc(var(--fan-offset) * var(--fan-step) * var(--fan-w)))
-    translateY(calc(var(--fan-depth) * var(--fan-h) * 0.09))
+    translateY(
+      calc(var(--fan-depth) * var(--fan-h) * 0.09 + var(--fan-lift))
+    )
     rotateY(calc(var(--fan-offset) * -8deg))
     rotateZ(calc(var(--fan-offset) * 6deg))
-    scale(calc(1 - var(--fan-depth) * 0.15));
+    scale(calc(1 - var(--fan-depth) * 0.15 + var(--fan-boost)));
   z-index: calc(10 - var(--fan-depth));
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    opacity var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
   /* `translate` composes ahead of `transform`, so the float never has to
      restate the placement above. The delay is seeded negative per slot, so
      every card is already mid-drift and no two rise together. */
@@ -1305,6 +1316,28 @@ section[id] {
   box-shadow:
     0 0 52px -4px rgba(255, 255, 255, 0.14),
     0 34px 74px -32px rgba(0, 0, 0, 0.95);
+}
+
+/* Hovering lifts the card clear of the fan, brings it to full strength, and
+   pulls it in front of its neighbours -- a back card would otherwise rise
+   into the featured card's shadow and never be seen. It goes opaque for the
+   same reason the featured card does: lifted over another weapon, a
+   translucent card reads as one picture with it. */
+.skin-fan-card:hover {
+  --fan-lift: calc(var(--fan-h) * -0.05);
+  --fan-boost: 0.06;
+
+  z-index: 20;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: linear-gradient(
+      rgba(255, 255, 255, 0.09),
+      rgba(255, 255, 255, 0.09)
+    ),
+    var(--bg);
+  opacity: 1;
+  box-shadow:
+    0 0 56px -4px rgba(255, 255, 255, 0.16),
+    0 36px 76px -30px rgba(0, 0, 0, 0.95);
 }
 
 @keyframes skin-fan-float {

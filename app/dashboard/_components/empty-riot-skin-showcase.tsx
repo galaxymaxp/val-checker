@@ -18,6 +18,14 @@ const FEATURED_INDEX = 2;
 const SWAP_MIN_MS = 4_000;
 const SWAP_MAX_MS = 7_000;
 
+/**
+ * Floor between two hover-driven swaps of the same card. A card that is still
+ * crossfading refuses on its own; this is for the case where the incoming art
+ * was already cached and landed instantly, so wiggling the pointer over one
+ * card cannot machine-gun through the pool.
+ */
+const HOVER_COOLDOWN_MS = 500;
+
 interface EmptyRiotSkinShowcaseProps {
   readonly skins: readonly ShowcaseSkinView[];
 }
@@ -88,6 +96,8 @@ export function EmptyRiotSkinShowcase({ skins }: EmptyRiotSkinShowcaseProps) {
   /** What each card currently shows, mirrored so swaps stay pure. */
   const shown = useRef<ShowcaseSkinView[]>([]);
   const lastSwapped = useRef(0);
+  /** When each card last swapped because the pointer entered it. */
+  const lastHovered = useRef<number[]>([]);
 
   useEffect(() => {
     const inFan = new Set(opening.map((skin) => skin.skinUuid));
@@ -211,6 +221,39 @@ export function EmptyRiotSkinShowcase({ skins }: EmptyRiotSkinShowcaseProps) {
     }
   }
 
+  /**
+   * Hovering a card deals it a new skin. Decorative and pointer-only: the fan
+   * is `aria-hidden`, so there is nothing here a keyboard or screen reader
+   * user is missing -- the timer deals the same cards to everyone anyway.
+   */
+  function swapOnHover(cardIndex: number) {
+    if (!motionAllowed || skins.length <= CARD_COUNT) {
+      return;
+    }
+
+    const card = cards[cardIndex];
+    const intended = shown.current[cardIndex];
+
+    // Still crossfading the last one in. Let it land before dealing again,
+    // otherwise the card would drop a skin it never finished showing.
+    if (
+      !card ||
+      !intended ||
+      card.faces[card.active]?.skinUuid !== intended.skinUuid
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (now - (lastHovered.current[cardIndex] ?? 0) < HOVER_COOLDOWN_MS) {
+      return;
+    }
+
+    lastHovered.current[cardIndex] = now;
+    drawInto(cardIndex);
+  }
+
   function revealFace(cardIndex: number, faceIndex: number) {
     setCards((current) => {
       const card = current[cardIndex];
@@ -266,6 +309,9 @@ export function EmptyRiotSkinShowcase({ skins }: EmptyRiotSkinShowcaseProps) {
           <div
             className="skin-fan-card"
             data-featured={cardIndex === FEATURED_INDEX}
+            onMouseEnter={() => {
+              swapOnHover(cardIndex);
+            }}
             // Cards are fixed slots in the fan, not a list that reorders; the
             // slot is the identity.
             key={cardIndex}

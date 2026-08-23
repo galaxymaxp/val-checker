@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EmptyRiotSkinShowcase } from "@/app/dashboard/_components/empty-riot-skin-showcase";
@@ -25,6 +25,15 @@ function visibleSkins(): string[] {
     const source = face?.querySelector("img")?.getAttribute("src") ?? "";
 
     return [decodeURIComponent(source)];
+  });
+}
+
+/** React derives onMouseEnter from mouseover, so that is what has to fire. */
+async function hover(cardIndex: number) {
+  const card = document.querySelectorAll(".skin-fan-card")[cardIndex];
+
+  await act(async () => {
+    fireEvent.mouseOver(card);
   });
 }
 
@@ -212,6 +221,71 @@ describe("EmptyRiotSkinShowcase", () => {
       expect(visibleSkins()).not.toContain(placeholderSource);
       expect(new Set(visibleSkins()).size).toBe(CARD_COUNT);
     }
+  });
+
+  it("deals a card a new skin when the pointer enters it", async () => {
+    render(<EmptyRiotSkinShowcase skins={pool} />);
+
+    const before = visibleSkins();
+
+    await hover(1);
+
+    // The incoming skin waits on the hidden face, as it does for the timer.
+    expect(visibleSkins()).toEqual(before);
+
+    const incoming = document
+      .querySelectorAll(".skin-fan-card")[1]
+      .querySelector<HTMLImageElement>('.skin-fan-face[data-active="false"] img');
+    expect(incoming).not.toBeNull();
+
+    await act(async () => {
+      setNaturalSize(incoming!, 200, 46);
+      incoming?.dispatchEvent(new Event("load"));
+    });
+
+    const after = visibleSkins();
+    expect(after[1]).not.toBe(before[1]);
+    // Only the hovered card changed.
+    expect(after.filter((source, index) => source !== before[index])).toHaveLength(
+      1,
+    );
+  });
+
+  it("refuses a second deal until the first has landed", async () => {
+    render(<EmptyRiotSkinShowcase skins={pool} />);
+
+    await hover(1);
+
+    const pending = document
+      .querySelectorAll(".skin-fan-card")[1]
+      .querySelector('.skin-fan-face[data-active="false"] img')
+      ?.getAttribute("src");
+
+    // Wiggling the pointer must not drop a skin the card never showed.
+    await hover(1);
+    await hover(1);
+
+    expect(
+      document
+        .querySelectorAll(".skin-fan-card")[1]
+        .querySelector('.skin-fan-face[data-active="false"] img')
+        ?.getAttribute("src"),
+    ).toBe(pending);
+  });
+
+  it("does not deal on hover when the user prefers reduced motion", async () => {
+    stubReducedMotion(true);
+    render(<EmptyRiotSkinShowcase skins={pool} />);
+
+    const before = visibleSkins();
+
+    await hover(1);
+    await hover(3);
+
+    expect(visibleSkins()).toEqual(before);
+    expect(
+      document.querySelectorAll('.skin-fan-face[data-active="false"]'),
+    ).toHaveLength(0);
   });
 
   it("holds the fan still when the user prefers reduced motion", async () => {
