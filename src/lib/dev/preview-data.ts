@@ -1,5 +1,11 @@
-import { isDevPreviewNightMarket } from "@/src/lib/dev/preview";
-import type { InventoryTileView } from "@/src/types/catalog-view";
+import {
+  isDevPreviewEmptyState,
+  isDevPreviewNightMarket,
+} from "@/src/lib/dev/preview";
+import type {
+  InventoryTileView,
+  ShowcaseSkinView,
+} from "@/src/types/catalog-view";
 import type { RiotAccountView } from "@/src/lib/riot/connection-state";
 import type { DailyShopView } from "@/src/lib/storefront/daily-shop";
 import type { StorefrontDashboardStatus } from "@/src/lib/storefront/dashboard-status";
@@ -23,6 +29,11 @@ function storeDay(now: Date): {
 
 export function previewAccounts(now: Date): readonly RiotAccountView[] {
   const connectedAt = new Date(now.getTime() - 3 * 86_400_000).toISOString();
+
+  if (isDevPreviewEmptyState()) {
+    return [];
+  }
+
   return [
     {
       authStatus: "CONNECTED",
@@ -382,5 +393,43 @@ export function previewInventory(): readonly InventoryTileView[] {
       2,
       "Reaver Karambit",
     ),
+  ];
+}
+
+/**
+ * A pool for the empty-state skin ring: more than the ten cards it shows, so
+ * a preview still demonstrates skins swapping in and out. Real catalog UUIDs,
+ * so the art loads from the same CDN the live pool points at.
+ */
+export function previewShowcaseSkins(): readonly ShowcaseSkinView[] {
+  const showcase = (skinUuid: string, displayName: string) => ({
+    displayIcon: `${MEDIA}/weaponskins/${skinUuid}/displayicon.png`,
+    displayName,
+    skinUuid,
+  });
+
+  return [
+    showcase("b9ee2457-481c-6776-3f5b-0ca8e8f90c89", "Prime Vandal"),
+    showcase("aecab890-43b7-d719-06bc-9295e3d116dc", "Reaver Operator"),
+    showcase("25a7f0f2-4bce-7e45-b4b0-ca9264f5dfcc", "Glitchpop Phantom"),
+    showcase("2a049f35-4bcd-af25-21fd-ec942e2d5007", "Prime Guardian"),
+    showcase("317574ca-4a9d-9e5a-f9c4-a79aa378f75b", "Araxys Sheriff"),
+    showcase("b73d7b16-4652-bc5b-5c4c-068aabb19d0a", "Reaver Karambit"),
+    showcase("e5490f71-455b-74ad-f762-f5a876d4dff9", "RGX 11z Pro Vandal"),
+    showcase("36791b03-452d-8dad-0091-898cc28d2196", "Oni Phantom"),
+    showcase("d722313d-43cb-b38d-7841-75880a3ed2cb", "Elderflame Operator"),
+    showcase("d653f4a7-4e92-2559-0a97-2c9d46d009b3", "Prime Classic"),
+    showcase("30388628-42f0-606c-82c0-73ad43de997f", "Reaver Vandal"),
+    showcase("e86bf7e4-4dd3-fbee-533b-fa875344bbaf", "Ion Phantom"),
+    showcase("83778c03-45a3-67a2-3c89-6b8598327d58", "Ion Sheriff"),
+    showcase("e8df3725-40de-b8ec-77bd-62a989685a85", "Sentinels of Light Vandal"),
+    showcase("5eec4ce6-443d-e9b5-4c5b-2b967d426bd3", "Singularity Phantom"),
+    showcase("c692e38e-4f38-0141-d0c9-aa99fab9362a", "Forsaken Operator"),
+    showcase("6460edbf-458d-bf61-7519-519305ba5da2", "Magepunk Sheriff"),
+    showcase("8a513c24-4c4d-ac15-6066-a1b2ff577041", "Ruination Ghost"),
+    showcase("c5482640-4652-6948-29c6-769e8198db27", "Xenohunter Knife"),
+    showcase("4c926aa9-4f26-bc80-c486-9b888333373f", "Araxys Vandal"),
+    showcase("522a264e-4ca7-adb0-6cf1-28b2ef938727", "Prelude to Chaos Vandal"),
+    showcase("d67b929f-4431-61c0-286e-3ebf3d11c4af", "Recon Phantom"),
   ];
 }

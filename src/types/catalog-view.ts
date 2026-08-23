@@ -74,3 +74,14 @@ export interface SkinDetailView {
   readonly weaponName: string;
   readonly weaponUuid: string;
 }
+
+/**
+ * One card of the "connect your first account" skin ring. The icon is
+ * non-null because the loader drops rows without art rather than making the
+ * ring render a hole.
+ */
+export interface ShowcaseSkinView {
+  readonly displayIcon: string;
+  readonly displayName: string;
+  readonly skinUuid: string;
+}

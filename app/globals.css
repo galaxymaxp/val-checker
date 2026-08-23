@@ -1219,3 +1219,178 @@ section[id] {
 .riot-signin-fields-deemphasized {
   opacity: 0.6;
 }
+
+/* ---- Empty state: fanned skin cards (additive) ---- */
+/* A hand of cards angled away behind a featured one. The 3D placement is
+   adapted from ilkhoeri's Uiverse carousel "swift-panda-38"
+   (https://uiverse.io/ilkhoeri/swift-panda-38, MIT) -- every card placed off
+   one shared index, turned in a shared perspective -- laid out as a fan rather
+   than a ring, and stripped of its colour: the surfaces are the same
+   translucent white-on-near-black as every other panel, so the skin art is the
+   only hue on screen. */
+
+.skin-fan {
+  --fan-w: clamp(86px, 22vw, 300px);
+  --fan-h: calc(var(--fan-w) * 1.32);
+  /* Centre-to-centre step, as a fraction of card width: under 1 so the cards
+     overlap into a hand instead of lining up as a row. */
+  --fan-step: 0.78;
+  /* Proportional to the cards, never a fixed length: a fixed perspective
+     flattens the turn as the fan shrinks, so a phone would get a differently
+     shaped composition rather than the same one smaller. */
+  --fan-perspective: calc(var(--fan-w) * 9);
+
+  position: relative;
+  height: calc(var(--fan-h) * 1.22);
+  margin-top: clamp(1.25rem, 3.5vw, 2.5rem);
+  perspective: var(--fan-perspective);
+}
+
+/* Depth behind the featured card, so the fan sits in something rather than on
+   nothing. Monochrome: the artwork supplies the only colour. */
+.skin-fan::before {
+  content: "";
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  width: min(94%, 36rem);
+  height: 78%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.08),
+    transparent 68%
+  );
+  translate: -50% -50%;
+}
+
+.skin-fan-card {
+  position: absolute;
+  /* Clear for the float to rise into, so the top card never crops. */
+  top: calc(var(--fan-h) * 0.04);
+  left: calc(50% - (var(--fan-w) / 2));
+  width: var(--fan-w);
+  height: var(--fan-h);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+  box-shadow: 0 22px 50px -28px rgba(0, 0, 0, 0.95);
+  /* Everything below is driven off the two custom properties the component
+     sets per card: the signed distance from the featured slot, and the
+     unsigned one. Cards further out step sideways, drop, turn away, shrink,
+     dim, and fall behind -- all from the same pair of numbers. */
+  opacity: calc(1 - var(--fan-depth) * 0.2);
+  transform: translateX(calc(var(--fan-offset) * var(--fan-step) * var(--fan-w)))
+    translateY(calc(var(--fan-depth) * var(--fan-h) * 0.09))
+    rotateY(calc(var(--fan-offset) * -8deg))
+    rotateZ(calc(var(--fan-offset) * 6deg))
+    scale(calc(1 - var(--fan-depth) * 0.15));
+  z-index: calc(10 - var(--fan-depth));
+  /* `translate` composes ahead of `transform`, so the float never has to
+     restate the placement above. The delay is seeded negative per slot, so
+     every card is already mid-drift and no two rise together. */
+  animation: skin-fan-float 6.5s var(--ease-in-out) infinite alternate;
+  animation-delay: calc(var(--fan-index) * -1.15s);
+}
+
+.skin-fan-card[data-featured="true"] {
+  border-color: rgba(255, 255, 255, 0.42);
+  /* Opaque, unlike the cards behind it: at this size a translucent front card
+     lets the next weapon read straight through it and the two look like one
+     picture. The white wash still sits on top, so the surface matches. */
+  background: linear-gradient(
+      rgba(255, 255, 255, 0.07),
+      rgba(255, 255, 255, 0.07)
+    ),
+    var(--bg);
+  box-shadow:
+    0 0 52px -4px rgba(255, 255, 255, 0.14),
+    0 34px 74px -32px rgba(0, 0, 0, 0.95);
+}
+
+@keyframes skin-fan-float {
+  from {
+    translate: 0 calc(var(--fan-h) * -0.035);
+  }
+  to {
+    translate: 0 calc(var(--fan-h) * 0.035);
+  }
+}
+
+/* Two faces per card, stacked. The incoming skin is mounted on the hidden one
+   and only crossfades in once its image has decoded, so a swap never leaves a
+   card empty. */
+.skin-fan-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2%;
+  padding: 6% 5% 7%;
+  opacity: 0;
+  transition: opacity 560ms var(--ease-out);
+}
+
+.skin-fan-face[data-active="true"] {
+  opacity: 1;
+}
+
+/* Weapon renders are long and the card is portrait, so the art lies on the
+   diagonal the way the game's own store cards lay it -- the tilt buys a longer
+   axis to fit along. `object-contain` on the image still does the fitting, and
+   nothing clips it: the card deliberately does not hide its overflow, so a
+   Vandal and a Karambit are both shown whole. */
+.skin-fan-art {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 0;
+  rotate: -22deg;
+  scale: 0.98;
+}
+
+.skin-fan-label {
+  display: block;
+  min-width: 0;
+  text-align: center;
+}
+
+.skin-fan-name,
+.skin-fan-weapon {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skin-fan-name {
+  color: var(--text-muted);
+  font-size: clamp(0.5rem, 0.95vw, 0.75rem);
+  font-weight: 640;
+  letter-spacing: 0.05em;
+}
+
+.skin-fan-weapon {
+  color: var(--text-dim);
+  font-size: clamp(0.4rem, 0.75vw, 0.625rem);
+  letter-spacing: 0.16em;
+}
+
+.skin-fan-card[data-featured="true"] .skin-fan-name {
+  color: var(--text);
+  font-size: clamp(0.6rem, 1.1vw, 0.875rem);
+}
+
+.skin-fan-spark {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The fan holds its shape and its perspective -- it just stops drifting.
+     The art stays exactly as legible. */
+  .skin-fan-card {
+    animation: none;
+  }
+}

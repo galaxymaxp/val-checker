@@ -21,8 +21,19 @@ export function isDevPreview(): boolean {
   return (
     process.env.NODE_ENV === "development" &&
     process.env.VERCEL === undefined &&
-    (flag === "1" || flag === "night-market")
+    (flag === "1" || flag === "night-market" || flag === "empty")
   );
+}
+
+/**
+ * Whether the preview should pretend no Riot account is connected.
+ *
+ * Same reason the night market has a flag: the preview fixtures always carry
+ * two accounts, so the "connect your first account" state and the skin ring
+ * under it are otherwise impossible to look at locally.
+ */
+export function isDevPreviewEmptyState(): boolean {
+  return isDevPreview() && process.env.VAL_CHECKER_DEV_PREVIEW === "empty";
 }
 
 /**

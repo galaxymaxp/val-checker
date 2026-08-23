@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { DailyShopStage } from "@/app/dashboard/_components/daily-shop-stage";
+import { EmptyRiotSkinShowcase } from "@/app/dashboard/_components/empty-riot-skin-showcase";
 import { FeaturedBundle } from "@/app/dashboard/_components/featured-bundle";
 import { InventoryGrid } from "@/app/dashboard/_components/inventory-grid";
 import { NightMarket } from "@/app/dashboard/_components/night-market";
@@ -13,13 +14,16 @@ import {
   previewDailyShops,
   previewInventory,
   previewRefreshStatus,
+  previewShowcaseSkins,
 } from "@/src/lib/dev/preview-data";
 import { loadWishlistInventory } from "@/src/lib/catalog/inventory";
+import { loadShowcaseSkins } from "@/src/lib/catalog/showcase";
 import { loadRiotAccountsWithClient } from "@/src/lib/riot/connection-state";
 import { loadStorefrontDashboardStatus } from "@/src/lib/storefront/dashboard-status";
 import { loadDailyShops } from "@/src/lib/storefront/daily-shop";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/server-admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
+import type { ShowcaseSkinView } from "@/src/types/catalog-view";
 
 export default async function DashboardPage({
   searchParams = Promise.resolve({}),
@@ -52,7 +56,7 @@ export default async function DashboardPage({
   const accounts = await accountsPromise;
   const selectedAccount =
     accounts.find((account) => account.id === params.account) ?? accounts[0];
-  const [dailyShops, refreshStatus, tiles] = await Promise.all([
+  const [dailyShops, refreshStatus, tiles, showcaseSkins] = await Promise.all([
     loadDailyShops(adminSupabase, data.claims.sub),
     refreshStatusPromise,
     loadWishlistInventory(
@@ -60,9 +64,21 @@ export default async function DashboardPage({
       data.claims.sub,
       selectedAccount?.id ?? null,
     ),
+    // The showcase only exists for the no-account state, so a user with a
+    // connected account never pays for the catalog read.
+    accounts.length === 0
+      ? loadShowcaseSkins(supabase)
+      : Promise.resolve<readonly ShowcaseSkinView[]>([]),
   ]);
 
-  return renderDashboard({ accounts, dailyShops, refreshStatus, tiles, params });
+  return renderDashboard({
+    accounts,
+    dailyShops,
+    params,
+    refreshStatus,
+    showcaseSkins,
+    tiles,
+  });
 }
 
 interface DashboardData {
@@ -72,6 +88,7 @@ interface DashboardData {
   readonly refreshStatus: Awaited<
     ReturnType<typeof loadStorefrontDashboardStatus>
   >;
+  readonly showcaseSkins: readonly ShowcaseSkinView[];
   readonly tiles: Awaited<ReturnType<typeof loadWishlistInventory>>;
 }
 
@@ -86,6 +103,7 @@ async function previewDashboardData(params: {
     dailyShops: previewDailyShops(now),
     params,
     refreshStatus: previewRefreshStatus(now),
+    showcaseSkins: previewShowcaseSkins(),
     tiles: previewInventory(),
   };
 }
@@ -95,6 +113,7 @@ function renderDashboard({
   dailyShops,
   params,
   refreshStatus,
+  showcaseSkins,
   tiles,
 }: DashboardData) {
   const selectedAccount =
@@ -116,6 +135,11 @@ function renderDashboard({
         accounts={accounts}
         selectedConnectionId={selectedAccount?.id ?? null}
       />
+      {/* Same condition the switcher's empty state uses, so the showcase can
+          never outlive the "connect your first account" card it supports. */}
+      {accounts.length === 0 ? (
+        <EmptyRiotSkinShowcase skins={showcaseSkins} />
+      ) : null}
       {selectedAccount && selectedRefreshStatus ? (
         <StoreAttentionPanel
           account={selectedAccount}

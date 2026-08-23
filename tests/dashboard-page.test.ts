@@ -5,6 +5,7 @@ const loadWishlistInventory = vi.fn();
 const loadRiotAccountsWithClient = vi.fn();
 const loadStorefrontDashboardStatus = vi.fn();
 const loadDailyShops = vi.fn();
+const loadShowcaseSkins = vi.fn();
 const redirect = vi.fn();
 const disconnectRiotSession = vi.fn();
 const setSkinWatched = vi.fn();
@@ -15,6 +16,7 @@ vi.mock("@/src/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/src/lib/catalog/inventory", () => ({ loadWishlistInventory }));
+vi.mock("@/src/lib/catalog/showcase", () => ({ loadShowcaseSkins }));
 vi.mock("@/src/lib/riot/connection-state", () => ({
   loadRiotAccountsWithClient,
 }));
@@ -34,6 +36,19 @@ vi.mock("@/app/dashboard/riot-actions", () => ({
 }));
 vi.mock("next/navigation", () => ({ redirect }));
 
+/** Component names of the sections the page renders, in document order. */
+function sectionNames(tree: { props: { children: unknown } }): string[] {
+  const children = tree.props.children;
+
+  return (Array.isArray(children) ? children : [children]).flatMap(
+    (child: unknown) => {
+      const type = (child as { type?: unknown } | null)?.type;
+
+      return typeof type === "function" ? [type.name] : [];
+    },
+  );
+}
+
 describe("dashboard page", () => {
   beforeEach(() => {
     getClaims.mockReset();
@@ -42,6 +57,8 @@ describe("dashboard page", () => {
     loadStorefrontDashboardStatus.mockReset();
     loadDailyShops.mockReset();
     loadDailyShops.mockResolvedValue([]);
+    loadShowcaseSkins.mockReset();
+    loadShowcaseSkins.mockResolvedValue([]);
     redirect.mockReset();
     loadWishlistInventory.mockResolvedValue([]);
     loadRiotAccountsWithClient.mockResolvedValue([]);
@@ -112,5 +129,41 @@ describe("dashboard page", () => {
     expect(loadRiotAccountsWithClient).not.toHaveBeenCalled();
     expect(loadStorefrontDashboardStatus).not.toHaveBeenCalled();
     expect(loadDailyShops).not.toHaveBeenCalled();
+    expect(loadShowcaseSkins).not.toHaveBeenCalled();
+  });
+
+  it("shows the skin showcase only while no Riot account is connected", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { email: "user@example.com", sub: "user-id" } },
+    });
+    const { default: DashboardPage } = await import("@/app/dashboard/page");
+
+    const empty = await DashboardPage();
+    expect(loadShowcaseSkins).toHaveBeenCalledTimes(1);
+    expect(sectionNames(empty)).toContain("EmptyRiotSkinShowcase");
+
+    loadRiotAccountsWithClient.mockResolvedValue([{ id: "connection-one" }]);
+    const connected = await DashboardPage();
+
+    // Gone from the tree entirely, not hidden behind a style: an account
+    // holder never renders the section and never pays for its catalog read.
+    expect(sectionNames(connected)).not.toContain("EmptyRiotSkinShowcase");
+    expect(loadShowcaseSkins).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts the showcase between the Riot account card and the arsenal", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { email: "user@example.com", sub: "user-id" } },
+    });
+    const { default: DashboardPage } = await import("@/app/dashboard/page");
+
+    const names = sectionNames(await DashboardPage());
+
+    expect(names.indexOf("EmptyRiotSkinShowcase")).toBe(
+      names.indexOf("RiotAccountSwitcher") + 1,
+    );
+    expect(names.indexOf("EmptyRiotSkinShowcase")).toBeLessThan(
+      names.indexOf("InventoryGrid"),
+    );
   });
 });
