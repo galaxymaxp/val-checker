@@ -4,6 +4,7 @@ import {
   BROWSER_ORDER,
   BROWSER_PROFILES,
   EXTENSION_PACKAGES,
+  EXTENSION_ROOT_FOLDER,
   extensionPackage,
 } from "@/src/lib/extension/browsers";
 import { detectBrowser } from "@/src/lib/extension/detect-browser";
@@ -86,14 +87,26 @@ describe("browser detection", () => {
 });
 
 describe("extension catalog", () => {
-  it("sends every Chromium browser to the one shared package", () => {
-    const chromiumBrowsers = BROWSER_ORDER.filter((id) => id !== "firefox");
-    for (const id of chromiumBrowsers) {
-      expect(BROWSER_PROFILES[id].build).toBe("chromium");
-      expect(extensionPackage(id)).toBe(EXTENSION_PACKAGES.chromium);
+  it("gives every browser its own download, named for that browser", () => {
+    const filenames = new Set<string>();
+    for (const id of BROWSER_ORDER) {
+      const target = extensionPackage(id);
+      expect(target).toBe(EXTENSION_PACKAGES[id]);
+      expect(target!.href).toBe(`/downloads/${target!.filename}`);
+      // No user should have to recognise "chromium" as their browser.
+      expect(target!.filename).not.toMatch(/chromium/i);
+      filenames.add(target!.filename);
     }
-    expect(extensionPackage("firefox")).toBe(EXTENSION_PACKAGES.firefox);
+    expect(filenames.size).toBe(BROWSER_ORDER.length);
     expect(extensionPackage("unknown")).toBeUndefined();
+  });
+
+  it("builds every Chromium browser from the one shared build", () => {
+    for (const id of BROWSER_ORDER) {
+      expect(BROWSER_PROFILES[id].build).toBe(
+        id === "firefox" ? "firefox" : "chromium",
+      );
+    }
   });
 
   it("never shows the word Chromium to the user", () => {
@@ -131,7 +144,16 @@ describe("extension catalog", () => {
       const steps = BROWSER_PROFILES[id].steps.join(" ");
       expect(steps).toContain("Extract All");
       expect(steps).toContain("Do not select the ZIP");
-      expect(steps).toContain("extracted folder containing manifest.json");
+      expect(steps).toContain(EXTENSION_ROOT_FOLDER);
+    }
+  });
+
+  it("never asks anyone to make or rename a folder", () => {
+    // The archive already contains the folder Load unpacked needs.
+    for (const id of BROWSER_ORDER) {
+      const steps = BROWSER_PROFILES[id].steps.join(" ");
+      expect(steps).toContain(EXTENSION_ROOT_FOLDER);
+      expect(steps).not.toMatch(/create (?:a )?(?:new )?folder|rename/i);
     }
   });
 
@@ -139,11 +161,12 @@ describe("extension catalog", () => {
     // A signed .xpi would be a permanent install; this one is not, and the
     // file name must not pretend otherwise.
     expect(EXTENSION_PACKAGES.firefox.filename).toBe(
-      "val-checker-firefox-extension-unsigned.zip",
+      "val-checker-firefox-unsigned.zip",
     );
     expect(EXTENSION_PACKAGES.firefox.filename).not.toMatch(/\.xpi$/);
-    expect(EXTENSION_PACKAGES.chromium.filename).toBe(
-      "val-checker-chromium-extension.zip",
+    expect(EXTENSION_PACKAGES.chrome.filename).toBe("val-checker-chrome.zip");
+    expect(EXTENSION_PACKAGES["opera-gx"].filename).toBe(
+      "val-checker-opera-gx.zip",
     );
   });
 });

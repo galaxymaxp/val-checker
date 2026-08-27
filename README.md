@@ -159,10 +159,13 @@ fixture, snapshot, command, or debug route.
 One shared implementation in `browser-extension/src` produces two packages via
 `pnpm run extension:build`:
 
-| Build    | Browsers                                                   | Archive                                       |
-| -------- | ---------------------------------------------------------- | --------------------------------------------- |
-| chromium | Chrome, Edge, Brave, Opera, Opera GX, other Chromium forks | `val-checker-chromium-extension.zip`          |
-| firefox  | Firefox                                                     | `val-checker-firefox-extension-unsigned.zip`  |
+| Build    | Browsers                             | Archives                                                          |
+| -------- | ------------------------------------ | ----------------------------------------------------------------- |
+| chromium | Chrome, Edge, Brave, Opera, Opera GX | `val-checker-chrome.zip`, `-edge`, `-brave`, `-opera`, `-opera-gx` |
+| firefox  | Firefox                              | `val-checker-firefox-unsigned.zip`                                 |
+
+Chromium browsers share one build, but each gets its own download name so no
+one has to recognise "chromium" as their browser.
 
 The connection card detects the browser and offers the right package with that
 browser's own wording, extensions URL, and steps; a manual picker is always
@@ -171,9 +174,13 @@ get a Chrome/Chromium-or-Firefox choice, Safari is told it is unsupported, and
 mobile browsers are told the flow is desktop-only rather than being handed an
 archive they cannot use.
 
+Every archive contains a single `UNZIP ME` folder with `manifest.json` directly
+inside it, so extracting produces exactly the folder **Load unpacked** needs.
+Nobody has to create, rename, move, or reorganise anything.
+
 For Chromium browsers, unzip the archive first, open the browser's extensions
 page, enable Developer mode, choose **Load unpacked**, and select the extracted
-folder containing `manifest.json`. Firefox has no signed add-on yet, so its
+`UNZIP ME` folder. Firefox has no signed add-on yet, so its
 artifact is a development build loaded through
 `about:debugging#/runtime/this-firefox`; see `browser-extension/README.md` for
 the production distribution steps that are still outstanding.

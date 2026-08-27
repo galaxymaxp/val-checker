@@ -159,11 +159,11 @@ describe("Riot connection consent UI", () => {
     const download = screen.getByRole("link", { name: "Download for Chrome" });
     expect(download).toHaveAttribute(
       "href",
-      "/downloads/val-checker-chromium-extension.zip",
+      "/downloads/val-checker-chrome.zip",
     );
     expect(download).toHaveAttribute(
       "download",
-      "val-checker-chromium-extension.zip",
+      "val-checker-chrome.zip",
     );
 
     const signIn = screen.getByRole("button", { name: "Sign in with Riot" });
@@ -187,19 +187,19 @@ describe("Riot connection consent UI", () => {
     const cases = [
       {
         expected: "Microsoft Edge detected",
-        href: "/downloads/val-checker-chromium-extension.zip",
+        href: "/downloads/val-checker-edge.zip",
         label: "Download for Microsoft Edge",
         userAgent: `${CHROME_UA} Edg/126.0.0.0`,
       },
       {
         expected: "Opera GX detected",
-        href: "/downloads/val-checker-chromium-extension.zip",
+        href: "/downloads/val-checker-opera-gx.zip",
         label: "Download for Opera GX",
         userAgent: `${CHROME_UA} OPR/112.0.0.0 OPX/112.0.0.0`,
       },
       {
         expected: "Firefox detected",
-        href: "/downloads/val-checker-firefox-extension-unsigned.zip",
+        href: "/downloads/val-checker-firefox-unsigned.zip",
         label: "Install for Firefox",
         userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
@@ -244,7 +244,7 @@ describe("Riot connection consent UI", () => {
     expect(screen.getByText("Chrome selected")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Download for Chrome" }),
-    ).toHaveAttribute("href", "/downloads/val-checker-chromium-extension.zip");
+    ).toHaveAttribute("href", "/downloads/val-checker-chrome.zip");
   });
 
   it("lets a detected browser be overridden by hand", async () => {
@@ -267,7 +267,7 @@ describe("Riot connection consent UI", () => {
       screen.getByRole("link", { name: "Install for Firefox" }),
     ).toHaveAttribute(
       "href",
-      "/downloads/val-checker-firefox-extension-unsigned.zip",
+      "/downloads/val-checker-firefox-unsigned.zip",
     );
   });
 

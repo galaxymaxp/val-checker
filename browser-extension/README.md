@@ -32,12 +32,23 @@ pnpm run extension:build
 That writes the unpacked builds to `dist/` and the archives to
 `public/downloads/`.
 
+Every archive wraps its files in a single folder named exactly `UNZIP ME`, with
+`manifest.json` directly inside it. Extracting therefore produces the folder
+**Load unpacked** expects; no user ever has to create, rename, move, or
+reorganise anything. `ROOT_FOLDER` in `scripts/build-extension.mjs` and
+`EXTENSION_ROOT_FOLDER` in `src/lib/extension/browsers.ts` must stay in step,
+and `tests/extension-build.test.ts` asserts they do.
+
 ## Browser support
 
-| Build    | Browsers                                                |
-| -------- | ------------------------------------------------------- |
-| chromium | Chrome, Edge, Brave, Opera, Opera GX, other Chromium forks |
-| firefox  | Firefox                                                   |
+| Build    | Browsers                             | Archives                                                          |
+| -------- | ------------------------------------ | ----------------------------------------------------------------- |
+| chromium | Chrome, Edge, Brave, Opera, Opera GX | `val-checker-chrome.zip`, `-edge`, `-brave`, `-opera`, `-opera-gx` |
+| firefox  | Firefox                              | `val-checker-firefox-unsigned.zip`                                 |
+
+Chromium browsers install byte-identical archives. The separate names exist so
+the website can offer each browser its own download, and so a future
+browser-specific build has somewhere to land without changing the website.
 
 There is one implementation. The only engine differences are in the manifest —
 Firefox has no Manifest V3 service worker, so it runs `background.scripts` as an
@@ -51,13 +62,14 @@ behaviour that differs by engine lives in the module.
 
 ## Install: Chrome, Edge, Brave, Opera, Opera GX
 
-1. Download `val-checker-chromium-extension.zip` from VAL Checker.
+1. Download your browser's ZIP from VAL Checker (for example
+   `val-checker-opera-gx.zip`).
 2. Unzip it with **Extract All**. The browser cannot load the ZIP itself.
 3. Open `chrome://extensions`, `edge://extensions`, `brave://extensions`, or
-   `opera://extensions`.
+   `opera://extensions` — Opera GX uses `opera://extensions` too.
 4. Enable **Developer mode**.
 5. Choose **Load unpacked**.
-6. Select the extracted folder containing `manifest.json`.
+6. Select the extracted `UNZIP ME` folder.
 7. Return to VAL Checker. It should say **Extension ready**.
 8. Choose **Sign in with Riot**.
 
@@ -68,9 +80,10 @@ for release Firefox. The published Firefox artifact is a development build.
 
 Development install:
 
-1. Download `val-checker-firefox-extension-unsigned.zip` and extract it.
+1. Download `val-checker-firefox-unsigned.zip` and extract it.
 2. Open `about:debugging#/runtime/this-firefox`.
-3. Choose **Load Temporary Add-on** and select `manifest.json`.
+3. Choose **Load Temporary Add-on** and select `manifest.json` inside the
+   extracted `UNZIP ME` folder.
 4. Grant access to `riotgames.com` and `playvalorant.com` if Firefox asks.
    Manifest V3 host permissions are opt-in on Firefox; without them the
    background page reports `permissions-needed` instead of opening Riot.
@@ -80,7 +93,7 @@ A temporary add-on is removed when Firefox closes.
 
 Production distribution (not yet done): submit `dist/firefox` to
 addons.mozilla.org, and publish the signed result as
-`val-checker-firefox-extension.xpi`. Only then should the website offer a
+`val-checker-firefox.xpi`. Only then should the website offer a
 permanent Firefox install.
 
 ## Security boundaries

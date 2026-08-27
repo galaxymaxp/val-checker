@@ -35,17 +35,36 @@ export interface BrowserProfile {
   readonly steps: readonly string[];
 }
 
-export const EXTENSION_PACKAGES: Record<ExtensionBuild, ExtensionPackage> = {
-  chromium: {
-    filename: "val-checker-chromium-extension.zip",
-    href: "/downloads/val-checker-chromium-extension.zip",
-  },
+/**
+ * Every archive extracts to this one folder, with `manifest.json` directly
+ * inside it. Nobody has to create, rename, or move a folder to install.
+ *
+ * `scripts/build-extension.mjs` writes it; `tests/extension-build.test.ts`
+ * asserts the two agree.
+ */
+export const EXTENSION_ROOT_FOLDER = "UNZIP ME";
+
+function archive(filename: string): ExtensionPackage {
+  return { filename, href: `/downloads/${filename}` };
+}
+
+/**
+ * One archive per browser. Chromium browsers share the same bytes, but each
+ * download is named for the browser the user actually has, so nothing in the
+ * flow asks them to recognise "chromium" as their browser.
+ */
+export const EXTENSION_PACKAGES: Record<
+  Exclude<SupportedBrowser, "unknown">,
+  ExtensionPackage
+> = {
+  brave: archive("val-checker-brave.zip"),
+  chrome: archive("val-checker-chrome.zip"),
+  edge: archive("val-checker-edge.zip"),
   // Mozilla signing is not configured yet, so this is the development build
   // rather than an installable .xpi. See the Firefox notes below.
-  firefox: {
-    filename: "val-checker-firefox-extension-unsigned.zip",
-    href: "/downloads/val-checker-firefox-extension-unsigned.zip",
-  },
+  firefox: archive("val-checker-firefox-unsigned.zip"),
+  opera: archive("val-checker-opera.zip"),
+  "opera-gx": archive("val-checker-opera-gx.zip"),
 };
 
 function chromiumSteps(displayName: string, extensionsUrl: string) {
@@ -55,7 +74,7 @@ function chromiumSteps(displayName: string, extensionsUrl: string) {
     `Open ${extensionsUrl}.`,
     "Enable Developer mode.",
     "Choose Load unpacked.",
-    "Select the extracted folder containing manifest.json.",
+    `Select the extracted “${EXTENSION_ROOT_FOLDER}” folder.`,
     "Return to VAL Checker.",
     "Confirm Extension ready.",
     "Choose Sign in with Riot.",
@@ -95,7 +114,7 @@ export const BROWSER_PROFILES: Record<
       "Extract All.",
       "Open about:debugging#/runtime/this-firefox.",
       "Choose Load Temporary Add-on.",
-      "Select manifest.json inside the extracted folder.",
+      `Select manifest.json inside the extracted “${EXTENSION_ROOT_FOLDER}” folder.`,
       "If Firefox asks, allow the add-on to access riotgames.com and playvalorant.com.",
       "Return to VAL Checker.",
       "Confirm Extension ready.",
@@ -127,8 +146,7 @@ export function browserProfile(browser: SupportedBrowser) {
 }
 
 export function extensionPackage(browser: SupportedBrowser) {
-  const profile = browserProfile(browser);
-  return profile ? EXTENSION_PACKAGES[profile.build] : undefined;
+  return browser === "unknown" ? undefined : EXTENSION_PACKAGES[browser];
 }
 
 /**

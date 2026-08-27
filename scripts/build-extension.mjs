@@ -19,23 +19,44 @@ const distDir = join(extensionRoot, "dist");
 const downloadDir = join(repoRoot, "public", "downloads");
 
 /**
- * Chrome, Edge, Brave, Opera, and Opera GX all install the chromium archive.
+ * Every file in an archive sits inside this one folder, so "Load unpacked"
+ * has a folder to select straight out of the extractor. Users must never have
+ * to create, rename, or move a folder themselves.
+ *
+ * Keep this in step with `EXTENSION_ROOT_FOLDER` in
+ * `src/lib/extension/browsers.ts`; `tests/extension-build.test.ts` asserts it.
+ */
+export const ROOT_FOLDER = "UNZIP ME";
+
+/**
+ * Chrome, Edge, Brave, Opera, and Opera GX all install the chromium build.
  * Firefox needs its own build because Manifest V3 background pages and
  * `browser_specific_settings` differ from Chromium.
  *
+ * Each browser still gets its own archive name. The bytes are identical
+ * within a build, but a user who downloads `val-checker-opera-gx.zip` should
+ * never have to wonder whether a file named "chromium" is the right one, and
+ * the names give any future per-browser build somewhere to land.
+ *
  * The Firefox archive is deliberately named as an unsigned development
- * artifact. Rename it to `val-checker-firefox-extension.xpi` only once the
- * add-on is actually signed by Mozilla, because an unsigned `.xpi` cannot be
- * installed permanently in release Firefox.
+ * artifact. Rename it to `val-checker-firefox.xpi` only once the add-on is
+ * actually signed by Mozilla, because an unsigned `.xpi` cannot be installed
+ * permanently in release Firefox.
  */
 const TARGETS = [
   {
-    archive: "val-checker-chromium-extension.zip",
+    archives: [
+      "val-checker-chrome.zip",
+      "val-checker-edge.zip",
+      "val-checker-brave.zip",
+      "val-checker-opera.zip",
+      "val-checker-opera-gx.zip",
+    ],
     manifest: "chromium.json",
     name: "chromium",
   },
   {
-    archive: "val-checker-firefox-extension-unsigned.zip",
+    archives: ["val-checker-firefox-unsigned.zip"],
     manifest: "firefox.json",
     name: "firefox",
   },
@@ -194,17 +215,32 @@ export async function buildExtension() {
       await writeFile(join(targetDir, source.name), source.data);
     }
 
-    const archive = zip([
-      { data: manifestJson, name: "manifest.json" },
-      ...sources,
-    ]);
-    await writeFile(join(downloadDir, target.archive), archive);
+    // Everything is written under `UNZIP ME/`, so extracting the archive
+    // produces exactly the folder "Load unpacked" needs, with manifest.json
+    // directly inside it.
+    const archive = zip(
+      [{ data: manifestJson, name: "manifest.json" }, ...sources].map(
+        (entry) => ({ ...entry, name: `${ROOT_FOLDER}/${entry.name}` }),
+      ),
+    );
+    for (const name of target.archives) {
+      await writeFile(join(downloadDir, name), archive);
+    }
     built.push({
-      archive: target.archive,
+      archives: target.archives,
       bytes: archive.length,
       target: target.name,
       version: manifest.version,
     });
+  }
+
+  // Drop archives from an earlier naming scheme so the site never links to a
+  // file that is no longer rebuilt. Only our own archives are considered.
+  const expected = new Set(TARGETS.flatMap((target) => target.archives));
+  for (const name of await readdir(downloadDir)) {
+    if (/^val-checker-.*\.zip$/.test(name) && !expected.has(name)) {
+      await rm(join(downloadDir, name));
+    }
   }
 
   return built;
@@ -216,7 +252,9 @@ if (
 ) {
   for (const result of await buildExtension()) {
     console.log(
-      `${result.target} v${result.version} -> public/downloads/${result.archive} (${result.bytes} bytes)`,
+      `${result.target} v${result.version} (${result.bytes} bytes) -> ${result.archives
+        .map((name) => `public/downloads/${name}`)
+        .join(", ")}`,
     );
   }
 }

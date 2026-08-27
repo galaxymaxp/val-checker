@@ -6,12 +6,25 @@ import { inflateRawSync } from "node:zlib";
 import { beforeAll, describe, expect, it } from "vitest";
 
 // @ts-expect-error -- plain build script, typed by its usage here.
-import { buildExtension } from "../scripts/build-extension.mjs";
-import { EXTENSION_PACKAGES } from "@/src/lib/extension/browsers";
+import { ROOT_FOLDER, buildExtension } from "../scripts/build-extension.mjs";
+import {
+  BROWSER_ORDER,
+  BROWSER_PROFILES,
+  EXTENSION_PACKAGES,
+  EXTENSION_ROOT_FOLDER,
+} from "@/src/lib/extension/browsers";
 
 const repoRoot = process.cwd();
 const distRoot = join(repoRoot, "browser-extension", "dist");
 const downloadRoot = join(repoRoot, "public", "downloads");
+
+/** The archive filename each build is published under, per browser. */
+const BUILD_FILENAMES = {
+  chromium: BROWSER_ORDER.filter(
+    (id) => BROWSER_PROFILES[id].build === "chromium",
+  ).map((id) => EXTENSION_PACKAGES[id].filename),
+  firefox: [EXTENSION_PACKAGES.firefox.filename],
+} as const;
 
 /**
  * The archives under public/downloads are committed artifacts: `next build`
@@ -20,11 +33,13 @@ const downloadRoot = join(repoRoot, "public", "downloads");
  * instead of silently handing users an old extension.
  */
 const COMMITTED_ARCHIVES = new Map(
-  ["chromium", "firefox"].map((build) => {
-    const filename =
-      EXTENSION_PACKAGES[build as "chromium" | "firefox"].filename;
-    return [build, readFileSync(join(downloadRoot, filename))];
-  }),
+  (["chromium", "firefox"] as const).map((build) => [
+    build,
+    BUILD_FILENAMES[build].map((filename) => ({
+      bytes: readFileSync(join(downloadRoot, filename)),
+      filename,
+    })),
+  ]),
 );
 
 /** Inflates every entry of a ZIP, keyed by file name. */
@@ -76,25 +91,40 @@ describe("extension build", () => {
   it("writes exactly the archives the website links to", async () => {
     const downloads = (await readdir(downloadRoot)).sort();
     expect(downloads).toEqual(
-      [
-        EXTENSION_PACKAGES.chromium.filename,
-        EXTENSION_PACKAGES.firefox.filename,
-      ].sort(),
+      [...BUILD_FILENAMES.chromium, ...BUILD_FILENAMES.firefox].sort(),
     );
+    // One download per supported browser, none of them named "chromium".
+    expect(downloads).toHaveLength(BROWSER_ORDER.length);
 
-    for (const [build, target] of [
-      ["chromium", EXTENSION_PACKAGES.chromium],
-      ["firefox", EXTENSION_PACKAGES.firefox],
-    ] as const) {
-      expect(target.href).toBe(`/downloads/${target.filename}`);
-      const archive = await readFile(join(downloadRoot, target.filename));
-      const entries = archiveEntries(archive);
-      // manifest.json sits at the archive root so "Load unpacked" can take the
-      // extracted folder directly.
-      expect(entries).toContain("manifest.json");
-      expect(entries).toEqual(
-        (await readdir(join(distRoot, build))).sort(),
+    for (const build of ["chromium", "firefox"] as const) {
+      const contents = await readdir(join(distRoot, build));
+      for (const filename of BUILD_FILENAMES[build]) {
+        const archive = await readFile(join(downloadRoot, filename));
+        // Everything lives under one folder, and manifest.json is directly
+        // inside it, so "Load unpacked" takes the extracted folder as-is.
+        expect(archiveEntries(archive)).toEqual(
+          contents.map((name) => `${ROOT_FOLDER}/${name}`).sort(),
+        );
+        expect(archiveEntries(archive)).toContain(
+          `${EXTENSION_ROOT_FOLDER}/manifest.json`,
+        );
+      }
+    }
+  });
+
+  it("keeps the build script and the website on the same folder name", () => {
+    expect(ROOT_FOLDER).toBe(EXTENSION_ROOT_FOLDER);
+    expect(ROOT_FOLDER).toBe("UNZIP ME");
+  });
+
+  it("ships identical bytes to every browser sharing a build", async () => {
+    for (const build of ["chromium", "firefox"] as const) {
+      const [first, ...rest] = await Promise.all(
+        BUILD_FILENAMES[build].map((filename) =>
+          readFile(join(downloadRoot, filename)),
+        ),
       );
+      for (const other of rest) expect(other.equals(first)).toBe(true);
     }
   });
 
@@ -102,16 +132,20 @@ describe("extension build", () => {
     // Compares inflated contents, not raw bytes, so a different zlib build
     // cannot make this fail spuriously.
     for (const build of ["chromium", "firefox"] as const) {
-      const committed = archiveContents(COMMITTED_ARCHIVES.get(build)!);
       const names = await readdir(join(distRoot, build));
 
-      expect([...committed.keys()].sort()).toEqual(names.sort());
-      for (const name of names) {
-        const fresh = await readFile(join(distRoot, build, name), "utf8");
-        expect(
-          committed.get(name),
-          `public/downloads is stale for ${build}/${name}: run pnpm run extension:build and commit the archives`,
-        ).toBe(fresh);
+      for (const { bytes, filename } of COMMITTED_ARCHIVES.get(build)!) {
+        const committed = archiveContents(bytes);
+        expect([...committed.keys()].sort()).toEqual(
+          names.map((name) => `${ROOT_FOLDER}/${name}`).sort(),
+        );
+        for (const name of names) {
+          const fresh = await readFile(join(distRoot, build, name), "utf8");
+          expect(
+            committed.get(`${ROOT_FOLDER}/${name}`),
+            `public/downloads is stale for ${filename} (${name}): run pnpm run extension:build and commit the archives`,
+          ).toBe(fresh);
+        }
       }
     }
   });

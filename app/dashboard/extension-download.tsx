@@ -6,6 +6,7 @@ import type { BrowserTarget } from "@/app/dashboard/use-browser-target";
 import {
   BROWSER_ORDER,
   BROWSER_PROFILES,
+  EXTENSION_ROOT_FOLDER,
   FIREFOX_DISTRIBUTION_NOTE,
   SUPPORTED_BROWSER_NAMES,
   browserProfile,
@@ -122,8 +123,8 @@ export function ExtensionDownload({
       {profile.build === "chromium" ? (
         <p className="riot-extension-note">
           Extract the ZIP before continuing. In {profile.displayName}, Load
-          unpacked must select the extracted folder containing manifest.json—not
-          the ZIP file.
+          unpacked must select the extracted “{EXTENSION_ROOT_FOLDER}” folder—not
+          the ZIP file. There is nothing to rename or move.
         </p>
       ) : (
         <p className="riot-extension-note">{FIREFOX_DISTRIBUTION_NOTE}</p>
