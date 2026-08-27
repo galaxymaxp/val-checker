@@ -36,11 +36,14 @@ export interface BrowserProfile {
 }
 
 /**
- * Every archive extracts to this one folder, with `manifest.json` directly
+ * Chromium archives extract to this one folder, with `manifest.json` directly
  * inside it. Nobody has to create, rename, or move a folder to install.
  *
  * `scripts/build-extension.mjs` writes it; `tests/extension-build.test.ts`
  * asserts the two agree.
+ *
+ * The Firefox archive is deliberately flat: an add-on package must have
+ * `manifest.json` at its root, or Firefox rejects the file as corrupt.
  */
 export const EXTENSION_ROOT_FOLDER = "UNZIP ME";
 
@@ -111,10 +114,10 @@ export const BROWSER_PROFILES: Record<
     id: "firefox",
     steps: [
       "Download the VAL Checker Firefox development build.",
-      "Extract All.",
+      "Extract All. Do not drag the ZIP into Firefox—it is not signed yet, so Firefox rejects it as corrupt.",
       "Open about:debugging#/runtime/this-firefox.",
       "Choose Load Temporary Add-on.",
-      `Select manifest.json inside the extracted “${EXTENSION_ROOT_FOLDER}” folder.`,
+      "Select manifest.json inside the extracted folder.",
       "If Firefox asks, allow the add-on to access riotgames.com and playvalorant.com.",
       "Return to VAL Checker.",
       "Confirm Extension ready.",
@@ -155,4 +158,4 @@ export function extensionPackage(browser: SupportedBrowser) {
  * otherwise.
  */
 export const FIREFOX_DISTRIBUTION_NOTE =
-  "Firefox signing isn’t set up yet, so this is a development install: Firefox removes a temporary add-on when it closes. A signed add-on will replace this step.";
+  "Firefox signing isn’t set up yet, so this is a development install: load it through about:debugging, not by opening the ZIP in Firefox. Firefox refuses an unsigned package as “corrupt”, and it removes a temporary add-on when it closes. A signed add-on will replace this step.";

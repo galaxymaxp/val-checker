@@ -5,6 +5,7 @@ import {
   BROWSER_PROFILES,
   EXTENSION_PACKAGES,
   EXTENSION_ROOT_FOLDER,
+  FIREFOX_DISTRIBUTION_NOTE,
   extensionPackage,
 } from "@/src/lib/extension/browsers";
 import { detectBrowser } from "@/src/lib/extension/detect-browser";
@@ -149,12 +150,28 @@ describe("extension catalog", () => {
   });
 
   it("never asks anyone to make or rename a folder", () => {
-    // The archive already contains the folder Load unpacked needs.
     for (const id of BROWSER_ORDER) {
-      const steps = BROWSER_PROFILES[id].steps.join(" ");
-      expect(steps).toContain(EXTENSION_ROOT_FOLDER);
+      const profile = BROWSER_PROFILES[id];
+      const steps = profile.steps.join(" ");
+      // Chromium archives already contain the folder Load unpacked needs.
+      // Firefox archives are flat, so they must not name that folder.
+      expect(steps.includes(EXTENSION_ROOT_FOLDER)).toBe(
+        profile.build === "chromium",
+      );
       expect(steps).not.toMatch(/create (?:a )?(?:new )?folder|rename/i);
     }
+  });
+
+  it("tells Firefox users not to open the unsigned ZIP in Firefox", () => {
+    // Firefox rejects an unsigned package as corrupt; about:debugging is the
+    // only path that works until the add-on is signed.
+    const firefox = BROWSER_PROFILES.firefox;
+    const steps = firefox.steps.join(" ");
+    expect(steps).toContain("about:debugging");
+    expect(steps).toContain("Load Temporary Add-on");
+    expect(steps).toMatch(/corrupt/i);
+    expect(FIREFOX_DISTRIBUTION_NOTE).toMatch(/corrupt/i);
+    expect(FIREFOX_DISTRIBUTION_NOTE).toContain("about:debugging");
   });
 
   it("labels the Firefox package as the unsigned development build", () => {

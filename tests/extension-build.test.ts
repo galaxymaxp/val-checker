@@ -27,6 +27,16 @@ const BUILD_FILENAMES = {
 } as const;
 
 /**
+ * Chromium wants a folder for "Load unpacked". Firefox wants a valid add-on
+ * package, which means `manifest.json` at the archive root — nesting it makes
+ * Firefox reject the file as corrupt.
+ */
+const BUILD_PREFIXES = {
+  chromium: `${EXTENSION_ROOT_FOLDER}/`,
+  firefox: "",
+} as const;
+
+/**
  * The archives under public/downloads are committed artifacts: `next build`
  * does not regenerate them, so Vercel ships exactly what is in git. Capture
  * them before the build below overwrites them, so a stale commit is caught
@@ -98,18 +108,38 @@ describe("extension build", () => {
 
     for (const build of ["chromium", "firefox"] as const) {
       const contents = await readdir(join(distRoot, build));
+      const prefix = BUILD_PREFIXES[build];
       for (const filename of BUILD_FILENAMES[build]) {
         const archive = await readFile(join(downloadRoot, filename));
-        // Everything lives under one folder, and manifest.json is directly
-        // inside it, so "Load unpacked" takes the extracted folder as-is.
         expect(archiveEntries(archive)).toEqual(
-          contents.map((name) => `${ROOT_FOLDER}/${name}`).sort(),
+          contents.map((name) => `${prefix}${name}`).sort(),
         );
-        expect(archiveEntries(archive)).toContain(
-          `${EXTENSION_ROOT_FOLDER}/manifest.json`,
-        );
+        expect(archiveEntries(archive)).toContain(`${prefix}manifest.json`);
       }
     }
+  });
+
+  it("puts the Chromium manifest one folder deep and the Firefox one at the root", async () => {
+    // "Load unpacked" needs a folder, so Chromium ships one ready-made.
+    const chromium = archiveEntries(
+      await readFile(join(downloadRoot, EXTENSION_PACKAGES.chrome.filename)),
+    );
+    expect(chromium).toContain(`${EXTENSION_ROOT_FOLDER}/manifest.json`);
+    expect(chromium).not.toContain("manifest.json");
+    for (const entry of chromium) {
+      expect(entry.startsWith(`${EXTENSION_ROOT_FOLDER}/`)).toBe(true);
+      // One folder deep exactly: no nested browser-extension/ wrapper.
+      expect(entry.split("/")).toHaveLength(2);
+    }
+
+    // A Firefox add-on package must have manifest.json at the archive root.
+    // Nested, Firefox reports "this add-on appears to be corrupt", and
+    // addons.mozilla.org cannot sign it either.
+    const firefox = archiveEntries(
+      await readFile(join(downloadRoot, EXTENSION_PACKAGES.firefox.filename)),
+    );
+    expect(firefox).toContain("manifest.json");
+    for (const entry of firefox) expect(entry).not.toContain("/");
   });
 
   it("keeps the build script and the website on the same folder name", () => {
@@ -134,15 +164,16 @@ describe("extension build", () => {
     for (const build of ["chromium", "firefox"] as const) {
       const names = await readdir(join(distRoot, build));
 
+      const prefix = BUILD_PREFIXES[build];
       for (const { bytes, filename } of COMMITTED_ARCHIVES.get(build)!) {
         const committed = archiveContents(bytes);
         expect([...committed.keys()].sort()).toEqual(
-          names.map((name) => `${ROOT_FOLDER}/${name}`).sort(),
+          names.map((name) => `${prefix}${name}`).sort(),
         );
         for (const name of names) {
           const fresh = await readFile(join(distRoot, build, name), "utf8");
           expect(
-            committed.get(`${ROOT_FOLDER}/${name}`),
+            committed.get(`${prefix}${name}`),
             `public/downloads is stale for ${filename} (${name}): run pnpm run extension:build and commit the archives`,
           ).toBe(fresh);
         }

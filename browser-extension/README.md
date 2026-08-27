@@ -32,12 +32,19 @@ pnpm run extension:build
 That writes the unpacked builds to `dist/` and the archives to
 `public/downloads/`.
 
-Every archive wraps its files in a single folder named exactly `UNZIP ME`, with
-`manifest.json` directly inside it. Extracting therefore produces the folder
-**Load unpacked** expects; no user ever has to create, rename, move, or
-reorganise anything. `ROOT_FOLDER` in `scripts/build-extension.mjs` and
-`EXTENSION_ROOT_FOLDER` in `src/lib/extension/browsers.ts` must stay in step,
-and `tests/extension-build.test.ts` asserts they do.
+Chromium archives wrap their files in a single folder named exactly
+`UNZIP ME`, with `manifest.json` directly inside it. Extracting therefore
+produces the folder **Load unpacked** expects; no user ever has to create,
+rename, move, or reorganise anything. `ROOT_FOLDER` in
+`scripts/build-extension.mjs` and `EXTENSION_ROOT_FOLDER` in
+`src/lib/extension/browsers.ts` must stay in step, and
+`tests/extension-build.test.ts` asserts they do.
+
+The Firefox archive is flat on purpose. An add-on package is a ZIP with
+`manifest.json` at its **root**; nested under a folder, Firefox cannot find the
+manifest and reports "This add-on could not be installed because it appears to
+be corrupt", and addons.mozilla.org cannot sign it either. Do not add the
+`UNZIP ME` wrapper to the Firefox target.
 
 ## Browser support
 
@@ -80,10 +87,13 @@ for release Firefox. The published Firefox artifact is a development build.
 
 Development install:
 
-1. Download `val-checker-firefox-unsigned.zip` and extract it.
+1. Download `val-checker-firefox-unsigned.zip` and extract it. Do **not** drag
+   the ZIP onto Firefox or use **Install Add-on From File** — the add-on is
+   unsigned, so Firefox refuses it as corrupt. `about:debugging` is the only
+   path that works today.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Choose **Load Temporary Add-on** and select `manifest.json` inside the
-   extracted `UNZIP ME` folder.
+   extracted folder.
 4. Grant access to `riotgames.com` and `playvalorant.com` if Firefox asks.
    Manifest V3 host permissions are opt-in on Firefox; without them the
    background page reports `permissions-needed` instead of opening Riot.

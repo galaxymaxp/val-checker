@@ -174,9 +174,11 @@ get a Chrome/Chromium-or-Firefox choice, Safari is told it is unsupported, and
 mobile browsers are told the flow is desktop-only rather than being handed an
 archive they cannot use.
 
-Every archive contains a single `UNZIP ME` folder with `manifest.json` directly
-inside it, so extracting produces exactly the folder **Load unpacked** needs.
-Nobody has to create, rename, move, or reorganise anything.
+Chromium archives contain a single `UNZIP ME` folder with `manifest.json`
+directly inside it, so extracting produces exactly the folder **Load unpacked**
+needs. Nobody has to create, rename, move, or reorganise anything. The Firefox
+archive is deliberately flat instead: an add-on package must carry
+`manifest.json` at its root, and Firefox rejects a nested one as corrupt.
 
 For Chromium browsers, unzip the archive first, open the browser's extensions
 page, enable Developer mode, choose **Load unpacked**, and select the extracted

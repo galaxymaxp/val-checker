@@ -19,12 +19,18 @@ const distDir = join(extensionRoot, "dist");
 const downloadDir = join(repoRoot, "public", "downloads");
 
 /**
- * Every file in an archive sits inside this one folder, so "Load unpacked"
- * has a folder to select straight out of the extractor. Users must never have
- * to create, rename, or move a folder themselves.
+ * Chromium files sit inside this one folder, so "Load unpacked" has a folder
+ * to select straight out of the extractor. Users must never have to create,
+ * rename, or move a folder themselves.
  *
  * Keep this in step with `EXTENSION_ROOT_FOLDER` in
  * `src/lib/extension/browsers.ts`; `tests/extension-build.test.ts` asserts it.
+ *
+ * Chromium only. A Firefox add-on package is a ZIP with `manifest.json` at the
+ * archive root; nest it under a folder and Firefox cannot find the manifest,
+ * so handing the file to Firefox fails with "This add-on could not be
+ * installed because it appears to be corrupt." The flat root layout is also
+ * what addons.mozilla.org requires in order to sign the add-on.
  */
 export const ROOT_FOLDER = "UNZIP ME";
 
@@ -54,11 +60,15 @@ const TARGETS = [
     ],
     manifest: "chromium.json",
     name: "chromium",
+    rootFolder: ROOT_FOLDER,
   },
   {
     archives: ["val-checker-firefox-unsigned.zip"],
     manifest: "firefox.json",
     name: "firefox",
+    // Root of the archive. See ROOT_FOLDER above: a nested manifest makes
+    // Firefox call the package corrupt.
+    rootFolder: null,
   },
 ];
 
@@ -215,12 +225,17 @@ export async function buildExtension() {
       await writeFile(join(targetDir, source.name), source.data);
     }
 
-    // Everything is written under `UNZIP ME/`, so extracting the archive
-    // produces exactly the folder "Load unpacked" needs, with manifest.json
-    // directly inside it.
+    // Chromium archives are written under `UNZIP ME/`, so extracting produces
+    // exactly the folder "Load unpacked" needs with manifest.json directly
+    // inside it. Firefox archives stay flat so the package is a valid add-on.
     const archive = zip(
       [{ data: manifestJson, name: "manifest.json" }, ...sources].map(
-        (entry) => ({ ...entry, name: `${ROOT_FOLDER}/${entry.name}` }),
+        (entry) => ({
+          ...entry,
+          name: target.rootFolder
+            ? `${target.rootFolder}/${entry.name}`
+            : entry.name,
+        }),
       ),
     );
     for (const name of target.archives) {
